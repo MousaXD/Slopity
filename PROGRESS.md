@@ -2,6 +2,36 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 005: make Linux dependency validation non-interactive
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Replace the self-hosted Linux job's interactive package installation with a deterministic dependency check. Use the Ayatana application-indicator development package required on current Ubuntu and Pop!_OS systems.
+
+### Evidence
+
+- Workflow run `31007274933` passed Rust formatting, all workspace tests, and Clippy with warnings denied.
+- The Linux job reached the `Ensure Linux Tauri dependencies` step and blocked on `[sudo] password for mousa:`.
+- Manual installation showed `libappindicator3-dev` conflicts with the already installed `libayatana-appindicator3-1` package family.
+- Current Tauri Debian/Ubuntu prerequisites use `libayatana-appindicator3-dev`, not `libappindicator3-dev`.
+
+### Intended changes
+
+- Replace `libappindicator3-dev` with `libayatana-appindicator3-dev`.
+- Remove `sudo apt-get` from GitHub Actions.
+- Check required packages with `dpkg -s` and fail with a copyable administrator command when any are missing.
+- Keep installation as an explicit host-administration action outside the unprivileged runner.
+- Preserve Windows CI as paused.
+
+### Acceptance checks
+
+- CI never prompts for a sudo password.
+- The dependency check passes after the documented packages are installed.
+- Linux Tauri compilation proceeds to `npm install` and `npm run tauri:check`.
+
 ## Step 004: supply Tauri icon and clear compile warning
 
 **Status:** PARTIAL  
