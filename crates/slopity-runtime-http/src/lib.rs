@@ -273,9 +273,8 @@ impl HttpServerManager {
         let finished = self
             .running
             .iter()
-            .filter_map(|(server_id, running)| {
-                running.thread.is_finished().then(|| server_id.clone())
-            })
+            .filter(|(_, running)| running.thread.is_finished())
+            .map(|(server_id, _)| server_id.clone())
             .collect::<Vec<_>>();
         for server_id in finished {
             if let Some(running) = self.running.remove(&server_id) {
