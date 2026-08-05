@@ -4,9 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 009: publish installable Android debug artifacts
 
-**Status:** PARTIAL  
+**Status:** DONE  
 **Declared:** 2026-08-05  
-**Updated:** 2026-08-05
+**Completed:** 2026-08-05
 
 ### Scope
 
@@ -38,16 +38,18 @@ Preserve the successful Android debug APK and AAB as downloadable GitHub Actions
 - `.github/workflows/ci.yml`
 - `PROGRESS.md`
 
-### Verification pending
+### Verification performed
 
-- Rust formatting, workspace tests, and strict Clippy must remain green.
-- Linux Tauri compilation must remain green.
-- Android ARM64 compilation must still produce the expected APK and AAB paths.
-- The upload step must complete and expose a non-expired downloadable artifact containing both files.
+- Workflow run `31028085306` passed Rust formatting, all 14 workspace tests, strict Clippy, Linux Tauri compilation, Android initialization, and the ARM64 debug APK build.
+- The `Upload Android debug packages` step completed successfully.
+- GitHub created artifact `8939796324`, named `slopity-android-debug-1e864bd8e7b8cd2294f8ef4f64d6e9bce7cc07e3`, with 14-day retention through 2026-08-19.
+- GitHub reported artifact size `148602982` bytes and digest `sha256:649ee5d05962102907c3fce8468d64805ee52a7d13a32c8e334f6d9271a6063b`.
+- The downloaded ZIP matched that digest and contained exactly `app-universal-debug.apk` and `app-universal-debug.aab`.
+- The APK archive passed an integrity test and contains `lib/arm64-v8a/libslopity_lib.so`, `AndroidManifest.xml`, and Android DEX files.
 
 ### Follow-up
 
-Inspect the replacement workflow run and download the resulting artifact. Install the APK on an ARM64 Android device and perform the Step 008 notification, reachability, background-survival, stop, and port-release smoke test.
+Install the debug APK on an ARM64 Android device and perform the Step 008 notification, reachability, background-survival, stop, and port-release smoke test. The AAB remains for packaging inspection and is not directly installable like the APK.
 
 ## Step 008: add the first built-in HTTP server
 
