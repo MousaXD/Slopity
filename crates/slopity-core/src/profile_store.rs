@@ -47,6 +47,8 @@ pub enum ProfileStoreError {
         first: String,
         second: String,
     },
+    #[error("no free profile port is available")]
+    NoAvailablePort,
     #[error(
         "profile storage replacement failed ({write_error}); rollback also failed ({rollback_error})"
     )]
@@ -146,6 +148,9 @@ impl ProfileStore {
             .ok_or_else(|| ProfileStoreError::NotFound(source_id.0.clone()))?;
         cloned.id = new_id;
         cloned.name = new_name;
+        cloned.port = self
+            .next_available_port(cloned.port)
+            .ok_or(ProfileStoreError::NoAvailablePort)?;
         cloned.enabled = false;
         self.create(cloned)
     }
@@ -175,6 +180,29 @@ impl ProfileStore {
         let deleted = profiles.remove(index);
         self.commit_profiles(profiles)?;
         Ok(deleted)
+    }
+
+    fn next_available_port(&self, after: u16) -> Option<u16> {
+        let reserved_ports = self
+            .document
+            .profiles
+            .iter()
+            .map(|profile| profile.port)
+            .collect::<HashSet<_>>();
+        let mut candidate = after;
+
+        for _ in 0..u16::MAX {
+            candidate = if candidate == u16::MAX {
+                1
+            } else {
+                candidate + 1
+            };
+            if !reserved_ports.contains(&candidate) {
+                return Some(candidate);
+            }
+        }
+
+        None
     }
 
     fn commit_profiles(&mut self, profiles: Vec<ServerProfile>) -> Result<(), ProfileStoreError> {
@@ -370,13 +398,14 @@ mod tests {
         let mut updated = profile("alpha", 3_001);
         updated.name = "Updated alpha".into();
         store.update(updated).expect("profile should be updated");
-        store
+        let cloned = store
             .clone_profile(
                 &ServerId("alpha".into()),
                 ServerId("beta".into()),
                 "Beta clone".into(),
             )
             .expect("profile should be cloned");
+        assert_eq!(cloned.port, 3_002);
         store
             .set_enabled(&ServerId("beta".into()), true)
             .expect("clone should be enabled");
@@ -389,6 +418,7 @@ mod tests {
             ProfileStore::load_or_create(&path, Vec::new()).expect("store should reload");
         assert_eq!(reopened.profiles().len(), 1);
         assert_eq!(reopened.profiles()[0].id.0, "beta");
+        assert_eq!(reopened.profiles()[0].port, 3_002);
         assert!(reopened.profiles()[0].enabled);
         let _ = fs::remove_dir_all(directory);
     }
