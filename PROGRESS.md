@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 007: remove the blocking GitHub Rust cache
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -16,24 +17,28 @@ Remove `Swatinem/rust-cache` from the Rust-quality job on the persistent self-ho
 - Step 006 workflow run `31011407485` checked out the branch and installed the Rust toolchain successfully.
 - The run remained inside `Swatinem/rust-cache@v2` for several minutes and never reached the progress ledger or any Cargo command.
 - The self-hosted machine already retains its Cargo registry and toolchains under the runner user's home directory between jobs.
-- The cache action is therefore blocking validation before providing value.
+- The cache action was blocking validation before providing value.
 
-### Non-goals
+### Delivered
 
-- Changing Step 006 application code.
-- Adding a new cache implementation or a machine-specific target directory.
-- Altering Linux, Android, or Windows platform scope.
+- Removed `Swatinem/rust-cache@v2` from the Rust-quality job.
+- Preserved the progress-ledger guard, formatting, tests, Clippy, Linux build, and Android build order.
+- Left Cargo's normal registry and toolchain reuse on the persistent self-hosted machine untouched.
 
-### Intended files
+### Files changed
 
 - `.github/workflows/ci.yml`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification pending
 
-- The superseded cache-blocked run is cancelled by workflow concurrency.
-- The replacement run reaches `cargo fmt --all -- --check` without a remote cache step.
-- Rust tests, Clippy, Linux Tauri compilation, and Android ARM64 validation continue in their existing order.
+- The replacement run must cancel the superseded cache-blocked run through workflow concurrency.
+- The replacement run must reach formatting without a remote cache restore.
+- Step 006 Rust, Linux, and Android checks remain pending behind this repair.
+
+### Follow-up
+
+Inspect the replacement run and mark this step done once the Rust-quality job reaches Slopity's own commands.
 
 ## Step 006: add versioned profile persistence and CRUD
 

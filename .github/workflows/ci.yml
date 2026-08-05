@@ -24,7 +24,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.89.0
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
       - name: Require progress ledger
         if: github.event_name == 'pull_request'
         run: ./scripts/check-progress-ledger.sh "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA"
