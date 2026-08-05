@@ -2,6 +2,45 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 003: stabilize Rust CI formatting gate
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Apply the exact `rustfmt` changes reported by the first self-hosted CI run so Rust tests, Clippy, Linux Tauri compilation, and Android validation can proceed.
+
+### Non-goals
+
+- Changing runtime behavior or public APIs.
+- Adding new features.
+- Fixing compiler, Clippy, Linux, or Android failures that have not been observed yet.
+- Restoring Windows CI.
+
+### Evidence
+
+- Workflow run `31005297951` reached the `pop-os` self-hosted runner.
+- Checkout, Rust 1.89.0 setup, cache setup, and the progress-ledger guard succeeded.
+- `cargo fmt --all -- --check` failed and printed deterministic formatting diffs in six Rust files.
+- Tests, Clippy, Linux, and Android jobs were skipped because the workflow is intentionally sequential.
+
+### Intended files
+
+- `apps/slopity/src-tauri/src/lib.rs`
+- `crates/slopity-core/src/capability.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/validation.rs`
+- `crates/slopity-runtime-local/src/lib.rs`
+- `plugins/tauri-plugin-slopity-host/src/lib.rs`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- `cargo fmt --all -- --check` passes on the self-hosted runner.
+- Rust tests and Clippy begin running, exposing any genuine code issues.
+- No behavior changes are introduced by this step.
+
 ## Step 002: pause Windows CI and use the Pop!_OS runner
 
 **Status:** DONE  
