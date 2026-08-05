@@ -39,7 +39,7 @@ pub(crate) struct StartHostRequest {
 
 pub struct HostServiceBridge<R: Runtime> {
     active: AtomicBool,
-    marker: PhantomData<R>,
+    marker: PhantomData<fn() -> R>,
     #[cfg(target_os = "android")]
     mobile: mobile::MobileHostService<R>,
 }
@@ -147,12 +147,12 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("slopity-host")
         .setup(|app, api| {
             #[cfg(target_os = "android")]
-            let bridge = {
+            let bridge: HostServiceBridge<R> = {
                 let handle = api.register_android_plugin("com.slopity.host", "HostPlugin")?;
                 HostServiceBridge::new(mobile::MobileHostService::new(handle))
             };
             #[cfg(not(target_os = "android"))]
-            let bridge = {
+            let bridge: HostServiceBridge<R> = {
                 let _ = api;
                 HostServiceBridge::new()
             };
