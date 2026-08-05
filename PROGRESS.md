@@ -2,6 +2,64 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 008: add the first built-in HTTP server
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Implement Slopity's first real hosted workload as a harmless built-in Rust HTTP server shared by Linux and Android. Add explicit start, stop, observed state, bounded logs, loopback/LAN binding, usable URLs, port-conflict reporting, and an Android foreground-service notification while hosting is active.
+
+### Non-goals
+
+- Downloading or executing Java, Node.js, Python, PHP, game-server, plugin, mod, or arbitrary native payloads.
+- Shell command execution, terminal input, static-folder selection, uploads, remote administration, TLS, authentication, or internet exposure.
+- Claiming durable Android hosting until a real device test proves notification behavior and survival outside the foreground UI.
+- Windows CI, packaging, or platform-specific implementation.
+
+### Risks
+
+- Android may compile the Rust listener while still requiring native foreground-service wiring to keep the app process eligible for long-running work.
+- LAN binding increases exposure, so loopback remains the default and the response must disclose that it is a development probe.
+- Lifecycle threads must stop cleanly without blocking the Tauri command thread or leaving a port occupied.
+- Shared runtime state must avoid poisoned locks, unbounded log growth, stale running states, and duplicate starts.
+
+### Intended files
+
+- `Cargo.toml`
+- `crates/slopity-core/src/model.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-runtime-http/Cargo.toml`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `apps/slopity/src-tauri/Cargo.toml`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `apps/slopity/web/index.html`
+- `apps/slopity/web/app.js`
+- `apps/slopity/web/styles.css`
+- `plugins/tauri-plugin-slopity-host/Cargo.toml`
+- `plugins/tauri-plugin-slopity-host/build.rs`
+- `plugins/tauri-plugin-slopity-host/src/lib.rs`
+- `plugins/tauri-plugin-slopity-host/src/mobile.rs`
+- `plugins/tauri-plugin-slopity-host/android/`
+- `TASK.md`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- Linux Tauri shell compilation succeeds on the self-hosted Pop!_OS runner.
+- Android ARM64 debug APK compilation succeeds.
+- Unit tests prove loopback start, HTTP response, bounded logs, duplicate-start rejection, port-conflict reporting, and graceful stop.
+- The UI can create or edit a built-in HTTP profile, start it, show observed state and URLs, refresh logs, and stop it.
+- Android foreground-service calls are compiled and reported honestly as unproven until an on-device test is performed.
+
+### Follow-up
+
+After CI is green, install the debug APK on an ARM64 Android device and prove notification visibility, loopback/LAN access, background survival, clean stop, and port release before marking Android durable hosting supported.
+
 ## Step 007: remove the blocking GitHub Rust cache
 
 **Status:** DONE  
@@ -93,11 +151,11 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 - Workflow run `31013262338` passed formatting, all nine Rust tests, Clippy with warnings denied, and Linux Tauri compilation after the clone-port fix.
 - Android setup, SDK/NDK verification, dependency installation, and Tauri Android initialization all passed in the same run.
 - The first Android ARM64 APK attempt failed during the final build step. GitHub's decoded job-log blob was unavailable, and the requested job rerun remained queued rather than starting.
+- Fresh workflow run `31015265578` passed formatting, all workspace tests, Clippy with warnings denied, Linux Tauri compilation, Android initialization, and the ARM64 debug APK build.
 
 ### Verification pending
 
-- A fresh workflow attempt must reproduce or clear the Android ARM64 APK failure and expose logs if it fails.
-- UI flows require an interactive smoke test after the compile gates pass.
+- UI create, edit, clone, enable, disable, delete, and restart persistence flows still require an interactive smoke test.
 
 ### Known limitations
 
@@ -108,7 +166,7 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 
 ### Follow-up
 
-Use the fresh workflow attempt created by this ledger update to validate Android. Fix only an observed reproducible failure, then perform an interactive persistence smoke test.
+Perform the interactive persistence smoke test while Step 008 adds the first harmless built-in hosted workload.
 
 ## Step 005: make Linux dependency validation non-interactive
 
@@ -256,7 +314,7 @@ Replace the Kotlin-first application foundation with a portable Rust workspace a
 - Added `slopity-core` with serializable profile models, lifecycle states, resource planning, validation, runtime availability, and runtime-adapter contracts.
 - Added `slopity-runtime-local`, a desktop adapter using an explicit executable and structured arguments without a shell command string.
 - Added a Tauri 2 shell with a static shared dashboard for Windows, Linux, and Android.
-- Added a host-service plugin boundary that reports Android foreground-service support as pending rather than pretending it exists.
+- Added a host-service capability plugin boundary that reports Android foreground-service support as pending rather than pretending it exists.
 - Added sample JVM, Node.js, and native profiles that are all disabled and unavailable by default.
 - Added Windows, Linux, Rust, and Android CI paths.
 - Updated architecture, security, contribution, hook, and roadmap documentation for the Rust-first design.
