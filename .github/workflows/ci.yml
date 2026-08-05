@@ -43,23 +43,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Ensure Linux Tauri dependencies
-        shell: bash
-        run: |
-          packages=(
-            libwebkit2gtk-4.1-dev
-            libappindicator3-dev
-            librsvg2-dev
-            patchelf
-          )
-          missing=()
-          for package in "${packages[@]}"; do
-            dpkg -s "$package" >/dev/null 2>&1 || missing+=("$package")
-          done
-          if ((${#missing[@]})); then
-            sudo apt-get update
-            sudo apt-get install -y "${missing[@]}"
-          fi
+      - name: Verify Linux Tauri prerequisites
+        run: bash scripts/check-linux-prerequisites.sh
       - working-directory: apps/slopity
         run: npm install --no-audit --no-fund
       - name: Compile Linux Tauri shell without bundling
