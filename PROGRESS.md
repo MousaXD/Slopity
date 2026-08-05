@@ -2,6 +2,44 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 009: publish installable Android debug artifacts
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Preserve the successful Android debug APK and AAB as downloadable GitHub Actions artifacts after every green Android build. Make missing output files fail the job instead of silently producing an empty artifact.
+
+### Non-goals
+
+- Release signing, production keystores, Google Play publication, stable releases, or automatic installation on a device.
+- Linux packaging, Windows packaging, or public release automation.
+- Treating the debug artifact as proof of Android background durability.
+
+### Risks
+
+- Tauri generates Android output under `src-tauri/gen`, so the upload paths must match the proven build output exactly.
+- The self-hosted runner cleans generated files between jobs, making artifact upload part of the Android job mandatory.
+- Debug builds are installable test packages, not production releases, and must remain clearly labeled.
+
+### Intended files
+
+- `.github/workflows/ci.yml`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- The Android job uploads both `app-universal-debug.apk` and `app-universal-debug.aab` after a successful build.
+- Missing files fail the upload step.
+- Artifacts have a short explicit retention period and a clearly debug-only name.
+- The resulting workflow run exposes a downloadable artifact through GitHub Actions.
+- Existing Rust, Linux, and Android build gates remain green.
+
+### Follow-up
+
+Download the APK artifact, install it on an ARM64 Android device, and perform the Step 008 notification, reachability, background-survival, stop, and port-release smoke test.
+
 ## Step 008: add the first built-in HTTP server
 
 **Status:** PARTIAL  
@@ -55,22 +93,22 @@ Implement Slopity's first real hosted workload as a harmless built-in Rust HTTP 
 - `TASK.md`
 - `PROGRESS.md`
 
-### Verification prepared
+### Verification performed
 
-- The Rust runtime has unit coverage for the declared lifecycle and networking behaviors.
-- The frontend uses only existing Tauri invocation APIs and adds no JavaScript dependencies.
-- The Android bridge follows Tauri's mobile plugin boundary and uses a user-started foreground service with an ongoing notification.
-- Production Rust contains no shell command strings and the built-in server never evaluates profile executable or argument fields.
+- Workflow run `31026665154` passed `cargo fmt --all -- --check`.
+- The same run passed all 14 workspace tests, including the built-in HTTP response, graceful stop and port release, duplicate-start rejection, occupied-port reporting, and bounded-log tests.
+- The same run passed `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- Linux Tauri shell compilation passed with the live HTTP manager, managed state, Tauri commands, and shared UI.
+- Android initialization passed with the Tauri mobile plugin included.
+- The ARM64 debug APK build passed with the Rust listener, Kotlin foreground service, manifest permissions, notification implementation, and `specialUse` declaration compiled into the application.
+- Tauri produced `app-universal-debug.apk` and `app-universal-debug.aab` under the generated Android build output.
 
 ### Verification pending
 
-- `cargo fmt --all -- --check`
-- `cargo test --workspace --all-features`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- Linux Tauri shell compilation on the self-hosted Pop!_OS runner.
-- Android ARM64 debug APK compilation.
-- Interactive Linux profile/start/request/log/stop smoke test.
-- ARM64 Android notification, loopback/LAN reachability, background survival, clean stop, and port-release proof.
+- Interactive Linux profile/create/start/request/log/stop and persistence smoke test.
+- ARM64 Android installation and notification visibility proof.
+- Android loopback and LAN reachability while the UI is foregrounded.
+- Android reachability while the UI is backgrounded, followed by clean stop and port-release proof.
 
 ### Known limitations
 
@@ -78,11 +116,13 @@ Implement Slopity's first real hosted workload as a harmless built-in Rust HTTP 
 - Runtime state is in memory and resets to stopped after application process restart.
 - LAN URL discovery depends on an active IPv4 route; loopback URL remains available regardless.
 - Android foreground-service compilation does not prove OEM background behavior or Google Play policy acceptance.
+- The successful Android build reports a non-blocking duplicate namespace warning between the application and plugin modules.
+- The workflow reports non-blocking action and Gradle deprecation warnings that require a separate CI-maintenance step.
 - No force-stop, crash-loop protection, TLS, authentication, remote management, file picker, or upload flow exists yet.
 
 ### Follow-up
 
-Use CI to fix only observed formatting, compiler, Clippy, Linux, or Android failures. After green builds, perform the Linux smoke test and install the debug APK on an ARM64 device before claiming Android durable hosting.
+Step 009 preserves the debug APK and AAB as downloadable CI artifacts. After that, perform the Linux smoke test and install the APK on an ARM64 device before claiming Android durable hosting.
 
 ## Step 007: remove the blocking GitHub Rust cache
 
