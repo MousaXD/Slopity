@@ -1,0 +1,153 @@
+@media (max-width: 410px) {
+  .app-shell {
+    padding-right: max(12px, var(--safe-right));
+    padding-left: max(12px, var(--safe-left));
+  }
+
+  .header-row {
+    grid-template-columns: 48px minmax(0, 1fr) 96px;
+    gap: 7px;
+  }
+
+  .server-art {
+    width: 96px;
+    transform: scale(0.82);
+    transform-origin: top right;
+  }
+
+  .server-grid {
+    gap: 9px;
+  }
+
+  .server-card {
+    min-height: 139px;
+    border-radius: 17px;
+  }
+
+  .server-card-main {
+    min-height: 137px;
+    grid-template-columns: 50px minmax(0, 1fr);
+    gap: 8px;
+    padding: 14px 25px 14px 11px;
+  }
+
+  .server-icon {
+    width: 50px;
+    min-width: 50px;
+    height: 59px;
+    border-radius: 13px;
+    font-size: 1.55rem;
+  }
+
+  .card-menu-button {
+    right: 2px;
+  }
+
+  .status-pill {
+    padding: 4px 6px;
+  }
+}
+
+@media (max-width: 355px) {
+  .server-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .server-card-main {
+    grid-template-columns: 66px minmax(0, 1fr);
+  }
+
+  .server-icon {
+    width: 66px;
+    min-width: 66px;
+    height: 70px;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .span-two {
+    grid-column: auto;
+  }
+
+  .sheet {
+    max-height: 92dvh;
+    border-radius: 30px 30px 0 0;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 760px) {
+  .app-shell {
+    padding-top: calc(36px + var(--safe-top));
+    padding-right: max(34px, var(--safe-right));
+    padding-left: max(34px, var(--safe-left));
+  }
+
+  .app-header {
+    min-height: 190px;
+  }
+
+  .header-row {
+    grid-template-columns: 58px minmax(0, 1fr) 170px;
+  }
+
+  .server-art {
+    transform: scale(1.18);
+    transform-origin: top right;
+  }
+
+  .server-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 15px;
+  }
+
+  .server-card-main {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .server-icon {
+    width: 76px;
+    min-width: 76px;
+    height: 80px;
+  }
+
+  .add-server-button {
+    right: 24px;
+    left: auto;
+    width: 310px;
+    margin: 0;
+  }
+
+  .sheet {
+    right: 24px;
+    left: auto;
+    width: min(620px, calc(100% - 48px));
+    border-right: 1px solid #2b3c56;
+    border-left: 1px solid #2b3c56;
+    border-radius: 32px 32px 0 0;
+  }
+}
+
+@media (min-width: 1040px) {
+  .server-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

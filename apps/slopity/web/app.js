@@ -1,20 +1,38 @@
-const tauriInvoke = window.__TAURI_INTERNALS__?.invoke;
+import { previewInvoke } from './preview.js';
+import { createOverlayController } from './overlay.js';
+import { createCatalogController } from './catalog.js';
+import { createProfileEditor } from './profile-editor.js';
+import { createProfileActions } from './profile-actions.js';
+import { renderBridgeError, renderProfiles, renderTemplates } from './views.js';
+
+const nativeInvoke = window.__TAURI_INTERNALS__?.invoke;
+const previewMode = !nativeInvoke && new URLSearchParams(window.location.search).get('preview') === '1';
+const tauriInvoke = nativeInvoke ?? (previewMode ? previewInvoke : null);
 
 const elements = {
-  platform: document.querySelector('#platform-pill'),
-  hostTitle: document.querySelector('#host-title'),
-  hostState: document.querySelector('#host-state'),
-  hostReason: document.querySelector('#host-reason'),
-  memoryBudget: document.querySelector('#memory-budget'),
-  memoryNote: document.querySelector('#memory-note'),
-  runtimeCount: document.querySelector('#runtime-count'),
+  platformLabel: document.querySelector('#platform-label'),
   profileSummary: document.querySelector('#profile-summary'),
   profiles: document.querySelector('#profiles'),
   refresh: document.querySelector('#refresh'),
-  newProfile: document.querySelector('#new-profile'),
+  drawerRefresh: document.querySelector('#drawer-refresh'),
   notice: document.querySelector('#notice'),
-  editor: document.querySelector('#editor'),
+  openDrawer: document.querySelector('#open-drawer'),
+  closeDrawer: document.querySelector('#close-drawer'),
+  drawer: document.querySelector('#app-drawer'),
+  drawerBackdrop: document.querySelector('#drawer-backdrop'),
+  modalBackdrop: document.querySelector('#modal-backdrop'),
+  addButton: document.querySelector('#add-server-button'),
+  templateList: document.querySelector('#template-list'),
+  detailsIcon: document.querySelector('#details-icon'),
+  detailsTitle: document.querySelector('#details-title'),
+  detailsSubtitle: document.querySelector('#details-subtitle'),
+  detailsContent: document.querySelector('#details-content'),
+  detailsActions: document.querySelector('#details-actions'),
+  editorSheet: document.querySelector('#editor-sheet'),
   editorTitle: document.querySelector('#editor-title'),
+  editorSubtitle: document.querySelector('#editor-subtitle'),
+  templateNote: document.querySelector('#template-note'),
+  editorValidation: document.querySelector('#editor-validation'),
   cancelEditor: document.querySelector('#cancel-editor'),
   form: document.querySelector('#profile-form'),
   id: document.querySelector('#profile-id'),
@@ -28,349 +46,180 @@ const elements = {
   arguments: document.querySelector('#profile-arguments'),
   enabled: document.querySelector('#profile-enabled'),
   saveProfile: document.querySelector('#save-profile'),
+  infoTitle: document.querySelector('#info-title'),
+  infoSubtitle: document.querySelector('#info-subtitle'),
+  infoContent: document.querySelector('#info-content'),
+  infoActions: document.querySelector('#info-actions'),
+  cardMenu: document.querySelector('#card-menu'),
 };
 
 const state = {
+  snapshot: null,
   profiles: [],
   servers: [],
-  editingId: null,
   schemaVersion: null,
+  editingId: null,
+  selectedProfileId: null,
+  menuProfileId: null,
+  currentSheet: null,
+  sheetReturnFocus: null,
+  drawerReturnFocus: null,
   busy: false,
+  validationTimer: null,
 };
 
-async function loadDashboard({ announce = true } = {}) {
+let actions;
+const overlays = createOverlayController({
+  elements,
+  state,
+  closeCardMenu: () => actions?.closeCardMenu(),
+});
+let editor;
+const catalog = createCatalogController({
+  elements,
+  state,
+  openEditor: (...args) => editor.openEditor(...args),
+  openSheet: overlays.openSheet,
+  closeSheet: overlays.closeSheet,
+  showNotice,
+  nextAvailablePort,
+});
+editor = createProfileEditor({
+  elements,
+  state,
+  overlays,
+  previewMode,
+  tauriInvoke,
+  showNotice,
+  nextAvailablePort,
+  nextProfileId,
+  runProfileCommand: (...args) => actions.runProfileCommand(...args),
+});
+actions = createProfileActions({
+  elements,
+  state,
+  overlays,
+  previewMode,
+  tauriInvoke,
+  showNotice,
+  loadDashboard,
+  renderProfileGrid,
+  setBusy,
+  profileById,
+  serverFor,
+  openEditor: editor.openEditor,
+  loadProfileValidation: editor.loadProfileValidation,
+  validationSlot,
+});
+
+async function loadDashboard({ announce = false } = {}) {
   try {
     requireNativeBridge();
-    const snapshot = await tauriInvoke('dashboard_snapshot');
-    renderDashboard(snapshot);
-    if (announce) {
-      showNotice('Profile and server state refreshed.', 'success');
+    setBusy(true);
+    applySnapshot(await tauriInvoke('dashboard_snapshot'));
+    if (previewMode) {
+      showNotice('Visual browser preview only. Native persistence and runtimes are not connected.', 'success');
+    } else if (announce) {
+      showNotice('Saved profiles and runtime state refreshed.', 'success');
     }
   } catch (error) {
-    elements.hostTitle.textContent = 'Native bridge unavailable';
-    elements.hostState.textContent = 'Preview only';
-    elements.hostState.className = 'status blocked';
-    elements.hostReason.textContent = String(error);
-    elements.profiles.innerHTML = '<article class="card error">Run this frontend through the Tauri shell to read Rust state.</article>';
+    state.profiles = [];
+    state.servers = [];
+    renderBridgeError(elements, error);
     if (announce) {
       showNotice(String(error), 'error');
     }
+  } finally {
+    setBusy(false);
   }
 }
 
-function renderDashboard(snapshot) {
-  state.profiles = snapshot.profiles;
-  state.servers = snapshot.servers ?? [];
+function applySnapshot(snapshot) {
+  state.snapshot = snapshot;
+  state.profiles = Array.isArray(snapshot.profiles) ? snapshot.profiles : [];
+  state.servers = Array.isArray(snapshot.servers) ? snapshot.servers : [];
   state.schemaVersion = snapshot.profileSchemaVersion;
-
-  elements.platform.textContent = `${snapshot.platform} · ${snapshot.architecture}`;
-  if (snapshot.hostService.platform === 'android' && snapshot.hostService.foregroundServiceAvailable) {
-    elements.hostTitle.textContent = 'Android foreground bridge compiled';
-    elements.hostState.textContent = 'Device proof pending';
-    elements.hostState.className = 'status neutral';
-  } else if (snapshot.hostService.durableHostingAvailable) {
-    elements.hostTitle.textContent = 'Built-in hosting available';
-    elements.hostState.textContent = 'Ready';
-    elements.hostState.className = 'status ready';
-  } else {
-    elements.hostTitle.textContent = 'Hosting proof still required';
-    elements.hostState.textContent = 'Not claimed';
-    elements.hostState.className = 'status blocked';
-  }
-  elements.hostReason.textContent = snapshot.hostService.reason;
-
-  const budget = snapshot.resourcePlan.safeServerBudgetMib;
-  elements.memoryBudget.textContent = budget > 0 ? `${budget} MiB` : 'Probe pending';
-  elements.memoryNote.textContent = snapshot.resourcePlan.warning
-    ?? 'The current shell does not yet include a platform memory probe.';
-
-  const ready = snapshot.runtimes.filter((runtime) => runtime.available).length;
-  elements.runtimeCount.textContent = `${ready} ready / ${snapshot.runtimes.length} known`;
-  renderProfiles();
+  elements.platformLabel.textContent = `${snapshot.platform} · ${snapshot.architecture}`;
+  renderProfileGrid();
+  renderTemplates(elements, catalog.selectTemplate);
+  actions.refreshOpenDetails();
 }
 
-function renderProfiles() {
-  const enabled = state.profiles.filter((profile) => profile.enabled).length;
-  const active = state.servers.filter((server) => isActiveState(server.state)).length;
-  elements.profileSummary.textContent = `${state.profiles.length} stored · ${enabled} enabled · ${active} active · schema v${state.schemaVersion ?? '?'}`;
-
-  if (state.profiles.length === 0) {
-    elements.profiles.innerHTML = '<article class="card empty-state"><h3>No profiles yet</h3><p class="muted">Create a built-in HTTP profile to host the first local probe.</p></article>';
-    return;
-  }
-
-  elements.profiles.replaceChildren(...state.profiles.map(profileCard));
-  setBusy(state.busy);
-}
-
-function profileCard(profile) {
-  const card = document.createElement('article');
-  card.className = 'card profile-card';
-  const runtime = profile.runtime.replaceAll('-', ' ');
-  const builtIn = profile.runtime === 'built-in-http';
-  const server = serverFor(profile.id);
-  const observedState = server?.state ?? 'stopped';
-  const active = isActiveState(observedState);
-  const stateClass = observedState === 'running'
-    ? 'ready'
-    : observedState === 'failed'
-      ? 'blocked'
-      : 'neutral';
-  const runtimeText = builtIn
-    ? 'Built-in Rust runtime'
-    : profile.executable
-      ? 'Executable configured, not verified'
-      : 'Runtime path pending';
-  const urls = server?.urls?.length
-    ? `<div class="server-urls">${server.urls.map((url) => `<code>${escapeHtml(url)}</code>`).join('')}</div>`
-    : '';
-  const logs = server?.logs?.length
-    ? `<details class="server-logs"><summary>Logs · ${server.requestCount} requests</summary><pre>${escapeHtml(server.logs.slice(-8).map((entry) => `[${entry.level}] ${entry.message}`).join('\n'))}</pre></details>`
-    : '';
-  const serverControl = builtIn
-    ? active
-      ? `<button class="server-stop" type="button" data-action="server-stop" data-id="${escapeHtml(profile.id)}">Stop</button>`
-      : `<button class="primary" type="button" data-action="server-start" data-id="${escapeHtml(profile.id)}" data-locked="${profile.enabled ? 'false' : 'true'}" title="${profile.enabled ? 'Start the built-in HTTP server' : 'Enable the profile before starting'}">Start</button>`
-    : '';
-
-  card.innerHTML = `
-    <div class="card-heading profile-heading">
-      <div>
-        <p class="eyebrow">${escapeHtml(runtime)}</p>
-        <h3>${escapeHtml(profile.name)}</h3>
-      </div>
-      <span class="status ${stateClass}">${escapeHtml(observedState)}</span>
-    </div>
-    <p class="muted">${escapeHtml(runtimeText)} · ID ${escapeHtml(profile.id)}</p>
-    <div class="profile-meta">
-      <span>Port ${profile.port}</span>
-      <span>${profile.memoryMib} MiB</span>
-      <span>${escapeHtml(profile.networkScope)}</span>
-      <span>${profile.enabled ? 'enabled' : 'disabled'}</span>
-    </div>
-    ${server?.lastError ? `<p class="server-error">${escapeHtml(server.lastError)}</p>` : ''}
-    ${urls}
-    ${logs}
-    <div class="profile-actions">
-      ${serverControl}
-      <button type="button" data-action="edit" data-id="${escapeHtml(profile.id)}" data-locked="${active}">Edit</button>
-      <button type="button" data-action="clone" data-id="${escapeHtml(profile.id)}">Clone</button>
-      <button type="button" data-action="toggle" data-id="${escapeHtml(profile.id)}" data-locked="${active}">${profile.enabled ? 'Disable' : 'Enable'}</button>
-      <button class="danger" type="button" data-action="delete" data-id="${escapeHtml(profile.id)}" data-locked="${active}">Delete</button>
-    </div>
-  `;
-  return card;
-}
-
-function openEditor(profile = null) {
-  state.editingId = profile?.id ?? null;
-  elements.editorTitle.textContent = profile ? `Edit ${profile.name}` : 'Create profile';
-  elements.id.readOnly = Boolean(profile);
-  elements.id.value = profile?.id ?? nextProfileId();
-  elements.name.value = profile?.name ?? 'My HTTP server';
-  elements.runtime.value = profile?.runtime ?? 'built-in-http';
-  elements.network.value = profile?.networkScope ?? 'loopback';
-  elements.port.value = String(profile?.port ?? nextAvailablePort());
-  elements.memory.value = String(profile?.memoryMib ?? 128);
-  elements.executable.value = profile?.executable ?? '';
-  elements.directory.value = profile?.workingDirectory ?? '';
-  elements.arguments.value = profile?.arguments?.join('\n') ?? '';
-  elements.enabled.checked = profile?.enabled ?? true;
-  updateRuntimeFields();
-  elements.editor.hidden = false;
-  elements.editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  elements.name.focus();
-}
-
-function closeEditor() {
-  state.editingId = null;
-  elements.editor.hidden = true;
-  elements.form.reset();
-}
-
-function updateRuntimeFields() {
-  const builtIn = elements.runtime.value === 'built-in-http';
-  [elements.executable, elements.directory, elements.arguments].forEach((field) => {
-    field.disabled = builtIn;
+function renderProfileGrid() {
+  renderProfiles({
+    elements,
+    profiles: state.profiles,
+    servers: state.servers,
+    schemaVersion: state.schemaVersion,
+    busy: state.busy,
+    onAdd: openAddSheet,
+    onDetails: actions.openDetails,
+    onMenu: actions.openCardMenu,
   });
+  applyBusyState();
 }
 
-function readProfileForm() {
-  const builtIn = elements.runtime.value === 'built-in-http';
-  return {
-    id: elements.id.value.trim(),
-    name: elements.name.value.trim(),
-    runtime: elements.runtime.value,
-    executable: builtIn ? null : nullable(elements.executable.value),
-    arguments: builtIn
-      ? []
-      : elements.arguments.value
-        .split('\n')
-        .map((argument) => argument.trim())
-        .filter(Boolean),
-    workingDirectory: builtIn ? null : nullable(elements.directory.value),
-    port: Number(elements.port.value),
-    memoryMib: Number(elements.memory.value),
-    networkScope: elements.network.value,
-    enabled: elements.enabled.checked,
-  };
+function openAddSheet() {
+  overlays.closeDrawer();
+  actions.closeCardMenu();
+  overlays.openSheet('add-sheet', elements.addButton);
 }
 
-async function saveProfile(event) {
-  event.preventDefault();
-  const profile = readProfileForm();
-  const command = state.editingId ? 'update_server_profile' : 'create_server_profile';
-  const success = await runProfileCommand(command, { profile }, `${profile.name} saved.`);
-  if (success) {
-    closeEditor();
-  }
-}
-
-async function handleProfileAction(event) {
-  const button = event.target.closest('button[data-action]');
-  if (!button || state.busy || button.disabled) {
+function handleDrawerAction(event) {
+  const button = event.target.closest('button[data-drawer-action]');
+  if (!button) {
     return;
   }
-
-  const profile = state.profiles.find((candidate) => candidate.id === button.dataset.id);
-  if (!profile) {
-    showNotice('That profile no longer exists. Refreshing storage.', 'error');
-    await loadDashboard();
-    return;
-  }
-
-  switch (button.dataset.action) {
-    case 'server-start':
-      await runServerCommand(
-        'start_builtin_http_server',
-        { id: profile.id },
-        `${profile.name} started.`,
-      );
+  overlays.closeDrawer({ restoreFocus: false });
+  switch (button.dataset.drawerAction) {
+    case 'servers':
+      document.querySelector('#saved-servers')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      elements.openDrawer.focus();
       break;
-    case 'server-stop':
-      await runServerCommand(
-        'stop_builtin_http_server',
-        { id: profile.id },
-        `${profile.name} stopped.`,
-      );
+    case 'add':
+      openAddSheet();
       break;
-    case 'edit':
-      openEditor(profile);
+    case 'runtime':
+      catalog.openRuntimeSupport();
       break;
-    case 'clone':
-      await cloneProfile(profile);
+    case 'device':
+      catalog.openDeviceStatus();
       break;
-    case 'toggle':
-      await runProfileCommand(
-        'set_server_profile_enabled',
-        { id: profile.id, enabled: !profile.enabled },
-        `${profile.name} ${profile.enabled ? 'disabled' : 'enabled'}.`,
-      );
+    case 'settings':
+      catalog.openInfoSheet({
+        title: 'Settings',
+        subtitle: 'Planned screen',
+        paragraphs: ['Settings are not implemented yet. Slopity currently keeps profile configuration inside each saved server.'],
+      });
       break;
-    case 'delete':
-      if (window.confirm(`Delete ${profile.name}? This removes configuration only.`)) {
-        await runProfileCommand(
-          'delete_server_profile',
-          { id: profile.id },
-          `${profile.name} deleted.`,
-        );
-      }
+    case 'about':
+      catalog.openInfoSheet({
+        title: 'About Slopity',
+        subtitle: 'A portable server-control foundation',
+        paragraphs: [
+          'Slopity uses a Rust core, Tauri 2 shell, durable profile storage, and a shared static interface for Linux and Android.',
+          'Only the fixed built-in HTTP probe is currently runnable. External runtime providers remain deliberately unavailable until they are implemented and proven.',
+        ],
+      });
       break;
     default:
-      showNotice('Unknown profile action.', 'error');
+      showNotice('Unknown navigation item.', 'error');
   }
-}
-
-async function cloneProfile(profile) {
-  const suggestedId = uniqueCloneId(profile.id);
-  const newId = window.prompt('ID for the cloned profile', suggestedId)?.trim();
-  if (!newId) {
-    return;
-  }
-  const newName = window.prompt('Name for the cloned profile', `${profile.name} copy`)?.trim();
-  if (!newName) {
-    return;
-  }
-
-  await runProfileCommand(
-    'clone_server_profile',
-    { sourceId: profile.id, newId, newName },
-    `${newName} cloned in a disabled state with a free port.`,
-  );
-}
-
-async function runProfileCommand(command, args, successMessage) {
-  try {
-    requireNativeBridge();
-    setBusy(true);
-    state.profiles = await tauriInvoke(command, args);
-    renderProfiles();
-    showNotice(successMessage, 'success');
-    return true;
-  } catch (error) {
-    showNotice(String(error), 'error');
-    return false;
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function runServerCommand(command, args, successMessage) {
-  try {
-    requireNativeBridge();
-    setBusy(true);
-    const snapshot = await tauriInvoke(command, args);
-    upsertServer(snapshot);
-    renderProfiles();
-    const urlNote = snapshot.urls?.length ? ` ${snapshot.urls.join(' · ')}` : '';
-    showNotice(`${successMessage}${urlNote}`, 'success');
-    return true;
-  } catch (error) {
-    showNotice(String(error), 'error');
-    await refreshServerStates();
-    return false;
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function refreshServerStates() {
-  if (!tauriInvoke || state.busy) {
-    return;
-  }
-  try {
-    state.servers = await tauriInvoke('list_builtin_http_servers');
-    renderProfiles();
-  } catch (error) {
-    console.error('Server state refresh failed', error);
-  }
-}
-
-function upsertServer(snapshot) {
-  const index = state.servers.findIndex((server) => server.serverId === snapshot.serverId);
-  if (index === -1) {
-    state.servers.push(snapshot);
-  } else {
-    state.servers[index] = snapshot;
-  }
-}
-
-function serverFor(profileId) {
-  return state.servers.find((server) => server.serverId === profileId) ?? null;
-}
-
-function isActiveState(serverState) {
-  return ['starting', 'running', 'stopping'].includes(serverState);
 }
 
 function setBusy(busy) {
   state.busy = busy;
-  elements.saveProfile.disabled = busy;
-  elements.refresh.disabled = busy;
-  elements.newProfile.disabled = busy;
-  elements.profiles.querySelectorAll('button').forEach((button) => {
-    button.disabled = busy || button.dataset.locked === 'true';
+  applyBusyState();
+}
+
+function applyBusyState() {
+  elements.refresh.disabled = state.busy;
+  elements.drawerRefresh.disabled = state.busy;
+  elements.saveProfile.disabled = state.busy || previewMode;
+  document.querySelectorAll('[data-mutation="true"]').forEach((button) => {
+    button.disabled = state.busy || previewMode || button.dataset.locked === 'true';
   });
+  elements.profiles.setAttribute('aria-busy', String(state.busy));
 }
 
 function showNotice(message, kind) {
@@ -381,8 +230,20 @@ function showNotice(message, kind) {
 
 function requireNativeBridge() {
   if (!tauriInvoke) {
-    throw new Error('The native Tauri bridge is not available in this browser preview.');
+    throw new Error('The native Tauri bridge is not available. Add ?preview=1 for a visual-only browser preview.');
   }
+}
+
+function profileById(profileId) {
+  return state.profiles.find((profile) => profile.id === profileId) ?? null;
+}
+
+function serverFor(profileId) {
+  return state.servers.find((server) => server.serverId === profileId) ?? null;
+}
+
+function validationSlot() {
+  return elements.detailsContent.querySelector('[data-validation-slot]');
 }
 
 function nextProfileId() {
@@ -393,44 +254,49 @@ function nextProfileId() {
   return `server-${index}`;
 }
 
-function uniqueCloneId(sourceId) {
-  let candidate = `${sourceId}-copy`;
-  let index = 2;
-  while (state.profiles.some((profile) => profile.id === candidate)) {
-    candidate = `${sourceId}-copy-${index}`;
-    index += 1;
-  }
-  return candidate;
-}
-
-function nextAvailablePort() {
+function nextAvailablePort(preferred) {
   const used = new Set(state.profiles.map((profile) => profile.port));
-  let port = 8_080;
+  let port = preferred;
   while (used.has(port) && port < 65_535) {
     port += 1;
   }
   return port;
 }
 
-function nullable(value) {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
+elements.openDrawer.addEventListener('click', overlays.openDrawer);
+elements.closeDrawer.addEventListener('click', () => overlays.closeDrawer());
+elements.drawerBackdrop.addEventListener('click', () => overlays.closeDrawer());
+elements.drawer.addEventListener('click', handleDrawerAction);
+elements.addButton.addEventListener('click', openAddSheet);
+elements.refresh.addEventListener('click', () => loadDashboard({ announce: true }));
+elements.drawerRefresh.addEventListener('click', async () => {
+  overlays.closeDrawer();
+  await loadDashboard({ announce: true });
+});
+elements.cancelEditor.addEventListener('click', editor.closeEditor);
+elements.runtime.addEventListener('change', editor.updateRuntimeFields);
+elements.form.addEventListener('input', editor.scheduleEditorValidation);
+elements.form.addEventListener('submit', editor.saveProfile);
+elements.detailsActions.addEventListener('click', actions.handleDetailAction);
+elements.detailsContent.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-copy-url]');
+  if (button) {
+    actions.copyText(button.dataset.copyUrl);
+  }
+});
+elements.cardMenu.addEventListener('click', actions.handleCardMenuAction);
+elements.modalBackdrop.addEventListener('click', () => overlays.closeSheet(state.currentSheet));
+document.querySelectorAll('[data-close-sheet]').forEach((button) => {
+  button.addEventListener('click', () => overlays.closeSheet(button.dataset.closeSheet));
+});
+document.addEventListener('keydown', overlays.handleKeydown);
+document.addEventListener('pointerdown', (event) => {
+  if (!elements.cardMenu.hidden && !elements.cardMenu.contains(event.target) && !event.target.closest('.card-menu-button')) {
+    actions.closeCardMenu();
+  }
+});
+window.addEventListener('resize', actions.closeCardMenu);
+window.addEventListener('scroll', actions.closeCardMenu, { passive: true });
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-elements.refresh.addEventListener('click', () => loadDashboard());
-elements.newProfile.addEventListener('click', () => openEditor());
-elements.cancelEditor.addEventListener('click', closeEditor);
-elements.runtime.addEventListener('change', updateRuntimeFields);
-elements.form.addEventListener('submit', saveProfile);
-elements.profiles.addEventListener('click', handleProfileAction);
 loadDashboard();
-window.setInterval(refreshServerStates, 2_000);
+window.setInterval(actions.refreshServerStates, 2_000);
