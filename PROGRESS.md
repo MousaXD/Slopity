@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 010: redesign the mobile server dashboard
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -18,36 +19,71 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - Adding a frontend framework, icon dependency, shell command execution, downloads, uploads, remote management, TLS, authentication, or runtime-provider installation.
 - Merging the branch, changing `main`, or modifying CI workflow behavior.
 
-### Risks
+### Delivered
 
-- Existing profile names, URLs, validation errors, and runtime logs are user-controlled and must never be interpolated into unsafe HTML.
-- The same WebView must remain usable on small Android phones, tablets, and Linux windows without horizontal overflow or controls hidden behind system safe areas.
-- Unsupported templates must remain honest placeholders and cannot expose start controls that imply a working provider.
-- Running profiles must preserve backend-enforced edit, disable, and delete restrictions.
-- Modal, drawer, popover, and editor focus management must not strand keyboard users or leave body scrolling locked.
+- Replaced the desktop-oriented overview with a mobile-first dashboard that follows the supplied composition: oversized Slopity wordmark, hamburger control, CSS server-stack illustration, Saved Servers heading, dense two-column phone grid, and a reachable Add Server action.
+- Added distinct local CSS and text icons, truthful status pills, three-dot card menus, press/hover feedback, safe-area spacing, narrow-phone fallback, tablet and desktop expansion, and reduced-motion handling.
+- Added a working navigation drawer with Servers, Add Server, Runtime Support, Device Status, Settings, and About Slopity entries. Planned screens are labeled instead of being presented as complete.
+- Added an accessible Add Server bottom sheet with drag handle, close control, scrollable templates, focus trapping, backdrop dismissal, Escape dismissal, and body-scroll locking.
+- Added Built-in HTTP, Website foundation, Minecraft placeholder, Node.js placeholder, Import placeholder, and Custom Template behavior without falsely claiming unsupported runtime execution.
+- Added compact card action menus and a details sheet exposing profile configuration, observed runtime state, available URLs, request count, recent logs, validation output, and lifecycle or CRUD controls.
+- Added a bottom-sheet profile editor that reuses the existing create and update commands, keeps external runtime arguments structured, and displays native validation results.
+- Preserved clone, enable, disable, delete, refresh, start, stop, persisted profile loading, runtime polling, and backend-enforced running-profile restrictions.
+- Split the frontend into small dependency-free ES modules and used DOM construction plus `textContent` for all profile names, URLs, log messages, validation messages, and other user-controlled values.
+- Added a clearly labeled `?preview=1` visual-preview path that cannot mutate profiles or pretend native persistence and runtime execution are connected.
+- Kept the Rust backend, profile model, Tauri command names, host-service bridge, and runtime security boundaries unchanged.
+- Fixed immediate-Escape races during overlay opening and eliminated horizontal document overflow at 320, 430, 800, and 1280 pixel viewports.
 
-### Intended files
+### Files changed
 
 - `apps/slopity/web/index.html`
 - `apps/slopity/web/app.js`
+- `apps/slopity/web/catalog.js`
+- `apps/slopity/web/dom.js`
+- `apps/slopity/web/overlay.js`
+- `apps/slopity/web/preview.js`
+- `apps/slopity/web/profile-actions.js`
+- `apps/slopity/web/profile-editor.js`
+- `apps/slopity/web/views.js`
 - `apps/slopity/web/styles.css`
+- `apps/slopity/web/overlays.css`
+- `apps/slopity/web/responsive.css`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification performed
 
-- `node --check apps/slopity/web/app.js`
-- `cargo fmt --all -- --check`
-- `cargo test --workspace --all-features`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- Linux Tauri compilation through `npm run tauri:check` in `apps/slopity`.
-- Android ARM64 debug build through the repository CI runner.
-- Dashboard loads persisted profiles and displays accurate runtime states.
-- Add Server opens and closes as an accessible bottom sheet.
-- Built-in HTTP and Website foundation templates create usable built-in HTTP profiles.
-- Unsupported templates are visibly marked as planned and cannot falsely start.
-- Details expose URLs, request count, logs, validation messages, and start/stop controls.
-- Drawer, sheets, dialogs, and menus close through their controls, backdrop interaction, and Escape where applicable.
-- Existing create, edit, clone, enable, disable, delete, start, stop, refresh, and persistence wiring remains connected to the current Tauri commands.
+- `node --check` passed for all eight JavaScript modules.
+- Python's standard HTML parser accepted `apps/slopity/web/index.html`.
+- Local module-import resolution found no missing relative JavaScript modules.
+- A source scan found no `innerHTML`, `outerHTML`, `insertAdjacentHTML`, or `document.write` usage in the redesigned frontend.
+- Headless Chromium interaction testing loaded five preview profiles with zero page errors; opened and closed the drawer, Add Server sheet, and details sheet; verified Escape dismissal; and verified the Website template maps to `built-in-http` with an explicit fixed-probe explanation.
+- The responsive browser matrix passed without horizontal document overflow at 320, 430, 800, and 1280 pixels. The grid resolved to one, two, three, and four columns at the expected breakpoints.
+- GitHub Actions workflow run `31041278188` passed the progress-ledger guard and `cargo fmt --all -- --check`.
+- The same run passed `cargo test --workspace --all-features` and all existing workspace tests.
+- The same run passed `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- The same run passed the non-interactive Linux prerequisites check and `npm run tauri:check`, compiling the Linux Tauri shell without bundling.
+- The same run installed the configured Android SDK and NDK, initialized the generated Tauri Android project, and passed `npm run android:build -- --debug --target aarch64`.
+- The Android job uploaded artifact `8944955353`, named `slopity-android-debug-720d3e5ebcbfb5a2c0dd64d31fae7c92c8aceeb7`, with digest `sha256:299c9a6526626660eadcc1e2f1de933c65f3afe18055aba64926a80701a3ca06` and 14-day retention.
+- Draft pull request `#2` remains open, unmerged, and based on `main`.
+
+### Verification pending
+
+- Interactive Linux Tauri smoke testing of create, edit, clone, enable, disable, delete, built-in HTTP start, request generation, URL display, log display, stop, application restart, and profile persistence.
+- Installation of the generated APK on an ARM64 Android device and validation of touch behavior, system safe areas, keyboard behavior, notification visibility, foreground reachability, background reachability, graceful stop, and port release.
+- Screenshot capture from the native Linux WebView or a physical Android device. The recorded screenshots are from the explicitly labeled browser preview path.
+
+### Known limitations
+
+- The Website template currently creates the fixed built-in HTTP probe foundation; it does not host user-selected static files or a web application.
+- Minecraft, Node.js, import, custom, Java, Python, PHP, and native profiles remain unavailable configuration placeholders and expose no false start path.
+- Browser preview mode uses sample data for visual and interaction testing and intentionally blocks persistence and runtime mutations.
+- Runtime state remains process-local and resets to stopped after the application process exits, as documented by Step 008.
+- Android compilation does not prove OEM background behavior, app-restart behavior, or Google Play foreground-service policy acceptance.
+- The dashboard uses bundled CSS/text illustrations rather than licensed game artwork from the mockup.
+
+### Follow-up
+
+Run the native Linux interaction and restart-persistence smoke test, then install the uploaded ARM64 debug APK on a physical Android device for the remaining UI, notification, reachability, and background-hosting proof.
 
 ## Step 009: publish installable Android debug artifacts
 
