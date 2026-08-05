@@ -2,6 +2,53 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 010: redesign the mobile server dashboard
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Redesign the shared static HTML, CSS, and JavaScript interface around the supplied mobile mockup. Deliver a mobile-first saved-server dashboard, responsive server-card grid, functional hamburger drawer, add-server bottom sheet, compact per-server action menu, focused details surface, and profile editor while preserving the existing Tauri commands, Rust profile persistence, and built-in HTTP lifecycle behavior.
+
+### Non-goals
+
+- Rewriting the Rust core, persistence model, Tauri command surface, Android foreground service, or built-in HTTP runtime unless a small compatibility adjustment proves unavoidable.
+- Claiming Minecraft, Node.js, imported VPS, static-site, or arbitrary custom runtimes are operational.
+- Adding a frontend framework, icon dependency, shell command execution, downloads, uploads, remote management, TLS, authentication, or runtime-provider installation.
+- Merging the branch, changing `main`, or modifying CI workflow behavior.
+
+### Risks
+
+- Existing profile names, URLs, validation errors, and runtime logs are user-controlled and must never be interpolated into unsafe HTML.
+- The same WebView must remain usable on small Android phones, tablets, and Linux windows without horizontal overflow or controls hidden behind system safe areas.
+- Unsupported templates must remain honest placeholders and cannot expose start controls that imply a working provider.
+- Running profiles must preserve backend-enforced edit, disable, and delete restrictions.
+- Modal, drawer, popover, and editor focus management must not strand keyboard users or leave body scrolling locked.
+
+### Intended files
+
+- `apps/slopity/web/index.html`
+- `apps/slopity/web/app.js`
+- `apps/slopity/web/styles.css`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- `node --check apps/slopity/web/app.js`
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- Linux Tauri compilation through `npm run tauri:check` in `apps/slopity`.
+- Android ARM64 debug build through the repository CI runner.
+- Dashboard loads persisted profiles and displays accurate runtime states.
+- Add Server opens and closes as an accessible bottom sheet.
+- Built-in HTTP and Website foundation templates create usable built-in HTTP profiles.
+- Unsupported templates are visibly marked as planned and cannot falsely start.
+- Details expose URLs, request count, logs, validation messages, and start/stop controls.
+- Drawer, sheets, dialogs, and menus close through their controls, backdrop interaction, and Escape where applicable.
+- Existing create, edit, clone, enable, disable, delete, start, stop, refresh, and persistence wiring remains connected to the current Tauri commands.
+
 ## Step 009: publish installable Android debug artifacts
 
 **Status:** DONE  
