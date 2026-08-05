@@ -2,6 +2,42 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 002: pause Windows CI and use the Pop!_OS runner
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Pause Windows compilation until the application is functionally mature and the repository is public. Route active Rust, Linux Tauri, and Android CI work to the connected self-hosted Pop!_OS runner.
+
+### Non-goals
+
+- Removing Windows portability from the Rust/Tauri architecture.
+- Shipping or testing a Windows application during this step.
+- Publishing the repository.
+- Implementing a real server runtime.
+
+### Risks
+
+- The self-hosted runner may be missing Rust, Node.js, WebKitGTK, Java, Android SDK, or NDK dependencies.
+- Multiple jobs cannot run concurrently on a single runner unless multiple runner services are registered.
+- Self-hosted job cleanup and toolchain maintenance become repository-owner responsibilities.
+
+### Acceptance checks
+
+- No active job uses a GitHub-hosted Windows runner.
+- Rust, Linux shell, and Android jobs select `[self-hosted, Linux, X64]`.
+- Jobs run serially enough to avoid competing for the single runner.
+- Documentation states that Windows remains architecturally supported but CI is deferred.
+
+### Intended files
+
+- `.github/workflows/ci.yml`
+- `README.md`
+- `TASK.md`
+- `PROGRESS.md`
+
 ## Step 001: portable Rust and Tauri foundation
 
 **Status:** DONE  
