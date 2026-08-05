@@ -4,9 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 007: remove the blocking GitHub Rust cache
 
-**Status:** PARTIAL  
+**Status:** DONE  
 **Declared:** 2026-08-05  
-**Updated:** 2026-08-05
+**Completed:** 2026-08-05
 
 ### Scope
 
@@ -30,15 +30,16 @@ Remove `Swatinem/rust-cache` from the Rust-quality job on the persistent self-ho
 - `.github/workflows/ci.yml`
 - `PROGRESS.md`
 
-### Verification pending
+### Verification performed
 
-- The replacement run must cancel the superseded cache-blocked run through workflow concurrency.
-- The replacement run must reach formatting without a remote cache restore.
-- Step 006 Rust, Linux, and Android checks remain pending behind this repair.
+- Replacement workflow run `31012340919` reached the progress-ledger check and `cargo fmt --all -- --check` immediately after Rust toolchain setup.
+- No GitHub cache restore step was present in the replacement run.
+- The runner exposed Slopity's actual formatting result instead of stalling in cache plumbing.
+- Workflow concurrency superseded the obsolete cache-blocked validation path.
 
 ### Follow-up
 
-Inspect the replacement run and mark this step done once the Rust-quality job reaches Slopity's own commands.
+Continue Step 006 validation through formatting, tests, Clippy, Linux, and Android.
 
 ## Step 006: add versioned profile persistence and CRUD
 
@@ -68,6 +69,7 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 - Added Tauri state and commands backed by the writable application-data directory on Linux and Android.
 - Replaced sample-only profile rendering with a shared profile editor and create/edit/clone/toggle/delete flows.
 - Kept executable paths optional and made the UI explicit that enabling configuration does not start a server.
+- Applied the exact two formatting changes reported by Rust 1.89.0 in workflow run `31012340919`.
 
 ### Files changed
 
@@ -81,9 +83,15 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 - `TASK.md`
 - `PROGRESS.md`
 
+### Verification performed
+
+- Workflow run `31012340919` reached `cargo fmt --all -- --check` without infrastructure blockage.
+- Rustfmt reported only export wrapping and one `matches!` layout in the new profile-store files.
+- Those exact mechanical changes were applied without behavior changes.
+
 ### Verification pending
 
-- The implementation was prepared without a local Rust toolchain, so `cargo fmt`, tests, and Clippy must be proven by the self-hosted runner.
+- A replacement run must confirm formatting, workspace tests, and Clippy.
 - Linux Tauri compilation must prove the new managed state and command signatures.
 - Android ARM64 compilation must prove application-data path resolution and mobile command generation.
 - UI flows require an interactive smoke test after the compile gates pass.
@@ -97,7 +105,7 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 
 ### Follow-up
 
-Inspect the Step 006 CI run. Fix only observed formatting, compiler, Clippy, Linux, or Android failures, then mark this step done after an interactive persistence smoke test.
+Inspect the replacement CI run. Fix only observed compiler, test, Clippy, Linux, or Android failures, then perform an interactive persistence smoke test.
 
 ## Step 005: make Linux dependency validation non-interactive
 
