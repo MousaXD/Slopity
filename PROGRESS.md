@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 004: supply Tauri icon and clear compile warning
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -25,18 +26,26 @@ Add the application icon required by `tauri::generate_context!()` and remove the
 - Compilation failed in `tauri::generate_context!()` because `apps/slopity/src-tauri/icons/icon.png` did not exist.
 - The same run reported `use tauri::Manager;` as unused in the Tauri shell.
 
-### Intended files
+### Delivered
+
+- Added a valid 512 by 512 RGBA PNG at the path expected by Tauri.
+- Removed the unused `tauri::Manager` import.
+- Kept the existing Tauri commands, setup hook, runtime catalog, and application behavior unchanged.
+
+### Files changed
 
 - `apps/slopity/src-tauri/icons/icon.png`
 - `apps/slopity/src-tauri/src/lib.rs`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification pending
 
-- The icon is a valid RGBA PNG readable by Tauri tooling.
-- `cargo fmt --all -- --check` remains clean.
-- `cargo test --workspace --all-features` gets beyond the missing-icon failure.
-- Clippy begins, or the runner exposes the next genuine compiler failure.
+- A new self-hosted workflow run must confirm Tauri can decode the icon and `cargo test` gets beyond `generate_context!()`.
+- Clippy, Linux Tauri compilation, and Android validation remain pending behind the Rust job.
+
+### Follow-up
+
+Inspect the next runner result and declare a separate step for any newly observed compiler, Clippy, Linux, or Android issue.
 
 ## Step 003: stabilize Rust CI formatting gate
 

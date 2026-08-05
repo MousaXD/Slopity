@@ -6,7 +6,6 @@ use slopity_core::{
     RuntimeAvailability, RuntimeKind, ServerProfile, ValidationIssue,
 };
 use std::collections::HashSet;
-use tauri::Manager;
 use tauri_plugin_slopity_host::{HostServiceCapability, SlopityHostExt};
 
 #[derive(Debug, Serialize)]
