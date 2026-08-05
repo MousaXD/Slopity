@@ -31,6 +31,7 @@ pub struct HostServiceStatus {
     pub reason: String,
 }
 
+#[cfg(target_os = "android")]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct StartHostRequest {
