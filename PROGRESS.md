@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 003: stabilize Rust CI formatting gate
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -25,7 +26,13 @@ Apply the exact `rustfmt` changes reported by the first self-hosted CI run so Ru
 - `cargo fmt --all -- --check` failed and printed deterministic formatting diffs in six Rust files.
 - Tests, Clippy, Linux, and Android jobs were skipped because the workflow is intentionally sequential.
 
-### Intended files
+### Delivered
+
+- Applied the exact import ordering, line wrapping, function-signature layout, and assertion layout requested by Rust 1.89.0 `rustfmt`.
+- Changed only formatting in the six files identified by the runner.
+- Preserved runtime behavior, APIs, feature flags, and workflow structure.
+
+### Files changed
 
 - `apps/slopity/src-tauri/src/lib.rs`
 - `crates/slopity-core/src/capability.rs`
@@ -35,11 +42,15 @@ Apply the exact `rustfmt` changes reported by the first self-hosted CI run so Ru
 - `plugins/tauri-plugin-slopity-host/src/lib.rs`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification pending
 
-- `cargo fmt --all -- --check` passes on the self-hosted runner.
-- Rust tests and Clippy begin running, exposing any genuine code issues.
-- No behavior changes are introduced by this step.
+- The formatting changes were derived directly from the failed runner output.
+- A new self-hosted workflow run must confirm `cargo fmt --all -- --check` passes.
+- Rust tests, Clippy, Linux Tauri compilation, and Android validation remain pending behind that gate.
+
+### Follow-up
+
+Inspect the next self-hosted run. Mark this step done once formatting passes, then declare a new step for any compiler, Clippy, Linux, or Android failure that appears.
 
 ## Step 002: pause Windows CI and use the Pop!_OS runner
 
