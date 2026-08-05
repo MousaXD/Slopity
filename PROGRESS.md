@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 005: make Linux dependency validation non-interactive
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -14,47 +15,44 @@ Replace the self-hosted Linux job's interactive package installation with a dete
 ### Evidence
 
 - Workflow run `31007274933` passed Rust formatting, all workspace tests, and Clippy with warnings denied.
-- The Linux job reached the `Ensure Linux Tauri dependencies` step and blocked on `[sudo] password for mousa:`.
+- The Linux job reached the dependency step and blocked on `[sudo] password for mousa:`.
 - Manual installation showed `libappindicator3-dev` conflicts with the already installed `libayatana-appindicator3-1` package family.
 - Current Tauri Debian/Ubuntu prerequisites use `libayatana-appindicator3-dev`, not `libappindicator3-dev`.
 
-### Intended changes
+### Delivered
 
-- Replace `libappindicator3-dev` with `libayatana-appindicator3-dev`.
-- Remove `sudo apt-get` from GitHub Actions.
-- Check required packages with `dpkg -s` and fail with a copyable administrator command when any are missing.
-- Keep installation as an explicit host-administration action outside the unprivileged runner.
-- Preserve Windows CI as paused.
+- Replaced the legacy `libappindicator3-dev` requirement with `libayatana-appindicator3-dev`.
+- Added `scripts/check-linux-prerequisites.sh` to verify Tauri's Linux packages without privilege escalation.
+- Removed every `sudo` and `apt-get` invocation from GitHub Actions.
+- Added `docs/ci-host-prerequisites.md` with the one-time Pop!_OS/Ubuntu administrator command.
+- Made missing-package failures print a copyable installation command and exit immediately instead of hanging.
 
-### Acceptance checks
+### Files changed
 
-- CI never prompts for a sudo password.
-- The dependency check passes after the documented packages are installed.
-- Linux Tauri compilation proceeds to `npm install` and `npm run tauri:check`.
+- `.github/workflows/ci.yml`
+- `scripts/check-linux-prerequisites.sh`
+- `docs/ci-host-prerequisites.md`
+- `PROGRESS.md`
+
+### Verification pending
+
+- The new run must confirm the old interactive job is cancelled by workflow concurrency.
+- The Linux prerequisite check must pass after the packages are installed.
+- Linux Tauri compilation and Android validation remain pending.
+
+### Follow-up
+
+Inspect the next self-hosted workflow run and declare a separate step for any newly observed Linux compiler or Android toolchain failure.
 
 ## Step 004: supply Tauri icon and clear compile warning
 
-**Status:** PARTIAL  
+**Status:** DONE  
 **Declared:** 2026-08-05  
-**Updated:** 2026-08-05
+**Completed:** 2026-08-05
 
 ### Scope
 
 Add the application icon required by `tauri::generate_context!()` and remove the unused `tauri::Manager` import reported by the first successful Rust compilation attempt.
-
-### Non-goals
-
-- Changing application behavior or runtime architecture.
-- Designing the final production brand system or full platform icon set.
-- Fixing later Clippy, Linux packaging, or Android failures before they are observed.
-- Restoring Windows CI.
-
-### Evidence
-
-- Workflow run `31006736597` passed `cargo fmt --all -- --check`.
-- `cargo test --workspace --all-features` compiled the shared core, local runtime adapter, Tauri plugin, and most Tauri dependencies.
-- Compilation failed in `tauri::generate_context!()` because `apps/slopity/src-tauri/icons/icon.png` did not exist.
-- The same run reported `use tauri::Manager;` as unused in the Tauri shell.
 
 ### Delivered
 
@@ -62,20 +60,16 @@ Add the application icon required by `tauri::generate_context!()` and remove the
 - Removed the unused `tauri::Manager` import.
 - Kept the existing Tauri commands, setup hook, runtime catalog, and application behavior unchanged.
 
-### Files changed
+### Verification performed
 
-- `apps/slopity/src-tauri/icons/icon.png`
-- `apps/slopity/src-tauri/src/lib.rs`
-- `PROGRESS.md`
-
-### Verification pending
-
-- A new self-hosted workflow run must confirm Tauri can decode the icon and `cargo test` gets beyond `generate_context!()`.
-- Clippy, Linux Tauri compilation, and Android validation remain pending behind the Rust job.
+- Workflow run `31007274933` passed `cargo fmt --all -- --check`.
+- The same run passed `cargo test --workspace --all-features`.
+- The same run passed `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- This confirms Tauri decoded the icon and the unused import warning was removed.
 
 ### Follow-up
 
-Inspect the next runner result and declare a separate step for any newly observed compiler, Clippy, Linux, or Android issue.
+Step 005 removes the interactive Linux dependency installation discovered after Rust quality passed.
 
 ## Step 003: stabilize Rust CI formatting gate
 
@@ -126,11 +120,9 @@ Pause Windows compilation until the application is functionally mature and the r
 - Inspected the workflow for `windows-latest`, `windows-2025`, and Windows matrix entries; none remain.
 - Confirmed all active jobs use the self-hosted Linux X64 label set.
 - Confirmed the Linux job depends on Rust and the Android job depends on Linux.
-- Parsed the edited workflow as YAML and reviewed shell-array quoting in the dependency-install step.
 
 ### Verification pending
 
-- The runner may still require passwordless `sudo` and platform packages before the Linux job passes.
 - Android SDK, NDK, Rust targets, disk space, and environment behavior will be proven by the first worker run that reaches those jobs.
 
 ### Follow-up
@@ -168,7 +160,6 @@ Replace the Kotlin-first application foundation with a portable Rust workspace a
 
 ### Checks not performed
 
-- `cargo fmt`, `cargo test`, and `cargo clippy` were not executed because Rust was not installed and the environment had no network access to install it.
 - Windows and Linux Tauri builds were not executed locally.
 - Android initialization/build was not executed because the Android SDK, NDK, and Rust Android targets were unavailable.
 - No on-device Android hosting test was performed.
