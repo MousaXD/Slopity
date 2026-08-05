@@ -142,12 +142,11 @@ impl HttpServerManager {
             NetworkScope::Lan => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         };
         let requested_address = SocketAddr::new(bind_ip, profile.port);
-        let listener = TcpListener::bind(requested_address).map_err(|source| {
-            HttpServerError::Bind {
+        let listener =
+            TcpListener::bind(requested_address).map_err(|source| HttpServerError::Bind {
                 address: requested_address.to_string(),
                 source,
-            }
-        })?;
+            })?;
         listener
             .set_nonblocking(true)
             .map_err(HttpServerError::Listener)?;
@@ -184,9 +183,13 @@ impl HttpServerManager {
         {
             let mut state = lock_state(&snapshot);
             state.state = ServerState::Running;
-            state.log(HttpLogLevel::Info, "Built-in HTTP server is accepting requests.");
+            state.log(
+                HttpLogLevel::Info,
+                "Built-in HTTP server is accepting requests.",
+            );
         }
-        self.snapshots.insert(profile.id.clone(), Arc::clone(&snapshot));
+        self.snapshots
+            .insert(profile.id.clone(), Arc::clone(&snapshot));
         self.running.insert(
             profile.id.clone(),
             RunningServer {
@@ -220,7 +223,10 @@ impl HttpServerManager {
             let mut state = lock_state(&snapshot);
             state.state = ServerState::Failed;
             state.last_error = Some(reason.clone());
-            state.log(HttpLogLevel::Error, format!("Server thread panicked: {reason}"));
+            state.log(
+                HttpLogLevel::Error,
+                format!("Server thread panicked: {reason}"),
+            );
             return Err(HttpServerError::ThreadPanic(reason));
         }
         Ok(lock_state(&snapshot).snapshot())
@@ -342,7 +348,11 @@ fn handle_client(mut stream: TcpStream) -> io::Result<String> {
         return Ok("connection-closed".into());
     }
     let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-    let mut request_parts = request.lines().next().unwrap_or_default().split_whitespace();
+    let mut request_parts = request
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .split_whitespace();
     let method = request_parts.next().unwrap_or_default();
     let path = request_parts.next().unwrap_or("/");
 
@@ -507,8 +517,8 @@ mod tests {
 
     #[test]
     fn occupied_port_is_reported() {
-        let occupied = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
-            .expect("fixture port should bind");
+        let occupied =
+            TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("fixture port should bind");
         let port = occupied
             .local_addr()
             .expect("fixture address should be available")
