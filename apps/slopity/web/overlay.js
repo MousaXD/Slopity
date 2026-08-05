@@ -4,10 +4,9 @@ export function createOverlayController({ elements, state, closeCardMenu }) {
     state.drawerReturnFocus = document.activeElement;
     elements.drawer.hidden = false;
     elements.drawerBackdrop.hidden = false;
-    requestAnimationFrame(() => {
-      elements.drawer.classList.add('is-open');
-      elements.drawerBackdrop.classList.add('is-visible');
-    });
+    void elements.drawer.offsetWidth;
+    elements.drawer.classList.add('is-open');
+    elements.drawerBackdrop.classList.add('is-visible');
     elements.drawer.setAttribute('aria-hidden', 'false');
     elements.openDrawer.setAttribute('aria-expanded', 'true');
     syncBodyLock();
@@ -15,7 +14,7 @@ export function createOverlayController({ elements, state, closeCardMenu }) {
   }
 
   function closeDrawer({ restoreFocus = true } = {}) {
-    if (!elements.drawer.classList.contains('is-open')) {
+    if (elements.drawer.getAttribute('aria-hidden') === 'true') {
       return;
     }
     elements.drawer.classList.remove('is-open');
@@ -44,10 +43,9 @@ export function createOverlayController({ elements, state, closeCardMenu }) {
     state.sheetReturnFocus = returnFocus;
     sheet.hidden = false;
     elements.modalBackdrop.hidden = false;
-    requestAnimationFrame(() => {
-      sheet.classList.add('is-open');
-      elements.modalBackdrop.classList.add('is-visible');
-    });
+    void sheet.offsetWidth;
+    sheet.classList.add('is-open');
+    elements.modalBackdrop.classList.add('is-visible');
     syncBodyLock();
     window.setTimeout(() => firstFocusable(sheet)?.focus(), 30);
   }

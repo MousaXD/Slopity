@@ -1,3 +1,24 @@
+.app-shell {
+  overflow-x: clip;
+}
+
+.app-header,
+.server-art,
+.server-card-copy,
+.server-card-meta {
+  overflow: hidden;
+}
+
+.server-card-meta {
+  min-width: 0;
+}
+
+.status-pill {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 410px) {
   .app-shell {
     padding-right: max(12px, var(--safe-right));
@@ -44,7 +65,15 @@
   }
 
   .status-pill {
-    padding: 4px 6px;
+    gap: 4px;
+    padding: 4px;
+    font-size: 0.62rem;
+  }
+
+  .status-pill::before {
+    width: 7px;
+    min-width: 7px;
+    height: 7px;
   }
 }
 
