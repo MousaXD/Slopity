@@ -2,11 +2,58 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 006: add versioned profile persistence and CRUD
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Implement the first durable product slice: a versioned Rust profile document, filesystem persistence, validated create/edit/clone/enable/disable/delete operations, Tauri commands, and a small profile-management interface shared by Linux and Android.
+
+### Non-goals
+
+- Downloading or executing any server runtime.
+- Import/export, aggregate memory reservation, remote management, or runtime lifecycle controls.
+- Android foreground-service hosting proof.
+- Windows CI, packaging, or platform-specific work.
+
+### Risks
+
+- A failed write must not leave in-memory state claiming data was saved.
+- Unsupported future schema versions must fail clearly instead of being silently rewritten.
+- Port validation must exclude the profile being edited while still rejecting conflicts with other profiles.
+- Android and Linux must resolve a writable application-data location without leaking Tauri types into `slopity-core`.
+
+### Intended files
+
+- `Cargo.toml`
+- `crates/slopity-core/Cargo.toml`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/profile_store.rs`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `apps/slopity/web/index.html`
+- `apps/slopity/web/app.js`
+- `apps/slopity/web/styles.css`
+- `TASK.md`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- Missing storage creates a valid schema-v1 document without pretending a runtime exists.
+- Malformed JSON and unsupported schema versions return explicit errors.
+- Create, update, clone, enable, disable, and delete persist across store reloads.
+- Duplicate IDs, duplicate ports, and invalid profile fields are rejected before writing.
+- A failed persistence attempt does not replace the last successfully loaded in-memory collection.
+- The Tauri shell exposes the CRUD operations without unrestricted command execution.
+- The shared UI can perform each operation and display validation or persistence errors.
+- `cargo fmt --all -- --check`, workspace tests, Clippy, Linux Tauri compilation, and Android ARM64 debug build pass on the self-hosted runner.
+
 ## Step 005: make Linux dependency validation non-interactive
 
-**Status:** PARTIAL  
+**Status:** DONE  
 **Declared:** 2026-08-05  
-**Updated:** 2026-08-05
+**Completed:** 2026-08-05
 
 ### Scope
 
@@ -34,15 +81,18 @@ Replace the self-hosted Linux job's interactive package installation with a dete
 - `docs/ci-host-prerequisites.md`
 - `PROGRESS.md`
 
-### Verification pending
+### Verification performed
 
-- The new run must confirm the old interactive job is cancelled by workflow concurrency.
-- The Linux prerequisite check must pass after the packages are installed.
-- Linux Tauri compilation and Android validation remain pending.
+- Workflow run `31008114077` passed the non-interactive Linux prerequisite check.
+- The same run passed Linux Tauri compilation without bundling.
+- Android SDK and NDK installation completed non-interactively.
+- Tauri Android initialization completed successfully.
+- The ARM64 debug APK build completed successfully.
+- Rust formatting, all workspace tests, and Clippy with warnings denied also passed in the same run.
 
 ### Follow-up
 
-Inspect the next self-hosted workflow run and declare a separate step for any newly observed Linux compiler or Android toolchain failure.
+Step 006 begins versioned Rust profile persistence and CRUD. Windows remains deferred.
 
 ## Step 004: supply Tauri icon and clear compile warning
 
