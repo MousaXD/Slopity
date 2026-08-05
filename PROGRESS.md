@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 006: add versioned profile persistence and CRUD
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -18,16 +19,20 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 - Android foreground-service hosting proof.
 - Windows CI, packaging, or platform-specific work.
 
-### Risks
+### Delivered
 
-- A failed write must not leave in-memory state claiming data was saved.
-- Unsupported future schema versions must fail clearly instead of being silently rewritten.
-- Port validation must exclude the profile being edited while still rejecting conflicts with other profiles.
-- Android and Linux must resolve a writable application-data location without leaking Tauri types into `slopity-core`.
+- Added schema-v1 JSON profile documents with explicit rejection of malformed data and unsupported future versions.
+- Added a Tauri-independent Rust `ProfileStore` that loads, seeds, validates, persists, and reloads profile collections.
+- Added create, update, clone, enable, disable, and delete operations that write before replacing in-memory state.
+- Added collection validation for duplicate IDs, duplicate ports, and existing profile validation errors.
+- Added replacement-write handling with a rollback path for platforms that cannot rename over an existing destination.
+- Added Rust tests for initial creation, malformed/future documents, durable CRUD, duplicate-port rejection, and write-failure state preservation.
+- Added Tauri state and commands backed by the writable application-data directory on Linux and Android.
+- Replaced sample-only profile rendering with a shared profile editor and create/edit/clone/toggle/delete flows.
+- Kept executable paths optional and made the UI explicit that enabling configuration does not start a server.
 
-### Intended files
+### Files changed
 
-- `Cargo.toml`
 - `crates/slopity-core/Cargo.toml`
 - `crates/slopity-core/src/lib.rs`
 - `crates/slopity-core/src/profile_store.rs`
@@ -38,16 +43,23 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 - `TASK.md`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification pending
 
-- Missing storage creates a valid schema-v1 document without pretending a runtime exists.
-- Malformed JSON and unsupported schema versions return explicit errors.
-- Create, update, clone, enable, disable, and delete persist across store reloads.
-- Duplicate IDs, duplicate ports, and invalid profile fields are rejected before writing.
-- A failed persistence attempt does not replace the last successfully loaded in-memory collection.
-- The Tauri shell exposes the CRUD operations without unrestricted command execution.
-- The shared UI can perform each operation and display validation or persistence errors.
-- `cargo fmt --all -- --check`, workspace tests, Clippy, Linux Tauri compilation, and Android ARM64 debug build pass on the self-hosted runner.
+- The implementation was prepared without a local Rust toolchain, so `cargo fmt`, tests, and Clippy must be proven by the self-hosted runner.
+- Linux Tauri compilation must prove the new managed state and command signatures.
+- Android ARM64 compilation must prove application-data path resolution and mobile command generation.
+- UI flows require an interactive smoke test after the compile gates pass.
+
+### Known limitations
+
+- Profile import/export and aggregate resource reservations remain separate roadmap items.
+- The store is process-local and serialized behind one mutex; multi-process writers are not supported.
+- Windows persistence behavior remains architectural only while Windows CI is paused.
+- No profile operation downloads, launches, or claims support for a runtime.
+
+### Follow-up
+
+Inspect the Step 006 CI run. Fix only observed formatting, compiler, Clippy, Linux, or Android failures, then mark this step done after an interactive persistence smoke test.
 
 ## Step 005: make Linux dependency validation non-interactive
 

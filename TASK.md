@@ -18,8 +18,8 @@
 
 ## Phase 1: durable profiles and UI
 
-- [ ] Add versioned profile persistence in Rust.
-- [ ] Add create, edit, clone, enable, disable, and delete flows.
+- [x] Add versioned profile persistence in Rust.
+- [x] Add create, edit, clone, enable, disable, and delete flows.
 - [ ] Add aggregate port and memory reservations.
 - [ ] Add profile import/export without executable payloads.
 - [ ] Add actionable compatibility warnings.
