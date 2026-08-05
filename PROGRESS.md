@@ -2,6 +2,39 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 007: remove the blocking GitHub Rust cache
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
+
+### Scope
+
+Remove `Swatinem/rust-cache` from the Rust-quality job on the persistent self-hosted Pop!_OS runner so CI reaches Slopity's formatting, tests, and Clippy gates without waiting on a remote target-cache restore.
+
+### Evidence
+
+- Step 006 workflow run `31011407485` checked out the branch and installed the Rust toolchain successfully.
+- The run remained inside `Swatinem/rust-cache@v2` for several minutes and never reached the progress ledger or any Cargo command.
+- The self-hosted machine already retains its Cargo registry and toolchains under the runner user's home directory between jobs.
+- The cache action is therefore blocking validation before providing value.
+
+### Non-goals
+
+- Changing Step 006 application code.
+- Adding a new cache implementation or a machine-specific target directory.
+- Altering Linux, Android, or Windows platform scope.
+
+### Intended files
+
+- `.github/workflows/ci.yml`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- The superseded cache-blocked run is cancelled by workflow concurrency.
+- The replacement run reaches `cargo fmt --all -- --check` without a remote cache step.
+- Rust tests, Clippy, Linux Tauri compilation, and Android ARM64 validation continue in their existing order.
+
 ## Step 006: add versioned profile persistence and CRUD
 
 **Status:** PARTIAL  
