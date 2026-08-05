@@ -1,14 +1,20 @@
 # Slopity implementation roadmap
 
+## Platform priority
+
+- Linux and Android are the active development and CI targets.
+- Windows remains an architectural target, but Windows CI, packaging, and platform-specific work are deferred until the application is functionally mature and the repository is public.
+
 ## Phase 0: portable foundation
 
 - [x] Rust workspace and shared core crate.
 - [x] Multi-runtime profile model and validation.
 - [x] Conservative device resource planner.
 - [x] Desktop process adapter boundary.
-- [x] Tauri 2 shell for Windows, Linux, and Android.
+- [x] Tauri 2 shell with Linux, Android, and future Windows portability.
 - [x] Host-service capability plugin boundary.
-- [x] Cross-platform CI and agent workflow.
+- [x] Rust, Linux, and Android CI on the self-hosted Pop!_OS runner.
+- [ ] Restore Windows CI and packaging after functional maturity and open-source publication.
 
 ## Phase 1: durable profiles and UI
 
@@ -58,5 +64,7 @@ Each provider requires its own threat model, licensing review, integrity rules, 
 - [ ] Console and command history.
 - [ ] Atomic backups and verified restore.
 - [ ] Authenticated remote management.
-- [ ] Reproducible signed release pipeline.
+- [ ] Reproducible signed Linux and Android release pipeline.
+- [ ] Make the repository public with an explicit open-source license and contribution policy.
+- [ ] Restore and validate Windows CI, packaging, and platform behavior.
 - [ ] Privacy policy, Play foreground-service declaration, accessibility, localization, and device matrix.

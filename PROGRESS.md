@@ -4,39 +4,39 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 002: pause Windows CI and use the Pop!_OS runner
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** DONE  
+**Declared:** 2026-08-05  
+**Completed:** 2026-08-05
 
 ### Scope
 
 Pause Windows compilation until the application is functionally mature and the repository is public. Route active Rust, Linux Tauri, and Android CI work to the connected self-hosted Pop!_OS runner.
 
-### Non-goals
+### Delivered
 
-- Removing Windows portability from the Rust/Tauri architecture.
-- Shipping or testing a Windows application during this step.
-- Publishing the repository.
-- Implementing a real server runtime.
+- Removed the Windows runner matrix and all active Windows CI work.
+- Routed Rust quality checks, Linux Tauri compilation, and Android ARM64 validation to `[self-hosted, Linux, X64]`.
+- Ordered the jobs as Rust, Linux, then Android so one self-hosted runner handles them without overlapping workloads.
+- Added workflow concurrency cancellation for superseded runs on the same branch.
+- Kept Windows in the portable Rust/Tauri architecture while explicitly deferring Windows compilation, packaging, and validation.
+- Updated the README and roadmap to make Linux and Android the active platform priority.
 
-### Risks
+### Verification performed
 
-- The self-hosted runner may be missing Rust, Node.js, WebKitGTK, Java, Android SDK, or NDK dependencies.
-- Multiple jobs cannot run concurrently on a single runner unless multiple runner services are registered.
-- Self-hosted job cleanup and toolchain maintenance become repository-owner responsibilities.
+- Inspected the workflow for `windows-latest`, `windows-2025`, and Windows matrix entries; none remain.
+- Confirmed all active jobs use the self-hosted Linux X64 label set.
+- Confirmed the Linux job depends on Rust and the Android job depends on Linux.
+- Parsed the edited workflow as YAML and reviewed shell-array quoting in the dependency-install step.
 
-### Acceptance checks
+### Verification pending
 
-- No active job uses a GitHub-hosted Windows runner.
-- Rust, Linux shell, and Android jobs select `[self-hosted, Linux, X64]`.
-- Jobs run serially enough to avoid competing for the single runner.
-- Documentation states that Windows remains architecturally supported but CI is deferred.
+- The self-hosted run has not completed yet.
+- The runner may still require passwordless `sudo` and platform packages before the Linux job passes.
+- Android SDK, NDK, Rust targets, disk space, and environment behavior will be proven by the first worker run.
 
-### Intended files
+### Follow-up
 
-- `.github/workflows/ci.yml`
-- `README.md`
-- `TASK.md`
-- `PROGRESS.md`
+Resume Phase 1 with versioned Rust profile persistence and CRUD. Restore Windows CI only after the application is functionally mature and the repository is public.
 
 ## Step 001: portable Rust and Tauri foundation
 
