@@ -198,7 +198,8 @@ impl HttpServerManager {
                 wake_address,
             },
         );
-        Ok(lock_state(&snapshot).snapshot())
+        let result = lock_state(&snapshot).snapshot();
+        Ok(result)
     }
 
     pub fn stop(&mut self, server_id: &ServerId) -> Result<HttpServerSnapshot, HttpServerError> {
@@ -229,7 +230,8 @@ impl HttpServerManager {
             );
             return Err(HttpServerError::ThreadPanic(reason));
         }
-        Ok(lock_state(&snapshot).snapshot())
+        let result = lock_state(&snapshot).snapshot();
+        Ok(result)
     }
 
     pub fn snapshot(&mut self, server_id: &ServerId) -> Option<HttpServerSnapshot> {
