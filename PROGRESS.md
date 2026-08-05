@@ -70,6 +70,8 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 - Replaced sample-only profile rendering with a shared profile editor and create/edit/clone/toggle/delete flows.
 - Kept executable paths optional and made the UI explicit that enabling configuration does not start a server.
 - Applied the exact two formatting changes reported by Rust 1.89.0 in workflow run `31012340919`.
+- Fixed cloning to select the next free port instead of copying a conflicting source port.
+- Added assertions that the automatically selected clone port persists across store reloads.
 
 ### Files changed
 
@@ -86,14 +88,15 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 ### Verification performed
 
 - Workflow run `31012340919` reached `cargo fmt --all -- --check` without infrastructure blockage.
-- Rustfmt reported only export wrapping and one `matches!` layout in the new profile-store files.
-- Those exact mechanical changes were applied without behavior changes.
+- Rustfmt reported only export wrapping and one `matches!` layout in the new profile-store files; those exact mechanical changes were applied.
+- Workflow run `31012808047` passed formatting and ran nine Rust tests. Eight passed; the durable CRUD test exposed the cloned-port conflict.
+- Workflow run `31013262338` passed formatting, all nine Rust tests, Clippy with warnings denied, and Linux Tauri compilation after the clone-port fix.
+- Android setup, SDK/NDK verification, dependency installation, and Tauri Android initialization all passed in the same run.
+- The first Android ARM64 APK attempt failed during the final build step. GitHub's decoded job-log blob was unavailable, and the requested job rerun remained queued rather than starting.
 
 ### Verification pending
 
-- A replacement run must confirm formatting, workspace tests, and Clippy.
-- Linux Tauri compilation must prove the new managed state and command signatures.
-- Android ARM64 compilation must prove application-data path resolution and mobile command generation.
+- A fresh workflow attempt must reproduce or clear the Android ARM64 APK failure and expose logs if it fails.
 - UI flows require an interactive smoke test after the compile gates pass.
 
 ### Known limitations
@@ -105,7 +108,7 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 
 ### Follow-up
 
-Inspect the replacement CI run. Fix only observed compiler, test, Clippy, Linux, or Android failures, then perform an interactive persistence smoke test.
+Use the fresh workflow attempt created by this ledger update to validate Android. Fix only an observed reproducible failure, then perform an interactive persistence smoke test.
 
 ## Step 005: make Linux dependency validation non-interactive
 
