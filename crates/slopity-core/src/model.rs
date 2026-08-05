@@ -8,6 +8,7 @@ pub struct ServerId(pub String);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RuntimeKind {
+    BuiltInHttp,
     Java,
     NodeJs,
     Python,
@@ -51,6 +52,18 @@ pub struct ServerProfile {
 pub fn sample_profiles() -> Vec<ServerProfile> {
     vec![
         ServerProfile {
+            id: ServerId("http-example".into()),
+            name: "Built-in HTTP example".into(),
+            runtime: RuntimeKind::BuiltInHttp,
+            executable: None,
+            arguments: Vec::new(),
+            working_directory: None,
+            port: 8_080,
+            memory_mib: 128,
+            network_scope: NetworkScope::Loopback,
+            enabled: false,
+        },
+        ServerProfile {
             id: ServerId("paper-example".into()),
             name: "Paper example".into(),
             runtime: RuntimeKind::Java,
@@ -81,7 +94,7 @@ pub fn sample_profiles() -> Vec<ServerProfile> {
             executable: None,
             arguments: Vec::new(),
             working_directory: None,
-            port: 8_080,
+            port: 8_081,
             memory_mib: 256,
             network_scope: NetworkScope::Loopback,
             enabled: false,

@@ -32,37 +32,51 @@ const elements = {
 
 const state = {
   profiles: [],
+  servers: [],
   editingId: null,
   schemaVersion: null,
   busy: false,
 };
 
-async function loadDashboard() {
+async function loadDashboard({ announce = true } = {}) {
   try {
     requireNativeBridge();
     const snapshot = await tauriInvoke('dashboard_snapshot');
     renderDashboard(snapshot);
-    showNotice('Profile storage refreshed.', 'success');
+    if (announce) {
+      showNotice('Profile and server state refreshed.', 'success');
+    }
   } catch (error) {
     elements.hostTitle.textContent = 'Native bridge unavailable';
     elements.hostState.textContent = 'Preview only';
     elements.hostState.className = 'status blocked';
     elements.hostReason.textContent = String(error);
     elements.profiles.innerHTML = '<article class="card error">Run this frontend through the Tauri shell to read Rust state.</article>';
-    showNotice(String(error), 'error');
+    if (announce) {
+      showNotice(String(error), 'error');
+    }
   }
 }
 
 function renderDashboard(snapshot) {
   state.profiles = snapshot.profiles;
+  state.servers = snapshot.servers ?? [];
   state.schemaVersion = snapshot.profileSchemaVersion;
 
   elements.platform.textContent = `${snapshot.platform} · ${snapshot.architecture}`;
-  elements.hostTitle.textContent = snapshot.hostService.durableHostingAvailable
-    ? 'Desktop hosting boundary ready'
-    : 'Hosting proof still required';
-  elements.hostState.textContent = snapshot.hostService.durableHostingAvailable ? 'Foundation ready' : 'Not claimed';
-  elements.hostState.className = snapshot.hostService.durableHostingAvailable ? 'status ready' : 'status blocked';
+  if (snapshot.hostService.platform === 'android' && snapshot.hostService.foregroundServiceAvailable) {
+    elements.hostTitle.textContent = 'Android foreground bridge compiled';
+    elements.hostState.textContent = 'Device proof pending';
+    elements.hostState.className = 'status neutral';
+  } else if (snapshot.hostService.durableHostingAvailable) {
+    elements.hostTitle.textContent = 'Built-in hosting available';
+    elements.hostState.textContent = 'Ready';
+    elements.hostState.className = 'status ready';
+  } else {
+    elements.hostTitle.textContent = 'Hosting proof still required';
+    elements.hostState.textContent = 'Not claimed';
+    elements.hostState.className = 'status blocked';
+  }
   elements.hostReason.textContent = snapshot.hostService.reason;
 
   const budget = snapshot.resourcePlan.safeServerBudgetMib;
@@ -77,42 +91,72 @@ function renderDashboard(snapshot) {
 
 function renderProfiles() {
   const enabled = state.profiles.filter((profile) => profile.enabled).length;
-  elements.profileSummary.textContent = `${state.profiles.length} stored · ${enabled} enabled · schema v${state.schemaVersion ?? '?'}`;
+  const active = state.servers.filter((server) => isActiveState(server.state)).length;
+  elements.profileSummary.textContent = `${state.profiles.length} stored · ${enabled} enabled · ${active} active · schema v${state.schemaVersion ?? '?'}`;
 
   if (state.profiles.length === 0) {
-    elements.profiles.innerHTML = '<article class="card empty-state"><h3>No profiles yet</h3><p class="muted">Create the first durable workload configuration. Nothing will execute.</p></article>';
+    elements.profiles.innerHTML = '<article class="card empty-state"><h3>No profiles yet</h3><p class="muted">Create a built-in HTTP profile to host the first local probe.</p></article>';
     return;
   }
 
   elements.profiles.replaceChildren(...state.profiles.map(profileCard));
+  setBusy(state.busy);
 }
 
 function profileCard(profile) {
   const card = document.createElement('article');
   card.className = 'card profile-card';
   const runtime = profile.runtime.replaceAll('-', ' ');
-  const configured = profile.executable ? 'Executable configured' : 'Runtime path pending';
-  const enabledClass = profile.enabled ? 'ready' : 'neutral';
-  const enabledText = profile.enabled ? 'Enabled' : 'Disabled';
+  const builtIn = profile.runtime === 'built-in-http';
+  const server = serverFor(profile.id);
+  const observedState = server?.state ?? 'stopped';
+  const active = isActiveState(observedState);
+  const stateClass = observedState === 'running'
+    ? 'ready'
+    : observedState === 'failed'
+      ? 'blocked'
+      : 'neutral';
+  const runtimeText = builtIn
+    ? 'Built-in Rust runtime'
+    : profile.executable
+      ? 'Executable configured, not verified'
+      : 'Runtime path pending';
+  const urls = server?.urls?.length
+    ? `<div class="server-urls">${server.urls.map((url) => `<code>${escapeHtml(url)}</code>`).join('')}</div>`
+    : '';
+  const logs = server?.logs?.length
+    ? `<details class="server-logs"><summary>Logs · ${server.requestCount} requests</summary><pre>${escapeHtml(server.logs.slice(-8).map((entry) => `[${entry.level}] ${entry.message}`).join('\n'))}</pre></details>`
+    : '';
+  const serverControl = builtIn
+    ? active
+      ? `<button class="server-stop" type="button" data-action="server-stop" data-id="${escapeHtml(profile.id)}">Stop</button>`
+      : `<button class="primary" type="button" data-action="server-start" data-id="${escapeHtml(profile.id)}" data-locked="${profile.enabled ? 'false' : 'true'}" title="${profile.enabled ? 'Start the built-in HTTP server' : 'Enable the profile before starting'}">Start</button>`
+    : '';
+
   card.innerHTML = `
     <div class="card-heading profile-heading">
       <div>
         <p class="eyebrow">${escapeHtml(runtime)}</p>
         <h3>${escapeHtml(profile.name)}</h3>
       </div>
-      <span class="status ${enabledClass}">${enabledText}</span>
+      <span class="status ${stateClass}">${escapeHtml(observedState)}</span>
     </div>
-    <p class="muted">${escapeHtml(configured)} · ID ${escapeHtml(profile.id)}</p>
+    <p class="muted">${escapeHtml(runtimeText)} · ID ${escapeHtml(profile.id)}</p>
     <div class="profile-meta">
       <span>Port ${profile.port}</span>
       <span>${profile.memoryMib} MiB</span>
       <span>${escapeHtml(profile.networkScope)}</span>
+      <span>${profile.enabled ? 'enabled' : 'disabled'}</span>
     </div>
+    ${server?.lastError ? `<p class="server-error">${escapeHtml(server.lastError)}</p>` : ''}
+    ${urls}
+    ${logs}
     <div class="profile-actions">
-      <button type="button" data-action="edit" data-id="${escapeHtml(profile.id)}">Edit</button>
+      ${serverControl}
+      <button type="button" data-action="edit" data-id="${escapeHtml(profile.id)}" data-locked="${active}">Edit</button>
       <button type="button" data-action="clone" data-id="${escapeHtml(profile.id)}">Clone</button>
-      <button type="button" data-action="toggle" data-id="${escapeHtml(profile.id)}">${profile.enabled ? 'Disable' : 'Enable'}</button>
-      <button class="danger" type="button" data-action="delete" data-id="${escapeHtml(profile.id)}">Delete</button>
+      <button type="button" data-action="toggle" data-id="${escapeHtml(profile.id)}" data-locked="${active}">${profile.enabled ? 'Disable' : 'Enable'}</button>
+      <button class="danger" type="button" data-action="delete" data-id="${escapeHtml(profile.id)}" data-locked="${active}">Delete</button>
     </div>
   `;
   return card;
@@ -123,15 +167,16 @@ function openEditor(profile = null) {
   elements.editorTitle.textContent = profile ? `Edit ${profile.name}` : 'Create profile';
   elements.id.readOnly = Boolean(profile);
   elements.id.value = profile?.id ?? nextProfileId();
-  elements.name.value = profile?.name ?? 'New server';
-  elements.runtime.value = profile?.runtime ?? 'native';
+  elements.name.value = profile?.name ?? 'My HTTP server';
+  elements.runtime.value = profile?.runtime ?? 'built-in-http';
   elements.network.value = profile?.networkScope ?? 'loopback';
   elements.port.value = String(profile?.port ?? nextAvailablePort());
-  elements.memory.value = String(profile?.memoryMib ?? 512);
+  elements.memory.value = String(profile?.memoryMib ?? 128);
   elements.executable.value = profile?.executable ?? '';
   elements.directory.value = profile?.workingDirectory ?? '';
   elements.arguments.value = profile?.arguments?.join('\n') ?? '';
-  elements.enabled.checked = profile?.enabled ?? false;
+  elements.enabled.checked = profile?.enabled ?? true;
+  updateRuntimeFields();
   elements.editor.hidden = false;
   elements.editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
   elements.name.focus();
@@ -143,17 +188,27 @@ function closeEditor() {
   elements.form.reset();
 }
 
+function updateRuntimeFields() {
+  const builtIn = elements.runtime.value === 'built-in-http';
+  [elements.executable, elements.directory, elements.arguments].forEach((field) => {
+    field.disabled = builtIn;
+  });
+}
+
 function readProfileForm() {
+  const builtIn = elements.runtime.value === 'built-in-http';
   return {
     id: elements.id.value.trim(),
     name: elements.name.value.trim(),
     runtime: elements.runtime.value,
-    executable: nullable(elements.executable.value),
-    arguments: elements.arguments.value
-      .split('\n')
-      .map((argument) => argument.trim())
-      .filter(Boolean),
-    workingDirectory: nullable(elements.directory.value),
+    executable: builtIn ? null : nullable(elements.executable.value),
+    arguments: builtIn
+      ? []
+      : elements.arguments.value
+        .split('\n')
+        .map((argument) => argument.trim())
+        .filter(Boolean),
+    workingDirectory: builtIn ? null : nullable(elements.directory.value),
     port: Number(elements.port.value),
     memoryMib: Number(elements.memory.value),
     networkScope: elements.network.value,
@@ -173,7 +228,7 @@ async function saveProfile(event) {
 
 async function handleProfileAction(event) {
   const button = event.target.closest('button[data-action]');
-  if (!button || state.busy) {
+  if (!button || state.busy || button.disabled) {
     return;
   }
 
@@ -185,6 +240,20 @@ async function handleProfileAction(event) {
   }
 
   switch (button.dataset.action) {
+    case 'server-start':
+      await runServerCommand(
+        'start_builtin_http_server',
+        { id: profile.id },
+        `${profile.name} started.`,
+      );
+      break;
+    case 'server-stop':
+      await runServerCommand(
+        'stop_builtin_http_server',
+        { id: profile.id },
+        `${profile.name} stopped.`,
+      );
+      break;
     case 'edit':
       openEditor(profile);
       break;
@@ -226,7 +295,7 @@ async function cloneProfile(profile) {
   await runProfileCommand(
     'clone_server_profile',
     { sourceId: profile.id, newId, newName },
-    `${newName} cloned in a disabled state.`,
+    `${newName} cloned in a disabled state with a free port.`,
   );
 }
 
@@ -246,13 +315,61 @@ async function runProfileCommand(command, args, successMessage) {
   }
 }
 
+async function runServerCommand(command, args, successMessage) {
+  try {
+    requireNativeBridge();
+    setBusy(true);
+    const snapshot = await tauriInvoke(command, args);
+    upsertServer(snapshot);
+    renderProfiles();
+    const urlNote = snapshot.urls?.length ? ` ${snapshot.urls.join(' · ')}` : '';
+    showNotice(`${successMessage}${urlNote}`, 'success');
+    return true;
+  } catch (error) {
+    showNotice(String(error), 'error');
+    await refreshServerStates();
+    return false;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function refreshServerStates() {
+  if (!tauriInvoke || state.busy) {
+    return;
+  }
+  try {
+    state.servers = await tauriInvoke('list_builtin_http_servers');
+    renderProfiles();
+  } catch (error) {
+    console.error('Server state refresh failed', error);
+  }
+}
+
+function upsertServer(snapshot) {
+  const index = state.servers.findIndex((server) => server.serverId === snapshot.serverId);
+  if (index === -1) {
+    state.servers.push(snapshot);
+  } else {
+    state.servers[index] = snapshot;
+  }
+}
+
+function serverFor(profileId) {
+  return state.servers.find((server) => server.serverId === profileId) ?? null;
+}
+
+function isActiveState(serverState) {
+  return ['starting', 'running', 'stopping'].includes(serverState);
+}
+
 function setBusy(busy) {
   state.busy = busy;
   elements.saveProfile.disabled = busy;
   elements.refresh.disabled = busy;
   elements.newProfile.disabled = busy;
   elements.profiles.querySelectorAll('button').forEach((button) => {
-    button.disabled = busy;
+    button.disabled = busy || button.dataset.locked === 'true';
   });
 }
 
@@ -309,9 +426,11 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-elements.refresh.addEventListener('click', loadDashboard);
+elements.refresh.addEventListener('click', () => loadDashboard());
 elements.newProfile.addEventListener('click', () => openEditor());
 elements.cancelEditor.addEventListener('click', closeEditor);
+elements.runtime.addEventListener('change', updateRuntimeFields);
 elements.form.addEventListener('submit', saveProfile);
 elements.profiles.addEventListener('click', handleProfileAction);
 loadDashboard();
+window.setInterval(refreshServerStates, 2_000);

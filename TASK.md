@@ -26,10 +26,11 @@
 
 ## Phase 2: Android hosting proof
 
-- [ ] Implement the Kotlin foreground-service side of `tauri-plugin-slopity-host`.
-- [ ] Keep hosting user-initiated and visibly controlled by a persistent notification.
-- [ ] Build a harmless loopback-only Rust test server.
-- [ ] Prove start, log capture, command input, graceful stop, forced stop, and crash detection on ARM64 Android.
+- [x] Implement the Kotlin foreground-service side of `tauri-plugin-slopity-host`.
+- [x] Keep hosting user-initiated and visibly controlled by a persistent notification.
+- [x] Build a harmless loopback-first Rust HTTP test server with opt-in LAN binding.
+- [ ] Prove start, log capture, graceful stop, forced stop, crash detection, and notification behavior on ARM64 Android.
+- [ ] Prove the server remains reachable while the UI is backgrounded and the foreground notification remains visible.
 - [ ] Record device model, Android version, ABI, battery, temperature, memory, and throttling for at least one hour.
 - [ ] Write an ADR selecting the Android process/runtime strategy.
 
@@ -67,4 +68,3 @@ Each provider requires its own threat model, licensing review, integrity rules, 
 - [ ] Reproducible signed Linux and Android release pipeline.
 - [ ] Make the repository public with an explicit open-source license and contribution policy.
 - [ ] Restore and validate Windows CI, packaging, and platform behavior.
-- [ ] Privacy policy, Play foreground-service declaration, accessibility, localization, and device matrix.

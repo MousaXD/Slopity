@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 008: add the first built-in HTTP server
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -18,18 +19,25 @@ Implement Slopity's first real hosted workload as a harmless built-in Rust HTTP 
 - Claiming durable Android hosting until a real device test proves notification behavior and survival outside the foreground UI.
 - Windows CI, packaging, or platform-specific implementation.
 
-### Risks
+### Delivered
 
-- Android may compile the Rust listener while still requiring native foreground-service wiring to keep the app process eligible for long-running work.
-- LAN binding increases exposure, so loopback remains the default and the response must disclose that it is a development probe.
-- Lifecycle threads must stop cleanly without blocking the Tauri command thread or leaving a port occupied.
-- Shared runtime state must avoid poisoned locks, unbounded log growth, stale running states, and duplicate starts.
+- Added `RuntimeKind::BuiltInHttp` and a disabled loopback-first sample profile.
+- Added a Tauri-independent `slopity-runtime-http` crate using a structured lifecycle manager and a fixed harmless HTTP response.
+- Added start, stop, observed state, request counts, usable URLs, duplicate-start rejection, clean port release, and port-bind error reporting.
+- Added bounded structured logs with a 200-entry retention cap.
+- Added unit tests for serving the health endpoint, graceful stop and port release, duplicate starts, occupied ports, and bounded logs.
+- Added Tauri commands for listing, starting, and stopping built-in HTTP servers.
+- Prevented running profiles from being edited, disabled, or deleted until they stop.
+- Added UI controls for built-in HTTP profile creation, start/stop, observed state, URLs, request counts, and recent logs.
+- Added a Kotlin Android foreground service, persistent low-priority notification, Tauri mobile bridge, required manifest permissions, and the Android 14 `specialUse` declaration.
+- Kept Android durable-hosting capability false until a real-device background test passes.
+- Kept external runtime providers unavailable and excluded shell execution, uploads, and arbitrary content serving.
 
-### Intended files
+### Files changed
 
 - `Cargo.toml`
 - `crates/slopity-core/src/model.rs`
-- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/validation.rs`
 - `crates/slopity-runtime-http/Cargo.toml`
 - `crates/slopity-runtime-http/src/lib.rs`
 - `apps/slopity/src-tauri/Cargo.toml`
@@ -37,28 +45,44 @@ Implement Slopity's first real hosted workload as a harmless built-in Rust HTTP 
 - `apps/slopity/web/index.html`
 - `apps/slopity/web/app.js`
 - `apps/slopity/web/styles.css`
-- `plugins/tauri-plugin-slopity-host/Cargo.toml`
 - `plugins/tauri-plugin-slopity-host/build.rs`
 - `plugins/tauri-plugin-slopity-host/src/lib.rs`
 - `plugins/tauri-plugin-slopity-host/src/mobile.rs`
-- `plugins/tauri-plugin-slopity-host/android/`
+- `plugins/tauri-plugin-slopity-host/android/build.gradle.kts`
+- `plugins/tauri-plugin-slopity-host/android/src/main/AndroidManifest.xml`
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostPlugin.kt`
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostForegroundService.kt`
 - `TASK.md`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification prepared
+
+- The Rust runtime has unit coverage for the declared lifecycle and networking behaviors.
+- The frontend uses only existing Tauri invocation APIs and adds no JavaScript dependencies.
+- The Android bridge follows Tauri's mobile plugin boundary and uses a user-started foreground service with an ongoing notification.
+- Production Rust contains no shell command strings and the built-in server never evaluates profile executable or argument fields.
+
+### Verification pending
 
 - `cargo fmt --all -- --check`
 - `cargo test --workspace --all-features`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- Linux Tauri shell compilation succeeds on the self-hosted Pop!_OS runner.
-- Android ARM64 debug APK compilation succeeds.
-- Unit tests prove loopback start, HTTP response, bounded logs, duplicate-start rejection, port-conflict reporting, and graceful stop.
-- The UI can create or edit a built-in HTTP profile, start it, show observed state and URLs, refresh logs, and stop it.
-- Android foreground-service calls are compiled and reported honestly as unproven until an on-device test is performed.
+- Linux Tauri shell compilation on the self-hosted Pop!_OS runner.
+- Android ARM64 debug APK compilation.
+- Interactive Linux profile/start/request/log/stop smoke test.
+- ARM64 Android notification, loopback/LAN reachability, background survival, clean stop, and port-release proof.
+
+### Known limitations
+
+- The HTTP server serves only a fixed development page and `/health`; static folder hosting is intentionally deferred.
+- Runtime state is in memory and resets to stopped after application process restart.
+- LAN URL discovery depends on an active IPv4 route; loopback URL remains available regardless.
+- Android foreground-service compilation does not prove OEM background behavior or Google Play policy acceptance.
+- No force-stop, crash-loop protection, TLS, authentication, remote management, file picker, or upload flow exists yet.
 
 ### Follow-up
 
-After CI is green, install the debug APK on an ARM64 Android device and prove notification visibility, loopback/LAN access, background survival, clean stop, and port release before marking Android durable hosting supported.
+Use CI to fix only observed formatting, compiler, Clippy, Linux, or Android failures. After green builds, perform the Linux smoke test and install the debug APK on an ARM64 device before claiming Android durable hosting.
 
 ## Step 007: remove the blocking GitHub Rust cache
 

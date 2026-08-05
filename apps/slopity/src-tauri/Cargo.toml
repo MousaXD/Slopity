@@ -21,5 +21,6 @@ tauri-build.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 slopity-core = { path = "../../../crates/slopity-core" }
+slopity-runtime-http = { path = "../../../crates/slopity-runtime-http" }
 tauri.workspace = true
 tauri-plugin-slopity-host = { path = "../../../plugins/tauri-plugin-slopity-host" }

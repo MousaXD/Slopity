@@ -14,7 +14,7 @@
         <div>
           <p class="eyebrow">Portable server host</p>
           <h1>Slopity</h1>
-          <p class="subtitle">One Rust core. Linux and Android today, Windows later. Profiles are durable; runtime support is still earned, not imagined.</p>
+          <p class="subtitle">The first real workload is here: a harmless built-in Rust HTTP server with explicit lifecycle state, bounded logs, and loopback-first networking.</p>
         </div>
         <span id="platform-pill" class="pill">Detecting platform…</span>
       </header>
@@ -40,13 +40,13 @@
         <article class="card">
           <p class="eyebrow">Runtime adapters</p>
           <h2 id="runtime-count">0 ready</h2>
-          <p class="muted">Configured profiles remain separate from installed and verified runtimes.</p>
+          <p class="muted">Only the built-in HTTP probe is runnable. External runtimes remain unavailable.</p>
         </article>
       </section>
 
       <section class="section-heading">
         <div>
-          <p class="eyebrow">Profiles</p>
+          <p class="eyebrow">Profiles and servers</p>
           <h2>Durable workloads</h2>
           <p id="profile-summary" class="muted compact">Loading profile storage…</p>
         </div>
@@ -80,6 +80,7 @@
             <label>
               <span>Runtime</span>
               <select id="profile-runtime" name="runtime">
+                <option value="built-in-http">Built-in HTTP</option>
                 <option value="java">Java</option>
                 <option value="node-js">Node.js</option>
                 <option value="python">Python</option>
@@ -100,25 +101,25 @@
               <input id="profile-port" name="port" type="number" min="1" max="65535" required />
             </label>
             <label>
-              <span>Memory (MiB)</span>
+              <span>Memory reservation (MiB)</span>
               <input id="profile-memory" name="memoryMib" type="number" min="128" max="32768" step="128" required />
             </label>
-            <label class="span-two">
-              <span>Executable path <small>optional until a runtime exists</small></span>
+            <label class="span-two external-runtime-field">
+              <span>Executable path <small>external runtimes only</small></span>
               <input id="profile-executable" name="executable" autocomplete="off" />
             </label>
-            <label class="span-two">
-              <span>Working directory <small>optional</small></span>
+            <label class="span-two external-runtime-field">
+              <span>Working directory <small>external runtimes only</small></span>
               <input id="profile-directory" name="workingDirectory" autocomplete="off" />
             </label>
-            <label class="span-two">
-              <span>Arguments <small>one argument per line</small></span>
+            <label class="span-two external-runtime-field">
+              <span>Arguments <small>one structured argument per line</small></span>
               <textarea id="profile-arguments" name="arguments" rows="4"></textarea>
             </label>
           </div>
           <label class="check-row">
             <input id="profile-enabled" name="enabled" type="checkbox" />
-            <span>Enabled as desired configuration. This does not start a server.</span>
+            <span>Enable this profile as runnable configuration. Starting remains a separate user action.</span>
           </label>
           <div class="form-actions">
             <button id="save-profile" class="primary" type="submit">Save profile</button>
@@ -130,7 +131,7 @@
 
       <section class="card truth-card">
         <h2>Current boundary</h2>
-        <p>Slopity now stores profile configuration on disk and validates every mutation in Rust. It still does not download or execute Minecraft, Java, Node.js, PHP, Python, or native server packages. Runtime proof comes next.</p>
+        <p>The built-in HTTP probe serves a fixed page and health endpoint. It does not execute files, scripts, JARs, uploaded code, or external runtimes. LAN binding is opt-in. Android foreground-service code is compiled but remains unproven until a real-device background test passes.</p>
       </section>
     </main>
   </body>

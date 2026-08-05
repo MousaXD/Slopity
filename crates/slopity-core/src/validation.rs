@@ -1,4 +1,4 @@
-use crate::{NetworkScope, ServerProfile};
+use crate::{NetworkScope, RuntimeKind, ServerProfile};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -49,12 +49,27 @@ pub fn validate_profile(
             "The requested memory budget is unusually high.",
         ));
     }
-    if profile.executable.is_none() {
+
+    if profile.runtime == RuntimeKind::BuiltInHttp {
+        if profile.executable.is_some() {
+            issues.push(warning(
+                "built-in-runtime-ignores-executable",
+                "The built-in HTTP runtime does not execute the configured executable path.",
+            ));
+        }
+        if !profile.arguments.is_empty() {
+            issues.push(warning(
+                "built-in-runtime-ignores-arguments",
+                "The built-in HTTP runtime does not execute profile arguments.",
+            ));
+        }
+    } else if profile.executable.is_none() {
         issues.push(warning(
             "runtime-not-installed",
             "No executable/runtime provider is configured; this profile is not runnable yet.",
         ));
     }
+
     if matches!(profile.network_scope, NetworkScope::Lan) {
         issues.push(warning(
             "lan-exposure",
@@ -105,6 +120,16 @@ mod tests {
     fn missing_runtime_is_a_warning_not_a_false_success() {
         let issues = validate_profile(&profile(), &HashSet::new());
         assert!(issues
+            .iter()
+            .any(|issue| issue.code == "runtime-not-installed"));
+    }
+
+    #[test]
+    fn built_in_http_does_not_require_an_executable() {
+        let mut built_in = profile();
+        built_in.runtime = RuntimeKind::BuiltInHttp;
+        let issues = validate_profile(&built_in, &HashSet::new());
+        assert!(!issues
             .iter()
             .any(|issue| issue.code == "runtime-not-installed"));
     }

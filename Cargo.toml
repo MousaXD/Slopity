@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/slopity-core",
+    "crates/slopity-runtime-http",
     "crates/slopity-runtime-local",
     "plugins/tauri-plugin-slopity-host",
     "apps/slopity/src-tauri",
