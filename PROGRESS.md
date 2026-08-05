@@ -2,29 +2,51 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
-## Step 003: stabilize Rust CI formatting gate
+## Step 004: supply Tauri icon and clear compile warning
 
-**Status:** PARTIAL  
-**Declared:** 2026-08-05  
-**Updated:** 2026-08-05
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-05
 
 ### Scope
 
-Apply the exact `rustfmt` changes reported by the first self-hosted CI run so Rust tests, Clippy, Linux Tauri compilation, and Android validation can proceed.
+Add the application icon required by `tauri::generate_context!()` and remove the unused `tauri::Manager` import reported by the first successful Rust compilation attempt.
 
 ### Non-goals
 
-- Changing runtime behavior or public APIs.
-- Adding new features.
-- Fixing compiler, Clippy, Linux, or Android failures that have not been observed yet.
+- Changing application behavior or runtime architecture.
+- Designing the final production brand system or full platform icon set.
+- Fixing later Clippy, Linux packaging, or Android failures before they are observed.
 - Restoring Windows CI.
 
 ### Evidence
 
-- Workflow run `31005297951` reached the `pop-os` self-hosted runner.
-- Checkout, Rust 1.89.0 setup, cache setup, and the progress-ledger guard succeeded.
-- `cargo fmt --all -- --check` failed and printed deterministic formatting diffs in six Rust files.
-- Tests, Clippy, Linux, and Android jobs were skipped because the workflow is intentionally sequential.
+- Workflow run `31006736597` passed `cargo fmt --all -- --check`.
+- `cargo test --workspace --all-features` compiled the shared core, local runtime adapter, Tauri plugin, and most Tauri dependencies.
+- Compilation failed in `tauri::generate_context!()` because `apps/slopity/src-tauri/icons/icon.png` did not exist.
+- The same run reported `use tauri::Manager;` as unused in the Tauri shell.
+
+### Intended files
+
+- `apps/slopity/src-tauri/icons/icon.png`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- The icon is a valid RGBA PNG readable by Tauri tooling.
+- `cargo fmt --all -- --check` remains clean.
+- `cargo test --workspace --all-features` gets beyond the missing-icon failure.
+- Clippy begins, or the runner exposes the next genuine compiler failure.
+
+## Step 003: stabilize Rust CI formatting gate
+
+**Status:** DONE  
+**Declared:** 2026-08-05  
+**Completed:** 2026-08-05
+
+### Scope
+
+Apply the exact `rustfmt` changes reported by the first self-hosted CI run so Rust tests, Clippy, Linux Tauri compilation, and Android validation can proceed.
 
 ### Delivered
 
@@ -32,25 +54,14 @@ Apply the exact `rustfmt` changes reported by the first self-hosted CI run so Ru
 - Changed only formatting in the six files identified by the runner.
 - Preserved runtime behavior, APIs, feature flags, and workflow structure.
 
-### Files changed
+### Verification performed
 
-- `apps/slopity/src-tauri/src/lib.rs`
-- `crates/slopity-core/src/capability.rs`
-- `crates/slopity-core/src/lib.rs`
-- `crates/slopity-core/src/validation.rs`
-- `crates/slopity-runtime-local/src/lib.rs`
-- `plugins/tauri-plugin-slopity-host/src/lib.rs`
-- `PROGRESS.md`
-
-### Verification pending
-
-- The formatting changes were derived directly from the failed runner output.
-- A new self-hosted workflow run must confirm `cargo fmt --all -- --check` passes.
-- Rust tests, Clippy, Linux Tauri compilation, and Android validation remain pending behind that gate.
+- Workflow run `31006736597` passed `cargo fmt --all -- --check` on the `pop-os` self-hosted runner.
+- The workflow continued into `cargo test`, proving the formatting gate was cleared.
 
 ### Follow-up
 
-Inspect the next self-hosted run. Mark this step done once formatting passes, then declare a new step for any compiler, Clippy, Linux, or Android failure that appears.
+Step 004 addresses the missing Tauri icon and unused import reported by the test compile.
 
 ## Step 002: pause Windows CI and use the Pop!_OS runner
 
@@ -80,13 +91,12 @@ Pause Windows compilation until the application is functionally mature and the r
 
 ### Verification pending
 
-- The self-hosted run has not completed yet.
 - The runner may still require passwordless `sudo` and platform packages before the Linux job passes.
-- Android SDK, NDK, Rust targets, disk space, and environment behavior will be proven by the first worker run.
+- Android SDK, NDK, Rust targets, disk space, and environment behavior will be proven by the first worker run that reaches those jobs.
 
 ### Follow-up
 
-Resume Phase 1 with versioned Rust profile persistence and CRUD. Restore Windows CI only after the application is functionally mature and the repository is public.
+Resume Phase 1 with versioned Rust profile persistence and CRUD after the foundation CI is stable. Restore Windows CI only after the application is functionally mature and the repository is public.
 
 ## Step 001: portable Rust and Tauri foundation
 
@@ -132,7 +142,7 @@ Replace the Kotlin-first application foundation with a portable Rust workspace a
 
 ### Follow-up
 
-Step 002 should implement versioned Rust profile persistence and CRUD before any real runtime download or server execution UI.
+Stabilize Linux and Android CI, then begin versioned Rust profile persistence and CRUD before any real runtime download or server execution UI.
 
 ## Step 000: repository foundation
 
