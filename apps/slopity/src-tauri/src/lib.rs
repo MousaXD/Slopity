@@ -2,8 +2,8 @@
 
 use serde::Serialize;
 use slopity_core::{
-    CapabilitySnapshot, ResourcePlan, ResourcePlanner, RuntimeAvailability, RuntimeKind,
-    ServerProfile, ValidationIssue, sample_profiles, validate_profile,
+    sample_profiles, validate_profile, CapabilitySnapshot, ResourcePlan, ResourcePlanner,
+    RuntimeAvailability, RuntimeKind, ServerProfile, ValidationIssue,
 };
 use std::collections::HashSet;
 use tauri::Manager;

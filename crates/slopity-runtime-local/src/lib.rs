@@ -32,7 +32,8 @@ impl RuntimeAdapter for LocalProcessRuntime {
             reason: if cfg!(target_os = "android") {
                 "The desktop local-process adapter is intentionally disabled on Android.".into()
             } else {
-                "The adapter is available; each profile still requires a verified executable.".into()
+                "The adapter is available; each profile still requires a verified executable."
+                    .into()
             },
         }
     }
@@ -42,7 +43,8 @@ impl RuntimeAdapter for LocalProcessRuntime {
         {
             let _ = request;
             return Err(RuntimeError::Unavailable(
-                "Android requires a separately proven runtime and foreground-service strategy.".into(),
+                "Android requires a separately proven runtime and foreground-service strategy."
+                    .into(),
             ));
         }
 

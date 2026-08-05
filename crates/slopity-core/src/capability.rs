@@ -30,7 +30,9 @@ impl ResourcePlanner {
         }
         .min(snapshot.total_memory_mib);
 
-        let memory_after_reserve = snapshot.available_memory_mib.saturating_sub(host_reserve_mib);
+        let memory_after_reserve = snapshot
+            .available_memory_mib
+            .saturating_sub(host_reserve_mib);
         let safe_server_budget_mib = memory_after_reserve.saturating_mul(70) / 100;
         let cpu_limit = snapshot.logical_cpus.saturating_sub(1).max(1);
         let memory_limit = usize::try_from(safe_server_budget_mib / 768).unwrap_or(usize::MAX);

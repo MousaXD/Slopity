@@ -17,7 +17,10 @@ pub struct ValidationIssue {
     pub message: String,
 }
 
-pub fn validate_profile(profile: &ServerProfile, reserved_ports: &HashSet<u16>) -> Vec<ValidationIssue> {
+pub fn validate_profile(
+    profile: &ServerProfile,
+    reserved_ports: &HashSet<u16>,
+) -> Vec<ValidationIssue> {
     let mut issues = Vec::new();
 
     if profile.id.0.trim().is_empty() {
@@ -27,15 +30,24 @@ pub fn validate_profile(profile: &ServerProfile, reserved_ports: &HashSet<u16>) 
         issues.push(error("profile-name-empty", "Profile name cannot be empty."));
     }
     if profile.port == 0 {
-        issues.push(error("port-zero", "Port 0 is not accepted for persisted server profiles."));
+        issues.push(error(
+            "port-zero",
+            "Port 0 is not accepted for persisted server profiles.",
+        ));
     } else if reserved_ports.contains(&profile.port) {
-        issues.push(error("port-conflict", "The selected port is already reserved by another profile."));
+        issues.push(error(
+            "port-conflict",
+            "The selected port is already reserved by another profile.",
+        ));
     }
     if profile.memory_mib < 128 {
         issues.push(error("memory-too-low", "Allocate at least 128 MiB."));
     }
     if profile.memory_mib > 32_768 {
-        issues.push(warning("memory-unusually-high", "The requested memory budget is unusually high."));
+        issues.push(warning(
+            "memory-unusually-high",
+            "The requested memory budget is unusually high.",
+        ));
     }
     if profile.executable.is_none() {
         issues.push(warning(
@@ -92,7 +104,9 @@ mod tests {
     #[test]
     fn missing_runtime_is_a_warning_not_a_false_success() {
         let issues = validate_profile(&profile(), &HashSet::new());
-        assert!(issues.iter().any(|issue| issue.code == "runtime-not-installed"));
+        assert!(issues
+            .iter()
+            .any(|issue| issue.code == "runtime-not-installed"));
     }
 
     #[test]

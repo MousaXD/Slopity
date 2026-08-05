@@ -2,8 +2,8 @@
 
 use serde::Serialize;
 use tauri::{
-    Manager, Runtime,
     plugin::{Builder, TauriPlugin},
+    Manager, Runtime,
 };
 
 #[derive(Debug, Clone, Serialize)]
