@@ -2,47 +2,33 @@
 
 ## Protected assets
 
-- User worlds and server data.
-- Device battery, CPU, memory, thermal health, and storage.
+- User worlds, configuration, logs, backups, and credentials.
+- Device CPU, memory, storage, battery, and thermal headroom.
 - Local network exposure.
-- Downloaded runtime and server-package integrity.
-- Future remote-management credentials.
-- Android application signing identity.
+- Integrity of downloaded runtimes and server packages.
 
-## Primary threats
+## Initial trust boundaries
 
-- Malicious server packages, plugins, mods, or scripts.
-- Archive path traversal and storage exhaustion.
-- Command injection through profile arguments.
+- The web frontend is untrusted presentation code relative to process execution.
+- Tauri commands expose only typed profile inspection and validation in this foundation.
+- Runtime adapters accept an explicit executable and argument vector, never a generic shell string.
+- New profiles bind to loopback by default.
+- Runtime availability is separate from profile validity.
+
+## Threats to address before real workloads
+
+- Malicious archives and path traversal.
+- Compromised download sources or dependency substitution.
+- Server plugins/mods executing with app privileges.
+- Port conflicts and accidental public exposure.
+- Resource exhaustion, thermal damage, and crash loops.
+- Command injection through profile fields.
 - Unauthenticated remote administration.
-- Servers binding beyond the user's intended interfaces.
-- Runtime escape into unrelated app or device data.
-- Resource starvation, thermal damage, battery drain, and crash loops.
-- Supply-chain compromise of downloaded runtimes.
 
-## Initial controls
+## Android-specific boundary
 
-- No functional runtime adapter is shipped in the foundation.
-- Runtime availability is explicit and defaults to unavailable.
-- Profile commands are modeled as structured fields, not shell strings.
-- The app uses private storage and does not request broad storage access.
-- Hosting begins only after a visible user action.
-- A persistent foreground notification exposes a stop control.
-- Capability advice reserves memory for Android.
+Long-running hosting must be user-initiated, visible through a foreground-service notification, stoppable, and compliant with Android background execution rules. The Rust core does not bypass those rules. Native Kotlin lifecycle integration belongs behind the host-service plugin.
 
-## Required controls before executing packages
+## Deliberate exclusions
 
-- Cryptographic checksums and provenance records.
-- Safe extraction that rejects absolute paths, traversal, links, and oversized entries.
-- Per-instance storage quotas.
-- Fixed executable entry points and structured arguments.
-- Loopback-first binding and explicit network exposure.
-- Authentication before any remote control.
-- Bounded logs and backups.
-- Graceful-stop timeout followed by explicit forced termination.
-- Crash-loop backoff.
-- Runtime and package license review.
-
-## Out of scope for the foundation
-
-The current app does not claim strong isolation between a future server process and the app itself. Android's application sandbox protects the app from other apps, but code executed inside PocketHost's identity must be treated as having access to PocketHost's private files unless a stronger isolation design is proven.
+The current UI cannot download runtimes, launch arbitrary user commands, expose a remote API, or claim Android background hosting support.

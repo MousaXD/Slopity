@@ -1,0 +1,15 @@
+[package]
+name = "tauri-plugin-slopity-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+links = "tauri-plugin-slopity-host"
+
+[build-dependencies]
+tauri-plugin = { workspace = true, features = ["build"] }
+
+[dependencies]
+serde.workspace = true
+tauri.workspace = true

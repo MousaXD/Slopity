@@ -1,76 +1,34 @@
 # Architecture
 
-## Purpose
+## Layers
 
-PocketHost is an Android control plane for multiple server workloads. The application owns profiles, resource policy, lifecycle state, logs, storage, and user controls. Runtime adapters own the mechanics of executing a specific engine.
+### `slopity-core`
 
-## Layer boundaries
-
-```text
-Compose UI
-    |
-DashboardViewModel
-    |
-ServerOrchestrator ---- DeviceCapabilityProbe
-    |
-RuntimeRegistry
-    |
-RuntimeAdapter implementations
-    |
-Android-compatible runtime or native bridge
-```
-
-### UI
-
-Displays desired state, observed state, capability guidance, and explicit failures. The UI must not infer that a server is running merely because a start request was accepted.
-
-### Domain
-
-Contains platform-light models such as `ServerProfile`, `ServerRuntime`, `DeviceCapabilities`, `HostingPlan`, and preflight decisions.
-
-### Orchestration
-
-Checks aggregate policy before delegating to an adapter. Future work must add a real lifecycle state machine, port ownership, memory reservations, crash-loop protection, and durable observed state.
+Pure Rust domain code shared by every platform. It owns profile semantics, lifecycle states, resource planning, validation, and runtime contracts. It must not depend on Tauri, Kotlin, WebViews, or UI frameworks.
 
 ### Runtime adapters
 
-A runtime adapter is responsible for one execution family, such as JVM, PHP, Node.js, Python, or reviewed native binaries. An adapter must report availability and the reason for unavailability. It must never silently fall back to an unrelated execution path.
+Adapters implement the core `RuntimeAdapter` trait. The first adapter, `slopity-runtime-local`, is desktop-only in behavior and uses `std::process::Command` with explicit executable and argument fields. Android runtime execution remains a separate proof track.
 
-### Foreground service
+### Tauri shell
 
-The foreground service provides the Android-visible lifecycle envelope for active hosting. The current service starts no server process. Future orchestration will bind active sessions to this envelope and update the notification from observed state.
+`apps/slopity/src-tauri` translates core data into a small command API for the shared static frontend. Mobile builds use the library entry point required by Tauri; desktop builds also provide a normal binary entry point.
 
-## Storage plan
+### Host-service plugin boundary
 
-Use app-private storage by default:
+`tauri-plugin-slopity-host` gives the shell one stable place to ask whether durable user-visible hosting is available. The foundation intentionally reports Android foreground-service hosting as pending until Kotlin service integration and a real ARM64 test are complete.
 
-```text
-files/
-  profiles/
-  packages/
-  instances/<profile-id>/
-  backups/
-  logs/
-```
+## Portability matrix
 
-External storage export should use the Storage Access Framework and explicit user-selected destinations.
+| Platform | App shell | Shared core | Local process adapter | Durable hosting claim |
+| --- | --- | --- | --- | --- |
+| Windows | Yes | Yes | Foundation present | Not yet validated |
+| Linux | Yes | Yes | Foundation present | Not yet validated |
+| Android | Yes | Yes | Not used | Pending foreground-service proof |
+| iOS | Future controller | Core-compatible | No | Not planned |
 
-## Runtime package direction
+## Runtime model
 
-A future package manifest should include at least:
+Profiles describe intent, not proof of availability. Each profile has a runtime kind, executable metadata, structured arguments, working directory, memory budget, port, and network scope. Availability is reported separately by a runtime provider.
 
-- Schema version.
-- Package and runtime IDs.
-- Human-readable name and license metadata.
-- Supported Android API levels and ABIs.
-- Download provenance and SHA-256 hashes.
-- Structured entry point and arguments.
-- Default and required ports.
-- Minimum and recommended RAM.
-- Health-check method.
-- Graceful shutdown method.
-- Data and log paths.
-
-## Why process execution is deferred
-
-Android is not ordinary desktop Linux. Runtime work must account for Bionic, app sandboxing, executable placement restrictions, SELinux, lifecycle limits, architecture, dynamic-code policy, and distribution licensing. The repository keeps these decisions behind adapters so an early shortcut does not poison the whole product.
+The UI must never infer that a profile is runnable merely because its schema is valid.

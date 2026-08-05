@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10131a" />
+    <title>Slopity</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Portable server host</p>
+          <h1>Slopity</h1>
+          <p class="subtitle">The first real workload is here: a harmless built-in Rust HTTP server with explicit lifecycle state, bounded logs, and loopback-first networking.</p>
+        </div>
+        <span id="platform-pill" class="pill">Detecting platform…</span>
+      </header>
+
+      <section class="grid" aria-label="Host overview">
+        <article class="card card-wide">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Hosting envelope</p>
+              <h2 id="host-title">Loading…</h2>
+            </div>
+            <span id="host-state" class="status neutral">Unknown</span>
+          </div>
+          <p id="host-reason" class="muted">Reading the native capability boundary.</p>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">Safe budget</p>
+          <h2 id="memory-budget">Unavailable</h2>
+          <p id="memory-note" class="muted">Real device memory probing will be added behind a platform adapter.</p>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">Runtime adapters</p>
+          <h2 id="runtime-count">0 ready</h2>
+          <p class="muted">Only the built-in HTTP probe is runnable. External runtimes remain unavailable.</p>
+        </article>
+      </section>
+
+      <section class="section-heading">
+        <div>
+          <p class="eyebrow">Profiles and servers</p>
+          <h2>Durable workloads</h2>
+          <p id="profile-summary" class="muted compact">Loading profile storage…</p>
+        </div>
+        <div class="toolbar">
+          <button id="new-profile" class="primary" type="button">New profile</button>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+      </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="editor" class="card editor" hidden>
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">Profile editor</p>
+            <h2 id="editor-title">Create profile</h2>
+          </div>
+          <button id="cancel-editor" class="quiet" type="button">Close</button>
+        </div>
+
+        <form id="profile-form">
+          <div class="form-grid">
+            <label>
+              <span>Profile ID</span>
+              <input id="profile-id" name="profileId" required maxlength="80" autocomplete="off" />
+            </label>
+            <label>
+              <span>Name</span>
+              <input id="profile-name" name="profileName" required maxlength="120" autocomplete="off" />
+            </label>
+            <label>
+              <span>Runtime</span>
+              <select id="profile-runtime" name="runtime">
+                <option value="built-in-http">Built-in HTTP</option>
+                <option value="java">Java</option>
+                <option value="node-js">Node.js</option>
+                <option value="python">Python</option>
+                <option value="php">PHP</option>
+                <option value="native">Native</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>
+              <span>Network</span>
+              <select id="profile-network" name="networkScope">
+                <option value="loopback">Loopback only</option>
+                <option value="lan">Local network</option>
+              </select>
+            </label>
+            <label>
+              <span>Port</span>
+              <input id="profile-port" name="port" type="number" min="1" max="65535" required />
+            </label>
+            <label>
+              <span>Memory reservation (MiB)</span>
+              <input id="profile-memory" name="memoryMib" type="number" min="128" max="32768" step="128" required />
+            </label>
+            <label class="span-two external-runtime-field">
+              <span>Executable path <small>external runtimes only</small></span>
+              <input id="profile-executable" name="executable" autocomplete="off" />
+            </label>
+            <label class="span-two external-runtime-field">
+              <span>Working directory <small>external runtimes only</small></span>
+              <input id="profile-directory" name="workingDirectory" autocomplete="off" />
+            </label>
+            <label class="span-two external-runtime-field">
+              <span>Arguments <small>one structured argument per line</small></span>
+              <textarea id="profile-arguments" name="arguments" rows="4"></textarea>
+            </label>
+          </div>
+          <label class="check-row">
+            <input id="profile-enabled" name="enabled" type="checkbox" />
+            <span>Enable this profile as runnable configuration. Starting remains a separate user action.</span>
+          </label>
+          <div class="form-actions">
+            <button id="save-profile" class="primary" type="submit">Save profile</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="profiles" class="profiles" aria-live="polite"></section>
+
+      <section class="card truth-card">
+        <h2>Current boundary</h2>
+        <p>The built-in HTTP probe serves a fixed page and health endpoint. It does not execute files, scripts, JARs, uploaded code, or external runtimes. LAN binding is opt-in. Android foreground-service code is compiled but remains unproven until a real-device background test passes.</p>
+      </section>
+    </main>
+  </body>
+</html>

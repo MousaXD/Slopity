@@ -3,16 +3,11 @@ set -eu
 
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 
-if printf '%s\n' "$STAGED" | grep -Eq '^(app/|gradle/|build\.gradle\.kts$|settings\.gradle\.kts$|gradle\.properties$|scripts/|\.github/workflows/)'; then
+if printf '%s\n' "$STAGED" | grep -Eq '^(crates/|apps/|plugins/|Cargo\.toml$|rust-toolchain\.toml$|\.github/workflows/|scripts/)'; then
     if ! printf '%s\n' "$STAGED" | grep -qx 'PROGRESS.md'; then
         cat >&2 <<'EOF'
-PocketHost workflow check failed:
-Implementation or build files are staged without PROGRESS.md.
-
-Follow AGENTS.md:
-1. Commit the IN PROGRESS plan first.
-2. Implement the step.
-3. Stage the completed PROGRESS.md entry with the implementation commit.
+Slopity workflow check failed: implementation/build files are staged without PROGRESS.md.
+Follow AGENTS.md and complete the declared step entry with the implementation commit.
 EOF
         exit 1
     fi

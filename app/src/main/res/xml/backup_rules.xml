@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
-    <exclude domain="file" path="packages/" />
-    <exclude domain="file" path="instances/" />
-    <exclude domain="file" path="logs/" />
-</full-backup-content>

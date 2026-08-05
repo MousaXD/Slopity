@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">PocketHost</string>
-    <string name="notification_channel_name">Server hosting</string>
-    <string name="notification_channel_description">Visible controls for locally hosted server workloads</string>
-    <string name="notification_title">PocketHost is armed</string>
-    <string name="notification_body">No runtime sessions are active yet</string>
-    <string name="notification_stop">Stop host</string>
-</resources>

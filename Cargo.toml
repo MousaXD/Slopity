@@ -1,0 +1,30 @@
+[workspace]
+members = [
+    "crates/slopity-core",
+    "crates/slopity-runtime-http",
+    "crates/slopity-runtime-local",
+    "plugins/tauri-plugin-slopity-host",
+    "apps/slopity/src-tauri",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MousaXD/Slopity"
+
+[workspace.dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+thiserror = "2.0.16"
+tauri = { version = "2.11.5" }
+tauri-build = "2.6.3"
+tauri-plugin = "2.6.3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
