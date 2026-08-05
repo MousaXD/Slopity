@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10131a" />
+    <title>Slopity</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Portable server host</p>
+          <h1>Slopity</h1>
+          <p class="subtitle">One Rust core. Windows, Linux, and Android shells. Zero imaginary runtime support.</p>
+        </div>
+        <span id="platform-pill" class="pill">Detecting platform…</span>
+      </header>
+
+      <section class="grid" aria-label="Host overview">
+        <article class="card card-wide">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Hosting envelope</p>
+              <h2 id="host-title">Loading…</h2>
+            </div>
+            <span id="host-state" class="status neutral">Unknown</span>
+          </div>
+          <p id="host-reason" class="muted">Reading the native capability boundary.</p>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">Safe budget</p>
+          <h2 id="memory-budget">Unavailable</h2>
+          <p id="memory-note" class="muted">Real device memory probing will be added behind a platform adapter.</p>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">Runtime adapters</p>
+          <h2 id="runtime-count">0 ready</h2>
+          <p class="muted">Profiles and adapters remain separate, so “configured” never means “installed.”</p>
+        </article>
+      </section>
+
+      <section class="section-heading">
+        <div>
+          <p class="eyebrow">Profiles</p>
+          <h2>Starter workloads</h2>
+        </div>
+        <button id="refresh" type="button">Refresh</button>
+      </section>
+
+      <section id="profiles" class="profiles" aria-live="polite"></section>
+
+      <section class="card truth-card">
+        <h2>Foundation boundary</h2>
+        <p>This build does not download or execute Minecraft, Java, Node.js, PHP, Python, or native server packages. The next milestones add persistence, then a harmless runtime proof, before real engines enter the room.</p>
+      </section>
+    </main>
+  </body>
+</html>

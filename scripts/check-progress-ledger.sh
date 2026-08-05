@@ -1,13 +1,13 @@
 #!/bin/sh
 set -eu
 
-BASE_SHA=${1:?base SHA required}
-HEAD_SHA=${2:?head SHA required}
-CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+BASE=${1:-HEAD^}
+HEAD_REF=${2:-HEAD}
+CHANGED=$(git diff --name-only "$BASE" "$HEAD_REF")
 
-if printf '%s\n' "$CHANGED" | grep -Eq '^(app/|gradle/|build\.gradle\.kts$|settings\.gradle\.kts$|gradle\.properties$|scripts/|\.github/workflows/)'; then
+if printf '%s\n' "$CHANGED" | grep -Eq '^(crates/|apps/|plugins/|Cargo\.toml$|rust-toolchain\.toml$|\.github/workflows/|scripts/)'; then
     if ! printf '%s\n' "$CHANGED" | grep -qx 'PROGRESS.md'; then
-        echo "Implementation or build files changed without PROGRESS.md." >&2
+        echo "Implementation/build changes require PROGRESS.md in the same implementation commit." >&2
         exit 1
     fi
 fi

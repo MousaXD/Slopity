@@ -1,0 +1,3 @@
+[default]
+description = "Registers the Slopity host-service capability boundary. It exposes no frontend commands yet."
+permissions = []

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimal Slopity dashboard capability",
+  "windows": ["main"],
+  "permissions": ["core:default", "slopity-host:default"]
+}
