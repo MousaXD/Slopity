@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 009: publish installable Android debug artifacts
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-05
+**Status:** PARTIAL  
+**Declared:** 2026-08-05  
+**Updated:** 2026-08-05
 
 ### Scope
 
@@ -23,22 +24,30 @@ Preserve the successful Android debug APK and AAB as downloadable GitHub Actions
 - The self-hosted runner cleans generated files between jobs, making artifact upload part of the Android job mandatory.
 - Debug builds are installable test packages, not production releases, and must remain clearly labeled.
 
-### Intended files
+### Delivered
+
+- Added an Android post-build upload step using `actions/upload-artifact@v7`.
+- Included the generated universal debug APK and universal debug AAB in one artifact.
+- Named each artifact with the tested commit SHA so packages cannot be confused across runs.
+- Made missing APK or AAB output fail the workflow through `if-no-files-found: error`.
+- Set explicit 14-day retention for temporary device-testing packages.
+- Disabled extra artifact compression because APK and AAB files are already compressed archives.
+
+### Files changed
 
 - `.github/workflows/ci.yml`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification pending
 
-- The Android job uploads both `app-universal-debug.apk` and `app-universal-debug.aab` after a successful build.
-- Missing files fail the upload step.
-- Artifacts have a short explicit retention period and a clearly debug-only name.
-- The resulting workflow run exposes a downloadable artifact through GitHub Actions.
-- Existing Rust, Linux, and Android build gates remain green.
+- Rust formatting, workspace tests, and strict Clippy must remain green.
+- Linux Tauri compilation must remain green.
+- Android ARM64 compilation must still produce the expected APK and AAB paths.
+- The upload step must complete and expose a non-expired downloadable artifact containing both files.
 
 ### Follow-up
 
-Download the APK artifact, install it on an ARM64 Android device, and perform the Step 008 notification, reachability, background-survival, stop, and port-release smoke test.
+Inspect the replacement workflow run and download the resulting artifact. Install the APK on an ARM64 Android device and perform the Step 008 notification, reachability, background-survival, stop, and port-release smoke test.
 
 ## Step 008: add the first built-in HTTP server
 

@@ -82,3 +82,13 @@ jobs:
       - name: Build ARM64 debug APK
         working-directory: apps/slopity
         run: npm run android:build -- --debug --target aarch64
+      - name: Upload Android debug packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: slopity-android-debug-${{ github.sha }}
+          path: |
+            apps/slopity/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+            apps/slopity/src-tauri/gen/android/app/build/outputs/bundle/universalDebug/app-universal-debug.aab
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
