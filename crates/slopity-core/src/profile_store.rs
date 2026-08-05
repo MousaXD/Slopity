@@ -403,8 +403,7 @@ mod tests {
 
         assert!(matches!(
             store.create(profile("beta", 3_000)),
-            Err(ProfileStoreError::Validation(_))
-                | Err(ProfileStoreError::PortConflict { .. })
+            Err(ProfileStoreError::Validation(_)) | Err(ProfileStoreError::PortConflict { .. })
         ));
         assert_eq!(store.profiles(), before.as_slice());
         let _ = fs::remove_dir_all(directory);
