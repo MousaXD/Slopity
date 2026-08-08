@@ -2,6 +2,50 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 011: publish Linux and Android GitHub releases
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-08
+
+### Scope
+
+Add a dedicated release workflow that validates package creation on pull requests and publishes versioned GitHub prereleases from the existing Tauri application. Produce Linux `.deb` and AppImage bundles plus the currently proven Android ARM64 debug APK/AAB, collect SHA-256 checksums, and attach the files to a GitHub Release instead of leaving them only as short-lived workflow artifacts.
+
+### Non-goals
+
+- Claiming the Android package is production-signed or Play-ready. The existing proven Android build remains a debug build until signing is designed and configured.
+- Marking the roadmap's reproducible signed release pipeline complete.
+- Adding Windows or macOS packaging, changing runtime behavior, changing profile persistence, or modifying server security boundaries.
+- Publishing releases from pull-request validation runs.
+- Committing generated packages, signing keys, APKs, AABs, `.deb` files, AppImages, or Tauri generated mobile projects to Git.
+
+### Risks
+
+- Tauri's Linux bundle output lives under the Cargo workspace target directory, so artifact discovery must not assume a package-local target path.
+- AppImage packaging invokes Linux bundling tooling and can expose missing self-hosted-runner prerequisites even when `--no-bundle` compilation succeeds.
+- Android debug artifacts are useful for installation testing but must remain visibly labeled as debug/unsigned in GitHub Releases.
+- Release creation requires narrowly scoped `contents: write` permission while pull-request build jobs should remain read-only.
+- Version tags and `tauri.conf.json` can drift unless the workflow validates that they agree.
+
+### Intended files
+
+- `.github/workflows/release.yml`
+- `docs/releases.md`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- Pull-request release validation produces exactly one `.deb`, one AppImage, one ARM64 debug APK, and one ARM64 debug AAB from the current source tree.
+- Release assets are discovered and copied deterministically rather than relying on stale self-hosted-runner files.
+- GitHub Release publication is gated off for pull requests and uses `contents: write` only in the publishing job.
+- Manual/tag/main release paths validate a `v<tauri version>` tag before publishing.
+- Existing `cargo fmt --all -- --check`, `cargo test --workspace --all-features`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, Linux Tauri, and Android CI remain green.
+- The release workflow is documented with its unsigned-preview limitations and the steps required to produce a new version.
+
+### Correction note
+
+- Step 010 recorded pull request `#2` as open and unmerged because that was true when its validation evidence was written. The owner later explicitly requested the merge on 2026-08-08, and PR `#2` was merged into `main` as merge commit `d093e6b5ea9554e22a33f0ee4517347c7c231386`.
+
 ## Step 010: redesign the mobile server dashboard
 
 **Status:** PARTIAL  
