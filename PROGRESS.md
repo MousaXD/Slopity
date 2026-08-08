@@ -5,8 +5,8 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 ## Step 010: redesign the mobile server dashboard
 
 **Status:** PARTIAL  
-**Declared:** 2026-08-05  
-**Updated:** 2026-08-05
+**Declared:** 2026-08-08  
+**Updated:** 2026-08-08
 
 ### Scope
 
@@ -19,71 +19,67 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - Adding a frontend framework, icon dependency, shell command execution, downloads, uploads, remote management, TLS, authentication, or runtime-provider installation.
 - Merging the branch, changing `main`, or modifying CI workflow behavior.
 
+### Correction note
+
+- Step 010 was resumed on 2026-08-08 from an older draft branch and pull request whose ledger text described a superseded multi-module frontend and earlier CI evidence.
+- The superseded frontend modules were removed from the current branch diff. This entry now records the self-contained `index.html`, `app.js`, and `styles.css` implementation and the validation performed against the current code head.
+- Steps 009 and earlier remain unchanged.
+
 ### Delivered
 
-- Replaced the desktop-oriented overview with a mobile-first dashboard that follows the supplied composition: oversized Slopity wordmark, hamburger control, CSS server-stack illustration, Saved Servers heading, dense two-column phone grid, and a reachable Add Server action.
-- Added distinct local CSS and text icons, truthful status pills, three-dot card menus, press/hover feedback, safe-area spacing, narrow-phone fallback, tablet and desktop expansion, and reduced-motion handling.
-- Added a working navigation drawer with Servers, Add Server, Runtime Support, Device Status, Settings, and About Slopity entries. Planned screens are labeled instead of being presented as complete.
-- Added an accessible Add Server bottom sheet with drag handle, close control, scrollable templates, focus trapping, backdrop dismissal, Escape dismissal, and body-scroll locking.
-- Added Built-in HTTP, Website foundation, Minecraft placeholder, Node.js placeholder, Import placeholder, and Custom Template behavior without falsely claiming unsupported runtime execution.
-- Added compact card action menus and a details sheet exposing profile configuration, observed runtime state, available URLs, request count, recent logs, validation output, and lifecycle or CRUD controls.
-- Added a bottom-sheet profile editor that reuses the existing create and update commands, keeps external runtime arguments structured, and displays native validation results.
-- Preserved clone, enable, disable, delete, refresh, start, stop, persisted profile loading, runtime polling, and backend-enforced running-profile restrictions.
-- Split the frontend into small dependency-free ES modules and used DOM construction plus `textContent` for all profile names, URLs, log messages, validation messages, and other user-controlled values.
-- Added a clearly labeled `?preview=1` visual-preview path that cannot mutate profiles or pretend native persistence and runtime execution are connected.
-- Kept the Rust backend, profile model, Tauri command names, host-service bridge, and runtime security boundaries unchanged.
-- Fixed immediate-Escape races during overlay opening and eliminated horizontal document overflow at 320, 430, 800, and 1280 pixel viewports.
+- Replaced the desktop-oriented overview with a mobile-first dashboard matching the supplied composition: oversized Slopity wordmark, hamburger control, CSS server-stack illustration, Saved Servers heading, dense two-column phone grid, and an easy-to-reach Add Server action.
+- Added bundled CSS and inline-SVG illustrations, truthful status pills, three-dot card menus, touch-sized controls, safe-area spacing, narrow-phone fallback, tablet and desktop expansion, and reduced-motion handling.
+- Added a functional navigation drawer with Servers, Add Server, Runtime Support, Device Status, Settings, and About Slopity. Settings is visibly marked planned.
+- Added an Add Server bottom sheet with drag handle, close control, scrollable templates, focus trapping, backdrop dismissal, Escape dismissal, and body-scroll locking.
+- Added truthful template behavior: Built-in HTTP creates a usable built-in profile; Website maps only to the built-in HTTP probe and says so; Minecraft and Node.js create disabled placeholders; Import performs no fake VPS import; Custom Template opens the blank profile editor.
+- Added compact per-card actions and a details sheet exposing profile configuration, observed runtime state, bind address, available URLs, request count, recent logs, validation results, and lifecycle or CRUD controls.
+- Added a bottom-sheet profile editor that reuses the existing create and update commands, keeps external arguments structured, runs native profile validation, and keeps unsupported external profiles disabled by default.
+- Preserved persisted profile loading, create, edit, clone, enable, disable, delete, refresh, built-in HTTP start and stop, runtime polling, and backend-enforced running-profile restrictions.
+- Rendered profile names, URLs, log messages, validation messages, runtime errors, and other user-controlled values through DOM text nodes instead of unsafe HTML interpolation.
+- Kept the Rust backend, profile model, Tauri invocation names, Android host-service bridge, and runtime security boundaries unchanged.
+- Fixed decorative horizontal overflow and verified the document width at 320, 430, 800, and 1280 pixel viewports.
 
 ### Files changed
 
 - `apps/slopity/web/index.html`
 - `apps/slopity/web/app.js`
-- `apps/slopity/web/catalog.js`
-- `apps/slopity/web/dom.js`
-- `apps/slopity/web/overlay.js`
-- `apps/slopity/web/preview.js`
-- `apps/slopity/web/profile-actions.js`
-- `apps/slopity/web/profile-editor.js`
-- `apps/slopity/web/views.js`
 - `apps/slopity/web/styles.css`
-- `apps/slopity/web/overlays.css`
-- `apps/slopity/web/responsive.css`
 - `PROGRESS.md`
 
 ### Verification performed
 
-- `node --check` passed for all eight JavaScript modules.
-- Python's standard HTML parser accepted `apps/slopity/web/index.html`.
-- Local module-import resolution found no missing relative JavaScript modules.
-- A source scan found no `innerHTML`, `outerHTML`, `insertAdjacentHTML`, or `document.write` usage in the redesigned frontend.
-- Headless Chromium interaction testing loaded five preview profiles with zero page errors; opened and closed the drawer, Add Server sheet, and details sheet; verified Escape dismissal; and verified the Website template maps to `built-in-http` with an explicit fixed-probe explanation.
-- The responsive browser matrix passed without horizontal document overflow at 320, 430, 800, and 1280 pixels. The grid resolved to one, two, three, and four columns at the expected breakpoints.
-- GitHub Actions workflow run `31041278188` passed the progress-ledger guard and `cargo fmt --all -- --check`.
-- The same run passed `cargo test --workspace --all-features` and all existing workspace tests.
-- The same run passed `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
-- The same run passed the non-interactive Linux prerequisites check and `npm run tauri:check`, compiling the Linux Tauri shell without bundling.
-- The same run installed the configured Android SDK and NDK, initialized the generated Tauri Android project, and passed `npm run android:build -- --debug --target aarch64`.
-- The Android job uploaded artifact `8944955353`, named `slopity-android-debug-720d3e5ebcbfb5a2c0dd64d31fae7c92c8aceeb7`, with digest `sha256:299c9a6526626660eadcc1e2f1de933c65f3afe18055aba64926a80701a3ca06` and 14-day retention.
+- Local JavaScript syntax validation with `node --check` passed on the implementation draft before it was pushed. The repository has no separate frontend validation script.
+- A source scan of the current branch `app.js` found no `innerHTML`, `insertAdjacentHTML`, or `eval(` usage.
+- Local mocked-browser interaction checks exercised the drawer, Add Server sheet, details sheet, action sheet, backdrop and Escape dismissal, and the responsive server-card grid.
+- The responsive browser matrix passed without horizontal document overflow at 320, 430, 800, and 1280 pixels after the overflow fix.
+- Pull-request workflow run `31266454190` validated code head `1e0e145a7a933e7102d69ccb721194bc31a70d47` through merge ref `b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4` against main `c5a3e29b75c309c96502c9122bd44522aa7ed4be`.
+- `cargo fmt --all -- --check` passed.
+- `cargo test --workspace --all-features` passed all 14 workspace tests with 0 failures.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed.
+- The Linux job passed the prerequisite check, `npm install --no-audit --no-fund`, and `npm run tauri:check`.
+- The Android job installed the configured SDK and NDK, passed `npm run android:init -- --ci`, and passed `npm run android:build -- --debug --target aarch64`.
+- Android produced `app-universal-debug.apk` and `app-universal-debug.aab` and uploaded artifact `9024516514`, named `slopity-android-debug-b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4`, size `148565786` bytes, digest `sha256:b3b97cfec46bfc35e6b4d3f4075f51a8c5cc611cb8276f2a5f55f2683bd5627f`, retained through 2026-08-22.
 - Draft pull request `#2` remains open, unmerged, and based on `main`.
 
 ### Verification pending
 
-- Interactive Linux Tauri smoke testing of create, edit, clone, enable, disable, delete, built-in HTTP start, request generation, URL display, log display, stop, application restart, and profile persistence.
+- Interactive native Linux WebView smoke testing of profile create, edit, clone, enable, disable, delete, built-in HTTP start, request generation, URL display, log display, stop, application restart, and UI-observed persistence.
 - Installation of the generated APK on an ARM64 Android device and validation of touch behavior, system safe areas, keyboard behavior, notification visibility, foreground reachability, background reachability, graceful stop, and port release.
-- Screenshot capture from the native Linux WebView or a physical Android device. The recorded screenshots are from the explicitly labeled browser preview path.
+- Native Linux or physical-Android screenshot capture. Current visual screenshots are mocked browser previews of the shared frontend.
 
 ### Known limitations
 
-- The Website template currently creates the fixed built-in HTTP probe foundation; it does not host user-selected static files or a web application.
-- Minecraft, Node.js, import, custom, Java, Python, PHP, and native profiles remain unavailable configuration placeholders and expose no false start path.
-- Browser preview mode uses sample data for visual and interaction testing and intentionally blocks persistence and runtime mutations.
+- Website currently creates the fixed built-in HTTP probe foundation; it does not serve a user-selected static folder or deploy a web application.
+- Minecraft, Node.js, import, custom, Java, Python, PHP, and native providers remain unavailable or configuration-only and expose no false start path.
+- Settings is a planned drawer entry without a settings screen.
 - Runtime state remains process-local and resets to stopped after the application process exits, as documented by Step 008.
 - Android compilation does not prove OEM background behavior, app-restart behavior, or Google Play foreground-service policy acceptance.
-- The dashboard uses bundled CSS/text illustrations rather than licensed game artwork from the mockup.
+- The Android build still reports existing non-blocking generated-code, Gradle deprecation, and duplicate `com.slopity.host` namespace warnings.
+- The dashboard uses bundled CSS and generic SVG illustrations rather than licensed game artwork from the mockup.
 
 ### Follow-up
 
-Run the native Linux interaction and restart-persistence smoke test, then install the uploaded ARM64 debug APK on a physical Android device for the remaining UI, notification, reachability, and background-hosting proof.
+Run the native Linux interaction and restart-persistence smoke test, then install the uploaded ARM64 debug APK on a physical Android device for the remaining touch, notification, reachability, and background-hosting proof.
 
 ## Step 009: publish installable Android debug artifacts
 
@@ -190,7 +186,7 @@ Implement Slopity's first real hosted workload as a harmless built-in Rust HTTP 
 ### Verification performed
 
 - Workflow run `31026665154` passed `cargo fmt --all -- --check`.
-- The same run passed all 14 workspace tests, including the built-in HTTP response, graceful stop and port release, duplicate-start rejection, occupied-port reporting, and bounded-log tests.
+- The same run passed all 14 workspace tests, including the built-in HTTP response, graceful stop and port release, duplicate-start rejection, occupied ports, and bounded-log tests.
 - The same run passed `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
 - Linux Tauri shell compilation passed with the live HTTP manager, managed state, Tauri commands, and shared UI.
 - Android initialization passed with the Tauri mobile plugin included.
@@ -248,7 +244,7 @@ Remove `Swatinem/rust-cache` from the Rust-quality job on the persistent self-ho
 
 ### Verification performed
 
-- Replacement workflow run `31012340919` reached the progress-ledger check and `cargo fmt --all -- --check` immediately after Rust toolchain setup.
+- Replacement workflow run `31012340919` reached `cargo fmt --all -- --check` immediately after Rust toolchain setup.
 - No GitHub cache restore step was present in the replacement run.
 - The runner exposed Slopity's actual formatting result instead of stalling in cache plumbing.
 - Workflow concurrency superseded the obsolete cache-blocked validation path.
