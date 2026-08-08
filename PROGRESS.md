@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 011: publish Linux and Android GitHub releases
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-08
+**Status:** PARTIAL  
+**Declared:** 2026-08-08  
+**Updated:** 2026-08-08
 
 ### Scope
 
@@ -19,28 +20,56 @@ Add a dedicated release workflow that validates package creation on pull request
 - Publishing releases from pull-request validation runs.
 - Committing generated packages, signing keys, APKs, AABs, `.deb` files, AppImages, or Tauri generated mobile projects to Git.
 
-### Risks
+### Delivered
 
-- Tauri's Linux bundle output lives under the Cargo workspace target directory, so artifact discovery must not assume a package-local target path.
-- AppImage packaging invokes Linux bundling tooling and can expose missing self-hosted-runner prerequisites even when `--no-bundle` compilation succeeds.
-- Android debug artifacts are useful for installation testing but must remain visibly labeled as debug/unsigned in GitHub Releases.
-- Release creation requires narrowly scoped `contents: write` permission while pull-request build jobs should remain read-only.
-- Version tags and `tauri.conf.json` can drift unless the workflow validates that they agree.
+- Added `.github/workflows/release.yml` with pull-request package validation plus `main`, `v*` tag, and manual-dispatch release paths.
+- Added a metadata gate that requires `tauri.conf.json`, `package.json`, and the root Cargo workspace version to agree and requires release tags to match `v<version>`.
+- Added release-mode Linux bundling with `tauri build --bundles deb,appimage`, deterministic discovery of exactly one `.deb` and one AppImage, and temporary GitHub Actions artifact upload.
+- Added Android ARM64 debug APK/AAB packaging using the same SDK, NDK, Java, Tauri initialization, and target path already proven by normal CI.
+- Added a publication job that is skipped on pull requests, receives `contents: write` only at job scope, downloads the validated package artifacts, gives them stable release names, generates `SHA256SUMS.txt`, and publishes them through `softprops/action-gh-release@v3` as a prerelease.
+- Configured the existing 512 by 512 RGBA Slopity icon as a Tauri bundle icon so AppImage packaging can select a square icon.
+- Added `docs/releases.md` documenting version synchronization, PR validation, automatic first release for a new version on `main`, explicit tag/manual paths, asset naming, and the unsigned Android limitation.
+- Kept the existing normal CI workflow unchanged.
 
-### Intended files
+### Files changed
 
 - `.github/workflows/release.yml`
+- `apps/slopity/src-tauri/tauri.conf.json`
 - `docs/releases.md`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification performed
 
-- Pull-request release validation produces exactly one `.deb`, one AppImage, one ARM64 debug APK, and one ARM64 debug AAB from the current source tree.
-- Release assets are discovered and copied deterministically rather than relying on stale self-hosted-runner files.
-- GitHub Release publication is gated off for pull requests and uses `contents: write` only in the publishing job.
-- Manual/tag/main release paths validate a `v<tauri version>` tag before publishing.
-- Existing `cargo fmt --all -- --check`, `cargo test --workspace --all-features`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, Linux Tauri, and Android CI remain green.
-- The release workflow is documented with its unsigned-preview limitations and the steps required to produce a new version.
+- Initial packaging run `31270262665` passed release metadata validation and compiled the Linux release binary. It successfully produced `target/release/bundle/deb/Slopity_0.1.0_amd64.deb`, then exposed a genuine AppImage bundler failure: `couldn't find a square icon to use as AppImage icon`.
+- Added `bundle.icon: ["icons/icon.png"]` using the existing Step 004 512 by 512 RGBA application icon rather than suppressing the AppImage error.
+- Replacement release-package run `31270803159` validated branch head `0fd05b182d526591bce7283a61c07c43922243cb` through pull-request merge ref `a7962b2bbfd005b9e61e2a1da62c6e88ed03dc76`.
+- The replacement run passed release metadata validation, Linux release compilation, `.deb` bundling, AppImage bundling, deterministic Linux asset collection, and Linux artifact upload.
+- Linux package artifact `9025722918`, named `release-linux-a7962b2bbfd005b9e61e2a1da62c6e88ed03dc76`, was created with size `79477996` bytes, digest `sha256:41b8b8ebfe7197877fc4f17847e31c5dd284f7f3a4e11f3ea78b050eb0be0067`, and seven-day retention.
+- The same replacement run passed Android SDK/NDK setup, `npm run android:init -- --ci`, `npm run android:build -- --debug --target aarch64`, exact APK/AAB path checks, Android asset collection, and artifact upload.
+- Android release-package artifact `9025859548`, named `release-android-a7962b2bbfd005b9e61e2a1da62c6e88ed03dc76`, was created with size `148565382` bytes, digest `sha256:5bf2a83f331cf7fd10894f3d2097eb8f79bf6784cc13fdad27c0f40b1235b227`, and seven-day retention.
+- The GitHub prerelease publication job was skipped on the pull request exactly as designed, so review-time validation cannot create or overwrite a release.
+- Normal CI run `31270803166` on the same branch head passed the progress-ledger guard, `cargo fmt --all -- --check`, all 14 workspace tests, and `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- The same normal CI run passed Linux prerequisite validation, `npm install --no-audit --no-fund`, Linux `npm run tauri:check`, Android SDK/NDK setup, Android initialization, ARM64 debug build, and Android artifact upload.
+- Normal-CI Android artifact `9025966939`, named `slopity-android-debug-a7962b2bbfd005b9e61e2a1da62c6e88ed03dc76`, was created with size `148565466` bytes and digest `sha256:c1775f7163c48aea023632faf6d6da379eb16a35e22e9870b71e84e134b8bb7f`.
+
+### Verification pending
+
+- Actual `contents: write` GitHub Release creation and attachment of the normalized `.deb`, AppImage, APK, AAB, and `SHA256SUMS.txt` assets. This is intentionally not exercised from pull requests and requires the validated workflow to reach `main` or a matching release tag/manual dispatch.
+- Installation and launch testing of the generated `.deb` and AppImage on a clean Linux system.
+- Installation of the generated APK on a physical ARM64 Android device.
+- Production Android signing, signed release-mode Android packaging, and signing-key lifecycle procedures.
+
+### Known limitations
+
+- GitHub Releases produced by this workflow are intentionally prereleases because Android is still a debug package and not production-signed.
+- The Phase 6 reproducible signed release-pipeline roadmap item remains incomplete.
+- Linux packages are currently x86_64 only and Android packages are currently ARM64 debug only; Windows, macOS, Linux ARM64, and additional Android release targets are not included.
+- A GitHub Release is not visible yet because pull-request publication is intentionally disabled and pull request `#3` remains draft and unmerged pending explicit owner authorization.
+- Physical-device and clean-install package behavior is not proven by compilation alone.
+
+### Follow-up
+
+After explicit owner authorization, merge pull request `#3`. The first `main` commit carrying version `0.1.0` while tag `v0.1.0` does not exist should build the packages again and publish the preview release. Verify that the release contains the `.deb`, AppImage, APK, AAB, and `SHA256SUMS.txt`, then continue toward signed Android release builds and physical package smoke tests.
 
 ### Correction note
 
