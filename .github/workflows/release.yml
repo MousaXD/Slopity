@@ -1,0 +1,300 @@
+name: Package and publish releases
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'plugins/**'
+      - 'apps/slopity/**'
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag matching tauri.conf.json, for example v0.1.0'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Resolve release metadata
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      build: ${{ steps.meta.outputs.build }}
+      publish: ${{ steps.meta.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate version metadata and release intent
+        id: meta
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          readarray -t versions < <(python3 - <<'PY'
+          import json
+          import tomllib
+
+          with open('apps/slopity/src-tauri/tauri.conf.json', 'rb') as handle:
+              tauri = json.load(handle)
+          with open('apps/slopity/package.json', 'rb') as handle:
+              package = json.load(handle)
+          with open('Cargo.toml', 'rb') as handle:
+              cargo = tomllib.load(handle)
+
+          print(tauri['version'])
+          print(package['version'])
+          print(cargo['workspace']['package']['version'])
+          PY
+          )
+
+          if [[ ${#versions[@]} -ne 3 ]]; then
+            echo 'Unable to resolve all application versions.' >&2
+            exit 1
+          fi
+
+          version="${versions[0]}"
+          if [[ "${versions[1]}" != "$version" || "${versions[2]}" != "$version" ]]; then
+            printf 'Version mismatch: tauri=%s package=%s cargo=%s\n' "${versions[0]}" "${versions[1]}" "${versions[2]}" >&2
+            exit 1
+          fi
+
+          expected_tag="v${version}"
+          release_tag="$expected_tag"
+          build=true
+          publish=false
+
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+            publish=false
+          elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            release_tag="$DISPATCH_TAG"
+            publish=true
+          elif [[ "$GITHUB_REF_TYPE" == 'tag' ]]; then
+            release_tag="$GITHUB_REF_NAME"
+            publish=true
+          elif [[ "$GITHUB_EVENT_NAME" == 'push' && "$GITHUB_REF_NAME" == 'main' ]]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/$expected_tag" >/dev/null 2>&1; then
+              echo "$expected_tag already exists; this main push does not need another package build."
+              build=false
+              publish=false
+            else
+              publish=true
+            fi
+          fi
+
+          if [[ "$release_tag" != "$expected_tag" ]]; then
+            printf 'Release tag %s does not match application version %s. Expected %s.\n' "$release_tag" "$version" "$expected_tag" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]] && git show-ref --verify --quiet "refs/tags/$release_tag"; then
+            tag_commit="$(git rev-list -n 1 "$release_tag")"
+            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+              printf 'Existing tag %s points to %s, not selected commit %s. Dispatch the workflow from the tagged commit or bump the version.\n' "$release_tag" "$tag_commit" "$GITHUB_SHA" >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          printf 'version=%s tag=%s build=%s publish=%s\n' "$version" "$release_tag" "$build" "$publish"
+
+  linux:
+    name: Linux .deb and AppImage
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify Linux Tauri prerequisites
+        run: bash scripts/check-linux-prerequisites.sh
+      - name: Install frontend build tooling
+        working-directory: apps/slopity
+        run: npm install --no-audit --no-fund
+      - name: Build Linux release bundles
+        working-directory: apps/slopity
+        run: npm run tauri:build -- --bundles deb,appimage
+      - name: Collect Linux release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-staging/linux
+          mkdir -p release-staging/linux
+
+          mapfile -d '' debs < <(find "$GITHUB_WORKSPACE" -type f -path '*/target/release/bundle/deb/*.deb' -print0)
+          mapfile -d '' appimages < <(find "$GITHUB_WORKSPACE" -type f -path '*/target/release/bundle/appimage/*.AppImage' -print0)
+
+          if [[ ${#debs[@]} -ne 1 ]]; then
+            printf 'Expected exactly one .deb bundle, found %d.\n' "${#debs[@]}" >&2
+            printf '%s\n' "${debs[@]:-}" >&2
+            exit 1
+          fi
+          if [[ ${#appimages[@]} -ne 1 ]]; then
+            printf 'Expected exactly one AppImage bundle, found %d.\n' "${#appimages[@]}" >&2
+            printf '%s\n' "${appimages[@]:-}" >&2
+            exit 1
+          fi
+
+          cp "${debs[0]}" release-staging/linux/
+          cp "${appimages[0]}" release-staging/linux/
+          ls -lh release-staging/linux
+      - name: Upload Linux package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-linux-${{ github.sha }}
+          path: release-staging/linux/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  android:
+    name: Android ARM64 debug packages
+    needs: [prepare, linux]
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK and NDK
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.3.13750724"
+      - name: Configure Android environment
+        run: |
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - name: Install frontend build tooling
+        working-directory: apps/slopity
+        run: npm install --no-audit --no-fund
+      - name: Initialize Android project
+        working-directory: apps/slopity
+        run: npm run android:init -- --ci
+      - name: Build ARM64 debug APK and AAB
+        working-directory: apps/slopity
+        run: npm run android:build -- --debug --target aarch64
+      - name: Collect Android release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='apps/slopity/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk'
+          aab='apps/slopity/src-tauri/gen/android/app/build/outputs/bundle/universalDebug/app-universal-debug.aab'
+
+          test -f "$apk"
+          test -f "$aab"
+
+          rm -rf release-staging/android
+          mkdir -p release-staging/android
+          cp "$apk" release-staging/android/
+          cp "$aab" release-staging/android/
+          ls -lh release-staging/android
+      - name: Upload Android package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-android-${{ github.sha }}
+          path: release-staging/android/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  release:
+    name: Publish GitHub prerelease
+    needs: [prepare, linux, android]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux packages
+        uses: actions/download-artifact@v4
+        with:
+          name: release-linux-${{ github.sha }}
+          path: dist/linux
+      - name: Download Android packages
+        uses: actions/download-artifact@v4
+        with:
+          name: release-android-${{ github.sha }}
+          path: dist/android
+      - name: Name assets and generate checksums
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          rm -rf release-assets
+          mkdir -p release-assets
+
+          mapfile -d '' debs < <(find dist/linux -type f -name '*.deb' -print0)
+          mapfile -d '' appimages < <(find dist/linux -type f -name '*.AppImage' -print0)
+          mapfile -d '' apks < <(find dist/android -type f -name '*.apk' -print0)
+          mapfile -d '' aabs < <(find dist/android -type f -name '*.aab' -print0)
+
+          [[ ${#debs[@]} -eq 1 ]]
+          [[ ${#appimages[@]} -eq 1 ]]
+          [[ ${#apks[@]} -eq 1 ]]
+          [[ ${#aabs[@]} -eq 1 ]]
+
+          cp "${debs[0]}" "release-assets/Slopity_${RELEASE_VERSION}_linux-amd64.deb"
+          cp "${appimages[0]}" "release-assets/Slopity_${RELEASE_VERSION}_linux-x86_64.AppImage"
+          cp "${apks[0]}" "release-assets/Slopity_${RELEASE_VERSION}_android-arm64-debug.apk"
+          cp "${aabs[0]}" "release-assets/Slopity_${RELEASE_VERSION}_android-arm64-debug.aab"
+
+          (cd release-assets && sha256sum Slopity_* > SHA256SUMS.txt)
+          cat release-assets/SHA256SUMS.txt
+      - name: Publish preview release
+        uses: softprops/action-gh-release@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Slopity ${{ needs.prepare.outputs.tag }} Preview
+          prerelease: true
+          fail_on_unmatched_files: true
+          body: |
+            Preview packages for Slopity ${{ needs.prepare.outputs.version }}.
+
+            - Linux `.deb` and AppImage are release-mode Tauri bundles built on the self-hosted x86_64 Linux runner.
+            - Android APK/AAB are ARM64 **debug** packages. Production Android signing is not configured yet.
+            - `SHA256SUMS.txt` contains checksums for all four packages.
+
+            This release is intentionally marked as a prerelease until production signing and physical-device release validation are complete.
+          files: |
+            release-assets/*.deb
+            release-assets/*.AppImage
+            release-assets/*.apk
+            release-assets/*.aab
+            release-assets/SHA256SUMS.txt
