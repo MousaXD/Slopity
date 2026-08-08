@@ -2,229 +2,147 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#070c16" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#080f1c" />
     <meta name="color-scheme" content="dark" />
     <title>Slopity</title>
     <link rel="stylesheet" href="./styles.css" />
     <script type="module" src="./app.js"></script>
   </head>
   <body>
-    <a class="skip-link" href="#saved-servers">Skip to saved servers</a>
-
-    <div id="drawer-backdrop" class="backdrop" hidden></div>
-    <aside id="app-drawer" class="drawer" aria-label="Slopity navigation" aria-hidden="true">
-      <div class="drawer-brand">
-        <span class="brand-mark" aria-hidden="true">S</span>
-        <div>
-          <strong>Slopity</strong>
-          <span>Portable server host</span>
-        </div>
-        <button id="close-drawer" class="icon-button drawer-close" type="button" aria-label="Close navigation">
-          <span aria-hidden="true">×</span>
-        </button>
-      </div>
-      <nav class="drawer-nav" aria-label="Primary navigation">
-        <button class="drawer-link is-active" type="button" data-drawer-action="servers">
-          <span class="nav-icon" aria-hidden="true">▤</span>
-          <span>Servers</span>
-        </button>
-        <button class="drawer-link" type="button" data-drawer-action="add">
-          <span class="nav-icon" aria-hidden="true">＋</span>
-          <span>Add Server</span>
-        </button>
-        <button class="drawer-link" type="button" data-drawer-action="runtime">
-          <span class="nav-icon" aria-hidden="true">⌘</span>
-          <span>Runtime Support</span>
-        </button>
-        <button class="drawer-link" type="button" data-drawer-action="device">
-          <span class="nav-icon" aria-hidden="true">◫</span>
-          <span>Device Status</span>
-        </button>
-        <button class="drawer-link" type="button" data-drawer-action="settings">
-          <span class="nav-icon" aria-hidden="true">⚙</span>
-          <span>Settings</span>
-          <span class="planned-tag">Planned</span>
-        </button>
-        <button class="drawer-link" type="button" data-drawer-action="about">
-          <span class="nav-icon" aria-hidden="true">i</span>
-          <span>About Slopity</span>
-        </button>
-      </nav>
-      <div class="drawer-footer">
-        <span id="platform-label">Loading platform…</span>
-        <button id="drawer-refresh" class="secondary-button" type="button">Refresh dashboard</button>
-      </div>
-    </aside>
-
-    <main class="app-shell">
+    <div class="app-shell">
       <header class="app-header">
-        <div class="header-row">
-          <button id="open-drawer" class="icon-button menu-button" type="button" aria-label="Open navigation" aria-controls="app-drawer" aria-expanded="false">
-            <span class="hamburger" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="brand-row">
+          <button id="menu-button" class="icon-button menu-button" type="button" aria-label="Open navigation menu" aria-controls="drawer" aria-expanded="false">
+            <span></span><span></span><span></span>
           </button>
-          <div class="wordmark">Slopity</div>
-          <div class="server-art" aria-hidden="true">
-            <span class="server-platform"></span>
-            <span class="server-block block-top"><i></i><i></i><b></b></span>
-            <span class="server-block block-middle"><i></i><i></i><b></b></span>
-            <span class="server-block block-bottom"><i></i><i></i><b></b></span>
+          <h1>Slopity</h1>
+          <div class="stack-art" aria-hidden="true">
+            <div class="stack-grid"></div>
+            <div class="server-unit server-unit-one"><i></i><i></i><b></b></div>
+            <div class="server-unit server-unit-two"><i></i><i></i><b></b></div>
+            <div class="server-unit server-unit-three"><i></i><i></i><b></b></div>
+            <div class="stack-base"></div>
           </div>
         </div>
       </header>
 
-      <section id="saved-servers" class="saved-section" aria-labelledby="saved-title">
-        <div class="section-intro">
-          <div class="section-icon" aria-hidden="true"><span></span><span></span></div>
+      <main class="dashboard" id="main-content">
+        <section class="section-intro" aria-labelledby="saved-servers-title">
+          <div class="section-icon" aria-hidden="true">
+            <span></span><span></span>
+          </div>
           <div>
-            <h1 id="saved-title">Saved Servers</h1>
+            <h2 id="saved-servers-title">Saved Servers</h2>
             <p>Your saved and imported servers</p>
           </div>
-        </div>
+          <button id="refresh-button" class="icon-button refresh-button" type="button" aria-label="Refresh server state" title="Refresh server state">↻</button>
+        </section>
 
-        <div class="summary-row" aria-label="Server summary">
-          <span id="profile-summary">Loading saved profiles…</span>
-          <button id="refresh" class="text-button" type="button">Refresh</button>
-        </div>
-
+        <div id="summary-strip" class="summary-strip" aria-live="polite">Loading your servers…</div>
         <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
-        <section id="profiles" class="server-grid" aria-live="polite" aria-busy="true"></section>
+
+        <section id="profiles" class="server-grid" aria-live="polite" aria-label="Saved servers"></section>
+
+        <button id="add-server-button" class="add-server-button" type="button">
+          <span class="add-server-icon" aria-hidden="true">+</span>
+          <span><strong>Add Server</strong><small>Choose a template</small></span>
+        </button>
+      </main>
+    </div>
+
+    <div id="drawer-overlay" class="overlay drawer-overlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close="drawer" aria-label="Close navigation menu"></button>
+      <aside id="drawer" class="drawer" aria-label="Slopity navigation" tabindex="-1">
+        <div class="drawer-header">
+          <div class="brand-mark" aria-hidden="true">S</div>
+          <div><strong>Slopity</strong><small id="drawer-platform">Loading device…</small></div>
+          <button class="icon-button" type="button" data-close="drawer" aria-label="Close navigation menu">×</button>
+        </div>
+        <nav id="drawer-nav" class="drawer-nav" aria-label="Primary"></nav>
+        <div class="drawer-foot">
+          <span id="host-state-dot" class="host-dot"></span>
+          <span id="host-state-copy">Checking hosting capability…</span>
+        </div>
+      </aside>
+    </div>
+
+    <div id="add-overlay" class="overlay sheet-overlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close="add" aria-label="Close Add Server"></button>
+      <section id="add-sheet" class="bottom-sheet add-sheet" role="dialog" aria-modal="true" aria-labelledby="add-sheet-title" tabindex="-1">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-heading">
+          <div class="sheet-title-icon" aria-hidden="true"><span></span><span></span><b>+</b></div>
+          <div>
+            <h2 id="add-sheet-title">Add Server</h2>
+            <p>Choose a template to get started</p>
+          </div>
+          <button class="icon-button sheet-close" type="button" data-close="add" aria-label="Close Add Server">×</button>
+        </div>
+        <div id="template-list" class="template-list"></div>
       </section>
-    </main>
+    </div>
 
-    <button id="add-server-button" class="add-server-button" type="button" aria-haspopup="dialog" aria-controls="add-sheet">
-      <span class="add-server-icon" aria-hidden="true"><i></i><b>+</b></span>
-      <span>
-        <strong>Add Server</strong>
-        <small>Choose a template</small>
-      </span>
-      <span class="button-chevron" aria-hidden="true">›</span>
-    </button>
+    <div id="details-overlay" class="overlay sheet-overlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close="details" aria-label="Close server details"></button>
+      <section id="details-sheet" class="bottom-sheet details-sheet" role="dialog" aria-modal="true" aria-labelledby="details-title" tabindex="-1">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div id="details-content"></div>
+      </section>
+    </div>
 
-    <div id="modal-backdrop" class="backdrop modal-backdrop" hidden></div>
-
-    <section id="add-sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="add-sheet-title" aria-describedby="add-sheet-subtitle" hidden>
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <header class="sheet-header">
-        <div class="sheet-title-icon" aria-hidden="true"><span></span><span></span><b>+</b></div>
-        <div>
-          <h2 id="add-sheet-title">Add Server</h2>
-          <p id="add-sheet-subtitle">Choose a template to get started</p>
+    <div id="actions-overlay" class="overlay sheet-overlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close="actions" aria-label="Close server actions"></button>
+      <section id="actions-sheet" class="bottom-sheet actions-sheet" role="dialog" aria-modal="true" aria-labelledby="actions-title" tabindex="-1">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-heading compact-heading">
+          <div><h2 id="actions-title">Server actions</h2><p id="actions-subtitle"></p></div>
+          <button class="icon-button sheet-close" type="button" data-close="actions" aria-label="Close server actions">×</button>
         </div>
-        <button class="icon-button sheet-close" type="button" data-close-sheet="add-sheet" aria-label="Close Add Server">
-          <span aria-hidden="true">×</span>
-        </button>
-      </header>
-      <div id="template-list" class="template-list" role="list"></div>
-    </section>
+        <div id="actions-list" class="actions-list"></div>
+      </section>
+    </div>
 
-    <section id="details-sheet" class="sheet details-sheet" role="dialog" aria-modal="true" aria-labelledby="details-title" hidden>
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <header class="sheet-header details-header">
-        <div id="details-icon" class="server-icon" aria-hidden="true"></div>
-        <div class="details-heading-copy">
-          <h2 id="details-title">Server details</h2>
-          <p id="details-subtitle">Profile configuration and runtime state</p>
-        </div>
-        <button class="icon-button sheet-close" type="button" data-close-sheet="details-sheet" aria-label="Close server details">
-          <span aria-hidden="true">×</span>
-        </button>
-      </header>
-      <div id="details-content" class="details-content"></div>
-      <footer id="details-actions" class="sticky-actions"></footer>
-    </section>
+    <div id="template-overlay" class="overlay sheet-overlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close="template" aria-label="Close runtime support message"></button>
+      <section id="template-sheet" class="bottom-sheet support-sheet" role="dialog" aria-modal="true" aria-labelledby="template-support-title" tabindex="-1">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div id="template-support-content"></div>
+      </section>
+    </div>
 
-    <section id="editor-sheet" class="sheet editor-sheet" role="dialog" aria-modal="true" aria-labelledby="editor-title" hidden>
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <header class="sheet-header">
-        <div class="sheet-title-icon editor-title-icon" aria-hidden="true">✎</div>
-        <div>
-          <h2 id="editor-title">Create profile</h2>
-          <p id="editor-subtitle">Configure a saved server profile</p>
+    <div id="editor-overlay" class="overlay sheet-overlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close="editor" aria-label="Close profile editor"></button>
+      <section id="editor-sheet" class="bottom-sheet editor-sheet" role="dialog" aria-modal="true" aria-labelledby="editor-title" tabindex="-1">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-heading">
+          <div>
+            <h2 id="editor-title">Create profile</h2>
+            <p id="editor-note">Configure the saved server profile.</p>
+          </div>
+          <button class="icon-button sheet-close" type="button" data-close="editor" aria-label="Close profile editor">×</button>
         </div>
-        <button id="cancel-editor" class="icon-button sheet-close" type="button" aria-label="Close profile editor">
-          <span aria-hidden="true">×</span>
-        </button>
-      </header>
-
-      <form id="profile-form" class="profile-form">
-        <div id="template-note" class="template-note" hidden></div>
-        <div class="form-grid">
-          <label>
-            <span>Profile ID</span>
-            <input id="profile-id" name="profileId" required maxlength="80" autocomplete="off" />
-          </label>
-          <label>
-            <span>Name</span>
-            <input id="profile-name" name="profileName" required maxlength="120" autocomplete="off" />
-          </label>
-          <label>
-            <span>Runtime</span>
-            <select id="profile-runtime" name="runtime">
-              <option value="built-in-http">Built-in HTTP</option>
-              <option value="java">Java</option>
-              <option value="node-js">Node.js</option>
-              <option value="python">Python</option>
-              <option value="php">PHP</option>
-              <option value="native">Native</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            <span>Network</span>
-            <select id="profile-network" name="networkScope">
-              <option value="loopback">Loopback only</option>
-              <option value="lan">Local network</option>
-            </select>
-          </label>
-          <label>
-            <span>Port</span>
-            <input id="profile-port" name="port" type="number" min="1" max="65535" required inputmode="numeric" />
-          </label>
-          <label>
-            <span>Memory reservation (MiB)</span>
-            <input id="profile-memory" name="memoryMib" type="number" min="128" max="32768" step="128" required inputmode="numeric" />
-          </label>
-          <label class="span-two external-runtime-field">
-            <span>Executable path <small>external runtimes only</small></span>
-            <input id="profile-executable" name="executable" autocomplete="off" />
-          </label>
-          <label class="span-two external-runtime-field">
-            <span>Working directory <small>external runtimes only</small></span>
-            <input id="profile-directory" name="workingDirectory" autocomplete="off" />
-          </label>
-          <label class="span-two external-runtime-field">
-            <span>Arguments <small>one structured argument per line</small></span>
-            <textarea id="profile-arguments" name="arguments" rows="4"></textarea>
-          </label>
-        </div>
-        <label class="check-row">
-          <input id="profile-enabled" name="enabled" type="checkbox" />
-          <span>Enable this profile as runnable configuration. Starting remains a separate action.</span>
-        </label>
-        <div id="editor-validation" class="validation-list" aria-live="polite"></div>
-        <div class="sticky-actions editor-actions">
-          <button id="save-profile" class="primary-button" type="submit">Save profile</button>
-        </div>
-      </form>
-    </section>
-
-    <section id="info-sheet" class="sheet info-sheet" role="dialog" aria-modal="true" aria-labelledby="info-title" hidden>
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <header class="sheet-header">
-        <div class="sheet-title-icon info-title-icon" aria-hidden="true">i</div>
-        <div>
-          <h2 id="info-title">Slopity</h2>
-          <p id="info-subtitle">Current product boundary</p>
-        </div>
-        <button class="icon-button sheet-close" type="button" data-close-sheet="info-sheet" aria-label="Close information">
-          <span aria-hidden="true">×</span>
-        </button>
-      </header>
-      <div id="info-content" class="info-content"></div>
-      <footer id="info-actions" class="sticky-actions"></footer>
-    </section>
-
-    <div id="card-menu" class="card-menu" role="menu" aria-label="Server actions" hidden></div>
+        <form id="profile-form" class="profile-form">
+          <div id="form-validation" class="form-validation" aria-live="polite" hidden></div>
+          <label><span>Profile ID</span><input id="profile-id" name="profileId" required maxlength="80" autocomplete="off" /></label>
+          <label><span>Name</span><input id="profile-name" name="profileName" required maxlength="120" autocomplete="off" /></label>
+          <div class="form-row">
+            <label><span>Runtime</span><select id="profile-runtime" name="runtime"><option value="built-in-http">Built-in HTTP</option><option value="java">Java</option><option value="node-js">Node.js</option><option value="python">Python</option><option value="php">PHP</option><option value="native">Native</option><option value="custom">Custom</option></select></label>
+            <label><span>Network</span><select id="profile-network" name="networkScope"><option value="loopback">Loopback only</option><option value="lan">Local network</option></select></label>
+          </div>
+          <div class="form-row">
+            <label><span>Port</span><input id="profile-port" name="port" type="number" min="1" max="65535" required /></label>
+            <label><span>Memory (MiB)</span><input id="profile-memory" name="memoryMib" type="number" min="128" max="32768" step="128" required /></label>
+          </div>
+          <div id="external-runtime-fields" class="external-runtime-fields">
+            <label><span>Executable path <small>provider not verified</small></span><input id="profile-executable" name="executable" autocomplete="off" /></label>
+            <label><span>Working directory</span><input id="profile-directory" name="workingDirectory" autocomplete="off" /></label>
+            <label><span>Arguments <small>one structured argument per line</small></span><textarea id="profile-arguments" name="arguments" rows="4"></textarea></label>
+          </div>
+          <label class="toggle-row"><input id="profile-enabled" name="enabled" type="checkbox" /><span><strong>Enabled configuration</strong><small>Starting is always a separate action.</small></span></label>
+          <div class="sticky-form-actions"><button id="save-profile" class="primary-action" type="submit">Save profile</button></div>
+        </form>
+      </section>
+    </div>
   </body>
 </html>
