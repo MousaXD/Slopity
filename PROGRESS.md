@@ -232,7 +232,7 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed.
 - The Linux job passed the prerequisite check, `npm install --no-audit --no-fund`, and `npm run tauri:check`.
 - The Android job installed the configured SDK and NDK, passed `npm run android:init -- --ci`, and passed `npm run android:build -- --debug --target aarch64`.
-- Android produced `app-universal-debug.apk` and `app-universal-debug.aab` and uploaded artifact `9024516514`, named `slopity-android-debug-b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4`, size `148565786` bytes, digest `sha256:b3b97cfec46bfc35e6b4d3f4075f51a8c5f55f2683bd5627f`, retained through 2026-08-22.
+- Android produced `app-universal-debug.apk` and `app-universal-debug.aab` and uploaded artifact `9024516514`, named `slopity-android-debug-b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4`, size `148565786` bytes, digest `sha256:b3b97cfec46bfc35e6b4d3f4075f51a8c5cc611cb8276f2a5f55f2683bd5627f`, retained through 2026-08-22.
 - Draft pull request `#2` remains open, unmerged, and based on `main`.
 
 ### Verification pending
