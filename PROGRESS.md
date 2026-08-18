@@ -4,8 +4,9 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 018: reconcile workload foundation
 
-**Status:** IN PROGRESS  
-**Declared:** 2026-08-18
+**Status:** PARTIAL  
+**Declared:** 2026-08-18  
+**Updated:** 2026-08-18
 
 ### Scope
 
@@ -19,33 +20,88 @@ Reconcile the compatible, still-desired foundation work from draft pull requests
 - Claiming Android background durability, OEM survival, notification behavior, process-death recovery, or real-device hosting proof from compilation.
 - Merging any source pull request or this integration branch, rebasing shared branches, force-pushing, or rewriting completed progress history.
 
-### Risks and reconciliation decisions
+### Delivered
 
-- `apps/slopity/src-tauri/src/lib.rs` overlaps all lifecycle/resource work. It will own one `ServerOrchestrator`, not a parallel `HttpServerManager`; built-in HTTP remains the only registered runnable adapter.
-- `crates/slopity-core/src/lib.rs` must combine orchestrator, accounting, recovery, migration, and validation exports while keeping the crate pure Rust and platform-neutral.
-- The host plugin overlaps telemetry and Android lifecycle changes. Its Rust/mobile/Kotlin surfaces will combine optional device telemetry with native status reconciliation and notification permission handling without changing the durability claim.
-- Profile validity stays independent from runtime availability. Unsupported external profiles may remain structurally valid while runtime availability remains false.
-- PR #6's exact head currently fails only the formatting gate, so the integration will apply Rust 1.89 formatting rather than inheriting that stale failure.
-- PR #5 and PR #10 exact-head CI runs were cancelled after earlier partial proof. The integration requires fresh exact-head CI instead of treating source-branch evidence as sufficient.
+- Added the platform-neutral `ServerOrchestrator` as the single authoritative lifecycle owner for the Tauri shell, with explicit desired and observed state, structured runtime identity, logs, terminal exits, failure observations, bounded deterministic events, adapter availability, and duplicate-adapter rejection.
+- Kept the existing built-in Rust HTTP provider behind the generic runtime adapter contract and registered only that adapter. External runtime kinds remain unavailable configuration values and the desktop local-process adapter is not registered or exposed.
+- Removed the parallel direct-`HttpServerManager` lifecycle ownership from the Tauri shell. Existing built-in HTTP commands now delegate through the orchestrator and explicitly reject profiles whose runtime kind is not `BuiltInHttp`.
+- Added aggregate resource accounting with host reserve policy, safe memory budgets, active-or-reserved server accounting, deterministic port reservations/conflicts, CPU headroom warnings, and conservative unknown-telemetry behavior.
+- Added proven host telemetry surfaces: Linux `/proc/meminfo` memory telemetry and Android system-service memory, battery, charging, battery-temperature, thermal-state, and free-storage telemetry. Missing values remain `None` instead of being guessed.
+- Integrated profile-store interrupted-write recovery, primary/temporary/backup candidate inspection, backup recovery, parent-directory synchronization, schema-v0 to schema-v1 migration infrastructure, migration/recovery notices, and hard failure for unsupported future schemas.
+- Integrated backend profile validation limits for IDs, names, argument counts and payload sizes, executable paths, working directories, duplicate IDs, and duplicate ports while keeping structural profile validity separate from runtime availability.
+- Integrated Android foreground-host lifecycle/status improvements: POST_NOTIFICATIONS permission handling, native service status, active-server counts, start/update behavior, conservative notification visibility, a pending notification stop request, and `START_NOT_STICKY` process-lifecycle honesty.
+- Added a dashboard resource-status surface and exposed capability, telemetry, resource accounting, profile recovery notices, generic server snapshots, and host-service status through the existing Tauri boundary.
+- Added integration tests for clean terminal runtime-exit observation and the 256-entry deterministic runtime-event retention contract, on top of the retained source-branch tests for adapter behavior, runtime failure, HTTP lifecycle/ports, profile migration/recovery/validation, resource accounting, unknown telemetry, and host-service serialization.
 
-### Intended files
+### Reconciliation decisions
 
-- `crates/slopity-core/src/{lib.rs,runtime.rs,orchestrator.rs,capability.rs,profile_store.rs,validation.rs}`
-- `crates/slopity-runtime-http/src/lib.rs`
-- `apps/slopity/src-tauri/src/lib.rs`
-- `apps/slopity/web/{index.html,resource-status.js}`
-- `plugins/tauri-plugin-slopity-host/{Cargo.toml,src/**,android/**}`
+- `apps/slopity/src-tauri/src/lib.rs` now owns one `ServerOrchestrator`; there is no parallel Tauri-managed `HttpServerManager` competing for lifecycle state.
+- `crates/slopity-core/src/lib.rs` combines the orchestrator, resource-accounting, profile-recovery/migration, runtime-observation, and hardened-validation exports while remaining pure Rust.
+- The host plugin combines PR #6 telemetry with PR #9 Android lifecycle/status and notification-permission behavior rather than choosing one branch snapshot over the other.
+- Resource reservations derive active IDs from orchestrator observations, including disabled profiles that remain active, so accounting does not rely only on persisted `enabled` flags.
+- A native Android `stopRequestPending` is surfaced for safe reconciliation, but it does not directly kill Rust listeners. Automatic process-death recovery or durable background hosting is not claimed.
+- PR #6's Rust 1.89 formatting corrections were applied while porting its accounting implementation instead of carrying its known exact-head formatting failure.
+
+### Files changed
+
 - `.github/workflows/ci.yml`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `apps/slopity/web/index.html`
+- `apps/slopity/web/resource-status.js`
+- `crates/slopity-core/src/capability.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/orchestrator.rs`
+- `crates/slopity-core/src/profile_store.rs`
+- `crates/slopity-core/src/runtime.rs`
+- `crates/slopity-core/src/validation.rs`
+- `crates/slopity-core/tests/orchestrator_foundation.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `plugins/tauri-plugin-slopity-host/Cargo.toml`
+- `plugins/tauri-plugin-slopity-host/src/lib.rs`
+- `plugins/tauri-plugin-slopity-host/src/mobile.rs`
+- `plugins/tauri-plugin-slopity-host/src/telemetry.rs`
+- `plugins/tauri-plugin-slopity-host/android/README.md`
+- `plugins/tauri-plugin-slopity-host/android/build.gradle.kts`
+- `plugins/tauri-plugin-slopity-host/android/src/main/AndroidManifest.xml`
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostForegroundService.kt`
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostPlugin.kt`
 - `PROGRESS.md`
 
-### Acceptance checks
+### Verification performed
 
-- Tests cover adapter registration and duplicate rejection, successful start/stop, runtime failure and terminal-exit observation, deterministic bounded event retention, profile migration and interrupted-write recovery, corrupt-primary/valid-recovery behavior, backend profile validation, port conflicts, aggregate resource budgets including active disabled profiles, unknown telemetry, and Android capability/status serialization where testable.
-- `cargo fmt --all -- --check` passes.
-- `cargo test --workspace --all-features` passes.
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes.
-- Repository Linux Tauri validation passes on the self-hosted Linux runner.
-- Android initialization and ARM64 debug build pass, including the merged-manifest host-service assertions, without treating compilation as physical-device durability proof.
+- Live-state verification on 2026-08-18 confirmed `main` at `356dd3aa9588b885f74ee9d59800f77c74487f34`; draft PRs #5, #6, #9, and #10 were all still open, unmerged, and based on that same main.
+- PR #5 retained orchestrator implementation had prior Rust-quality and Linux Tauri success on workflow run `31279333145`; its Android job never executed before cancellation, so that source run is not treated as Android proof.
+- PR #6 exact-head workflow run `31279264370` failed only `cargo fmt --all -- --check`; tests, Clippy, Linux, and Android were skipped. The reported Rust 1.89 formatting changes were applied to the reconciled accounting code rather than weakening the gate.
+- PR #9 exact-head Linux-and-Android workflow run `31280218290` succeeded, providing the strongest source-branch compile evidence for the Android lifecycle/status changes.
+- PR #10 exact-head Linux-and-Android run `31280369242` was cancelled; earlier branch validation had reached its recovery/migration tests and formatting, but the integration does not treat that cancelled final head as sufficient proof.
+- A disposable validation branch `integration/workload-foundation-validation` was created from the Step 018 plan commit. Candidate head `8a5baed33259404ff905fae4a4d096b149bd8fd3` is two commits ahead of source main and contains the reconciled implementation tree.
+- Draft validation PR #11 was opened explicitly as `Do not merge`. Linux-and-Android CI run `32139520572` and package-validation run `32139520552` were created for that exact candidate head.
+- At Step 018 closeout, CI run `32139520572` remained `queued`; its only materialized job, `Rust quality` (`95718614186`), also remained `queued` with zero executed steps. No formatting, test, Clippy, Linux, or Android success is claimed for the reconciled candidate.
+- Local execution was not substituted for the required self-hosted workflow because the agent environment has no Rust toolchain; the requested existing self-hosted Linux GitHub Actions runner remains the authoritative validation environment.
+
+### Verification pending / blocked
+
+- The self-hosted Linux runner must actually execute `cargo fmt --all -- --check`, `cargo test --workspace --all-features`, and `cargo clippy --workspace --all-targets --all-features -- -D warnings` for the reconciled integration head.
+- The same workflow must execute the repository Linux prerequisite check, dependency install, and Linux `npm run tauri:check` validation.
+- The same workflow must execute Android SDK/NDK setup, `npm run android:init -- --ci`, `npm run android:build -- --debug --target aarch64`, merged-manifest foreground-service assertions, and Android artifact upload.
+- A final exact-head pull-request CI run on `integration/workload-foundation` is required after the mandated implementation commit exists. That run cannot exist before this ledger is committed and therefore is not pre-claimed here.
+- Physical Android proof remains required for notification visibility, foreground/background reachability, notification stop-request reconciliation, app/activity recreation, OEM behavior, clean listener shutdown, and port release. Compilation cannot satisfy this proof.
+
+### Known limitations
+
+- Desired/observed runtime state and runtime events remain process-local; persistence of live runtime state, restart recovery, crash-loop policy, and automatic runtime restoration are future work.
+- Only built-in HTTP is registered and runnable. Java/JVM, Minecraft, GitHub deployment, Jellyfin, Node.js, Python, PHP, native packages, custom commands, and arbitrary external runtimes remain unavailable.
+- Android foreground-service native state is in-process and `START_NOT_STICKY`; no boot receiver, process-death recovery, or durable-hosting claim is added.
+- A notification `Request stop` records a pending native request, but the native layer deliberately does not stop Rust listeners by itself. A future resultful orchestration reconciliation path is needed before that action can safely become a full stop control.
+- Until the queued integration workflow executes successfully, this branch is not CI-proven and must not be treated as merge-ready solely from the source-branch evidence.
+
+### Correction note
+
+- The Step 018 planning commit accidentally shortened the existing Step 005 follow-up sentence while replacing the full ledger file. This implementation commit restores the historical line verbatim to `Step 006 begins versioned profile persistence and CRUD. Windows remains deferred.` The final branch therefore does not alter completed Step 005 semantics.
+
+### Follow-up
+
+Keep the integration pull request draft and unmerged. When the existing self-hosted Linux runner accepts the queued work, require the full Rust, Linux Tauri, and Android ARM64 gates to pass without weakening checks. Then perform the remaining physical Android lifecycle proof before making any durability claim.
 
 ## Step 011: publish Linux and Android GitHub releases
 

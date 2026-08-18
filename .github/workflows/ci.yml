@@ -82,6 +82,22 @@ jobs:
       - name: Build ARM64 debug APK
         working-directory: apps/slopity
         run: npm run android:build -- --debug --target aarch64
+      - name: Validate merged Android host manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=""
+          while IFS= read -r candidate; do
+            if grep -q 'com.slopity.host.HostForegroundService' "$candidate"; then
+              manifest="$candidate"
+              break
+            fi
+          done < <(find apps/slopity/src-tauri/gen/android/app/build/intermediates -type f -name AndroidManifest.xml -print)
+          test -n "$manifest"
+          grep -q 'android.permission.POST_NOTIFICATIONS' "$manifest"
+          grep -q 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$manifest"
+          grep -q 'android:foregroundServiceType="specialUse"' "$manifest"
+          echo "Validated merged host manifest: $manifest"
       - name: Upload Android debug packages
         uses: actions/upload-artifact@v7
         with:

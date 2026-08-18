@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.slopity.host"
+    namespace = "com.slopity.host.plugin"
     compileSdk = 36
 
     defaultConfig {

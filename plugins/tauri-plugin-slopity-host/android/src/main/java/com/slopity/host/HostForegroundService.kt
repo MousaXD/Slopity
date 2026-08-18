@@ -10,6 +10,14 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
+internal data class HostServiceSnapshot(
+    val active: Boolean = false,
+    val startRequestPending: Boolean = false,
+    val stopRequestPending: Boolean = false,
+    val label: String = "",
+    val activeServerCount: Int = 0
+)
+
 class HostForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
@@ -18,37 +26,32 @@ class HostForegroundService : Service() {
             "Slopity hosting",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Shows when a user-started local Slopity server is active."
+            description = "Shows when user-started Slopity server hosting is active."
             setShowBadge(false)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_REQUEST_STOP) {
+            markStopRequested()
+            getSystemService(NotificationManager::class.java).notify(
+                NOTIFICATION_ID,
+                buildNotification(snapshot())
+            )
+            return START_NOT_STICKY
+        }
+
         val label = intent?.getStringExtra(EXTRA_LABEL)
             ?.takeIf { it.isNotBlank() }
             ?: "Hosting a Slopity server"
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentTitle("Slopity server active")
-            .setContentText(label)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(label))
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
+        val activeServerCount = intent
+            ?.getIntExtra(EXTRA_ACTIVE_SERVER_COUNT, 1)
+            ?.coerceAtLeast(1)
+            ?: 1
+        markActive(label, activeServerCount)
+        val notification = buildNotification(snapshot())
 
-        packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
-            val pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                launchIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            builder.setContentIntent(pendingIntent)
-        }
-
-        val notification = builder.build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
@@ -62,15 +65,106 @@ class HostForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        markStopped()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun buildNotification(snapshot: HostServiceSnapshot) =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setContentTitle(notificationTitle(snapshot.activeServerCount))
+            .setContentText(notificationText(snapshot))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText(snapshot)))
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .apply {
+                packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+                    val contentIntent = PendingIntent.getActivity(
+                        this@HostForegroundService,
+                        0,
+                        launchIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    setContentIntent(contentIntent)
+                }
+
+                if (!snapshot.stopRequestPending) {
+                    val stopIntent = Intent(this@HostForegroundService, HostForegroundService::class.java)
+                        .setAction(ACTION_REQUEST_STOP)
+                    val stopPendingIntent = PendingIntent.getService(
+                        this@HostForegroundService,
+                        1,
+                        stopIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    addAction(0, "Request stop", stopPendingIntent)
+                }
+            }
+            .build()
+
+    private fun notificationTitle(activeServerCount: Int): String = when (activeServerCount) {
+        1 -> "Slopity server active"
+        else -> "Slopity hosting $activeServerCount servers"
+    }
+
+    private fun notificationText(snapshot: HostServiceSnapshot): String = when {
+        snapshot.stopRequestPending ->
+            "Stop requested. Open Slopity to finish shutting down hosted servers safely."
+        snapshot.label.isNotBlank() -> snapshot.label
+        else -> "Hosting a Slopity server"
+    }
+
     companion object {
+        const val ACTION_START_OR_UPDATE = "com.slopity.host.action.START_OR_UPDATE"
+        const val ACTION_REQUEST_STOP = "com.slopity.host.action.REQUEST_STOP"
         const val EXTRA_LABEL = "slopity.host.label"
-        private const val CHANNEL_ID = "slopity_hosting"
+        const val EXTRA_ACTIVE_SERVER_COUNT = "slopity.host.activeServerCount"
+        internal const val CHANNEL_ID = "slopity_hosting"
         private const val NOTIFICATION_ID = 8_081
+
+        private val stateLock = Any()
+        private var state = HostServiceSnapshot()
+
+        internal fun snapshot(): HostServiceSnapshot = synchronized(stateLock) { state.copy() }
+
+        internal fun markStartRequested(label: String, activeServerCount: Int) {
+            synchronized(stateLock) {
+                state = state.copy(
+                    startRequestPending = true,
+                    stopRequestPending = false,
+                    label = label,
+                    activeServerCount = activeServerCount
+                )
+            }
+        }
+
+        private fun markActive(label: String, activeServerCount: Int) {
+            synchronized(stateLock) {
+                state = HostServiceSnapshot(
+                    active = true,
+                    label = label,
+                    activeServerCount = activeServerCount
+                )
+            }
+        }
+
+        private fun markStopRequested() {
+            synchronized(stateLock) {
+                if (state.active) {
+                    state = state.copy(stopRequestPending = true, startRequestPending = false)
+                }
+            }
+        }
+
+        internal fun markStopped() {
+            synchronized(stateLock) {
+                state = HostServiceSnapshot()
+            }
+        }
     }
 }

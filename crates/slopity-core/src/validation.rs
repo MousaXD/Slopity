@@ -2,6 +2,14 @@ use crate::{NetworkScope, RuntimeKind, ServerProfile};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+pub const MAX_PROFILE_ID_LENGTH: usize = 128;
+pub const MAX_PROFILE_NAME_LENGTH: usize = 256;
+pub const MAX_ARGUMENT_COUNT: usize = 256;
+pub const MAX_ARGUMENT_LENGTH: usize = 8_192;
+pub const MAX_ARGUMENT_PAYLOAD_SIZE: usize = 65_536;
+pub const MAX_EXECUTABLE_PATH_LENGTH: usize = 4_096;
+pub const MAX_WORKING_DIRECTORY_PATH_LENGTH: usize = 4_096;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ValidationSeverity {
@@ -26,9 +34,69 @@ pub fn validate_profile(
     if profile.id.0.trim().is_empty() {
         issues.push(error("profile-id-empty", "Profile ID cannot be empty."));
     }
+    if profile.id.0.len() > MAX_PROFILE_ID_LENGTH {
+        issues.push(error(
+            "profile-id-too-long",
+            &format!("Profile ID cannot exceed {MAX_PROFILE_ID_LENGTH} UTF-8 bytes."),
+        ));
+    }
     if profile.name.trim().is_empty() {
         issues.push(error("profile-name-empty", "Profile name cannot be empty."));
     }
+    if profile.name.len() > MAX_PROFILE_NAME_LENGTH {
+        issues.push(error(
+            "profile-name-too-long",
+            &format!("Profile name cannot exceed {MAX_PROFILE_NAME_LENGTH} UTF-8 bytes."),
+        ));
+    }
+
+    if profile.arguments.len() > MAX_ARGUMENT_COUNT {
+        issues.push(error(
+            "too-many-arguments",
+            &format!("A profile cannot contain more than {MAX_ARGUMENT_COUNT} arguments."),
+        ));
+    }
+
+    let mut argument_payload_size = 0usize;
+    for (index, argument) in profile.arguments.iter().enumerate() {
+        argument_payload_size = argument_payload_size.saturating_add(argument.len());
+        if argument.len() > MAX_ARGUMENT_LENGTH {
+            issues.push(error(
+                "argument-too-long",
+                &format!("Argument {index} cannot exceed {MAX_ARGUMENT_LENGTH} UTF-8 bytes."),
+            ));
+        }
+    }
+    if argument_payload_size > MAX_ARGUMENT_PAYLOAD_SIZE {
+        issues.push(error(
+            "argument-payload-too-large",
+            &format!(
+                "The combined argument payload cannot exceed {MAX_ARGUMENT_PAYLOAD_SIZE} UTF-8 bytes."
+            ),
+        ));
+    }
+
+    if let Some(executable) = &profile.executable {
+        if executable.to_string_lossy().len() > MAX_EXECUTABLE_PATH_LENGTH {
+            issues.push(error(
+                "executable-path-too-long",
+                &format!(
+                    "Executable path cannot exceed {MAX_EXECUTABLE_PATH_LENGTH} UTF-8 bytes after portable path conversion."
+                ),
+            ));
+        }
+    }
+    if let Some(working_directory) = &profile.working_directory {
+        if working_directory.to_string_lossy().len() > MAX_WORKING_DIRECTORY_PATH_LENGTH {
+            issues.push(error(
+                "working-directory-path-too-long",
+                &format!(
+                    "Working-directory path cannot exceed {MAX_WORKING_DIRECTORY_PATH_LENGTH} UTF-8 bytes after portable path conversion."
+                ),
+            ));
+        }
+    }
+
     if profile.port == 0 {
         issues.push(error(
             "port-zero",
@@ -100,6 +168,7 @@ fn warning(code: &str, message: &str) -> ValidationIssue {
 mod tests {
     use super::*;
     use crate::{NetworkScope, RuntimeKind, ServerId};
+    use std::path::PathBuf;
 
     fn profile() -> ServerProfile {
         ServerProfile {
@@ -114,6 +183,12 @@ mod tests {
             network_scope: NetworkScope::Loopback,
             enabled: false,
         }
+    }
+
+    fn has_error(issues: &[ValidationIssue], code: &str) -> bool {
+        issues
+            .iter()
+            .any(|issue| issue.code == code && issue.severity == ValidationSeverity::Error)
     }
 
     #[test]
@@ -137,6 +212,65 @@ mod tests {
     #[test]
     fn reserved_port_is_an_error() {
         let issues = validate_profile(&profile(), &HashSet::from([8_080]));
-        assert!(issues.iter().any(|issue| issue.code == "port-conflict"));
+        assert!(has_error(&issues, "port-conflict"));
+    }
+
+    #[test]
+    fn profile_id_length_is_enforced() {
+        let mut candidate = profile();
+        candidate.id = ServerId("x".repeat(MAX_PROFILE_ID_LENGTH + 1));
+        let issues = validate_profile(&candidate, &HashSet::new());
+        assert!(has_error(&issues, "profile-id-too-long"));
+    }
+
+    #[test]
+    fn profile_name_length_is_enforced() {
+        let mut candidate = profile();
+        candidate.name = "x".repeat(MAX_PROFILE_NAME_LENGTH + 1);
+        let issues = validate_profile(&candidate, &HashSet::new());
+        assert!(has_error(&issues, "profile-name-too-long"));
+    }
+
+    #[test]
+    fn argument_count_is_enforced() {
+        let mut candidate = profile();
+        candidate.arguments = vec!["x".into(); MAX_ARGUMENT_COUNT + 1];
+        let issues = validate_profile(&candidate, &HashSet::new());
+        assert!(has_error(&issues, "too-many-arguments"));
+    }
+
+    #[test]
+    fn individual_argument_length_is_enforced() {
+        let mut candidate = profile();
+        candidate.arguments = vec!["x".repeat(MAX_ARGUMENT_LENGTH + 1)];
+        let issues = validate_profile(&candidate, &HashSet::new());
+        assert!(has_error(&issues, "argument-too-long"));
+    }
+
+    #[test]
+    fn total_argument_payload_is_enforced() {
+        let mut candidate = profile();
+        candidate.arguments = vec!["x".repeat(MAX_ARGUMENT_LENGTH); 9];
+        let issues = validate_profile(&candidate, &HashSet::new());
+        assert!(has_error(&issues, "argument-payload-too-large"));
+        assert!(!has_error(&issues, "argument-too-long"));
+    }
+
+    #[test]
+    fn executable_path_length_is_enforced() {
+        let mut candidate = profile();
+        candidate.executable = Some(PathBuf::from("x".repeat(MAX_EXECUTABLE_PATH_LENGTH + 1)));
+        let issues = validate_profile(&candidate, &HashSet::new());
+        assert!(has_error(&issues, "executable-path-too-long"));
+    }
+
+    #[test]
+    fn working_directory_path_length_is_enforced() {
+        let mut candidate = profile();
+        candidate.working_directory = Some(PathBuf::from(
+            "x".repeat(MAX_WORKING_DIRECTORY_PATH_LENGTH + 1),
+        ));
+        let issues = validate_profile(&candidate, &HashSet::new());
+        assert!(has_error(&issues, "working-directory-path-too-long"));
     }
 }

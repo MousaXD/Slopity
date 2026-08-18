@@ -1,7 +1,11 @@
 #![forbid(unsafe_code)]
 
 use serde::Serialize;
-use slopity_core::{NetworkScope, RuntimeKind, ServerId, ServerProfile, ServerState};
+use slopity_core::{
+    NetworkScope, RuntimeAdapter, RuntimeAvailability, RuntimeError, RuntimeExit,
+    RuntimeExitReason, RuntimeHandle, RuntimeIdentity, RuntimeKind, RuntimeLogEntry,
+    RuntimeLogLevel, RuntimeObservation, RuntimeRequest, ServerId, ServerProfile, ServerState,
+};
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, Read, Write},
@@ -277,16 +281,145 @@ impl HttpServerManager {
             .map(|(server_id, _)| server_id.clone())
             .collect::<Vec<_>>();
         for server_id in finished {
-            if let Some(running) = self.running.remove(&server_id) {
-                let _ = running.thread.join();
+            let Some(running) = self.running.remove(&server_id) else {
+                continue;
+            };
+            let join_result = running.thread.join();
+            let Some(snapshot) = self.snapshots.get(&server_id).cloned() else {
+                continue;
+            };
+            let mut state = lock_state(&snapshot);
+            match join_result {
+                Err(payload) => {
+                    let reason = panic_message(payload);
+                    state.state = ServerState::Failed;
+                    state.last_error = Some(reason.clone());
+                    state.log(
+                        HttpLogLevel::Error,
+                        format!("Server thread panicked: {reason}"),
+                    );
+                }
+                Ok(())
+                    if matches!(
+                        state.state,
+                        ServerState::Starting | ServerState::Running | ServerState::Stopping
+                    ) =>
+                {
+                    let reason =
+                        "server thread exited without reporting a terminal state".to_string();
+                    state.state = ServerState::Failed;
+                    state.last_error = Some(reason.clone());
+                    state.log(HttpLogLevel::Error, reason);
+                }
+                Ok(()) => {}
             }
         }
+    }
+}
+
+impl RuntimeAdapter for HttpServerManager {
+    fn runtime_kind(&self) -> RuntimeKind {
+        RuntimeKind::BuiltInHttp
+    }
+
+    fn runtime_identity(&self) -> RuntimeIdentity {
+        RuntimeIdentity {
+            runtime: RuntimeKind::BuiltInHttp,
+            adapter: "built-in-http".into(),
+        }
+    }
+
+    fn availability(&self) -> RuntimeAvailability {
+        RuntimeAvailability {
+            available: true,
+            runtime: RuntimeKind::BuiltInHttp,
+            reason: "The harmless built-in Rust HTTP probe is compiled into Slopity.".into(),
+        }
+    }
+
+    fn start(&mut self, request: RuntimeRequest) -> Result<RuntimeHandle, RuntimeError> {
+        let server_id = request.profile.id.clone();
+        HttpServerManager::start(self, &request.profile).map_err(map_http_error)?;
+        Ok(RuntimeHandle {
+            server_id,
+            process_id: None,
+        })
+    }
+
+    fn stop(&mut self, server_id: &ServerId) -> Result<(), RuntimeError> {
+        HttpServerManager::stop(self, server_id)
+            .map(|_| ())
+            .map_err(map_http_error)
+    }
+
+    fn observe(&mut self, server_id: &ServerId) -> Option<RuntimeObservation> {
+        HttpServerManager::snapshot(self, server_id).map(runtime_observation)
+    }
+
+    fn observations(&mut self) -> Vec<RuntimeObservation> {
+        HttpServerManager::snapshots(self)
+            .into_iter()
+            .map(runtime_observation)
+            .collect()
     }
 }
 
 impl Drop for HttpServerManager {
     fn drop(&mut self) {
         self.stop_all();
+    }
+}
+
+fn map_http_error(error: HttpServerError) -> RuntimeError {
+    match error {
+        HttpServerError::UnsupportedRuntime(server_id) => RuntimeError::InvalidRequest(format!(
+            "profile {server_id} does not use the built-in HTTP runtime"
+        )),
+        HttpServerError::Disabled(server_id) => RuntimeError::InvalidRequest(format!(
+            "profile {server_id} is disabled; enable it before starting"
+        )),
+        HttpServerError::AlreadyRunning(server_id) => RuntimeError::AlreadyRunning(server_id),
+        HttpServerError::NotRunning(server_id) => RuntimeError::NotRunning(server_id),
+        other => RuntimeError::Process(other.to_string()),
+    }
+}
+
+fn runtime_observation(snapshot: HttpServerSnapshot) -> RuntimeObservation {
+    let exit = match snapshot.state {
+        ServerState::Stopped => Some(RuntimeExit {
+            reason: RuntimeExitReason::UserRequested,
+            message: "Built-in HTTP server stopped cleanly.".into(),
+        }),
+        ServerState::Failed => Some(RuntimeExit {
+            reason: RuntimeExitReason::Failed,
+            message: snapshot
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "Built-in HTTP runtime failed.".into()),
+        }),
+        _ => None,
+    };
+    RuntimeObservation {
+        server_id: snapshot.server_id,
+        state: snapshot.state,
+        bind_address: snapshot.bind_address,
+        urls: snapshot.urls,
+        request_count: snapshot.request_count,
+        logs: snapshot
+            .logs
+            .into_iter()
+            .map(|entry| RuntimeLogEntry {
+                sequence: entry.sequence,
+                level: match entry.level {
+                    HttpLogLevel::Info => RuntimeLogLevel::Info,
+                    HttpLogLevel::Warning => RuntimeLogLevel::Warning,
+                    HttpLogLevel::Error => RuntimeLogLevel::Error,
+                },
+                message: entry.message,
+            })
+            .collect(),
+        last_error: snapshot.last_error,
+        exit,
     }
 }
 
@@ -444,6 +577,7 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use slopity_core::{DesiredServerState, ServerOrchestrator};
 
     fn free_port() -> u16 {
         TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
@@ -452,10 +586,10 @@ mod tests {
             .expect("test should reserve an ephemeral port")
     }
 
-    fn profile(port: u16) -> ServerProfile {
+    fn profile_with_id(id: &str, port: u16) -> ServerProfile {
         ServerProfile {
-            id: ServerId("http-test".into()),
-            name: "HTTP test".into(),
+            id: ServerId(id.into()),
+            name: format!("HTTP test {id}"),
             runtime: RuntimeKind::BuiltInHttp,
             executable: None,
             arguments: Vec::new(),
@@ -465,6 +599,18 @@ mod tests {
             network_scope: NetworkScope::Loopback,
             enabled: true,
         }
+    }
+
+    fn profile(port: u16) -> ServerProfile {
+        profile_with_id("http-test", port)
+    }
+
+    fn orchestrator() -> ServerOrchestrator {
+        let mut orchestrator = ServerOrchestrator::default();
+        orchestrator
+            .register_adapter(Box::<HttpServerManager>::default())
+            .expect("HTTP adapter should register");
+        orchestrator
     }
 
     fn get_with_retry(port: u16) -> String {
@@ -549,5 +695,107 @@ mod tests {
         assert_eq!(state.logs.len(), MAX_LOG_ENTRIES);
         assert_eq!(state.logs.front().map(|entry| entry.sequence), Some(51));
         assert_eq!(state.logs.back().map(|entry| entry.sequence), Some(250));
+    }
+
+    #[test]
+    fn orchestrator_starts_serves_stops_and_keeps_terminal_snapshot() {
+        let port = free_port();
+        let server_id = ServerId("orchestrated".into());
+        let mut orchestrator = orchestrator();
+        let started = orchestrator
+            .start(&profile_with_id(&server_id.0, port))
+            .expect("orchestrated HTTP server should start");
+        assert_eq!(started.state, ServerState::Running);
+        assert_eq!(started.desired_state, DesiredServerState::Running);
+        assert_eq!(orchestrator.active_count(), 1);
+        assert!(get_with_retry(port).contains("200 OK"));
+
+        let stopped = orchestrator
+            .stop(&server_id)
+            .expect("orchestrated HTTP server should stop");
+        assert_eq!(stopped.state, ServerState::Stopped);
+        assert_eq!(stopped.desired_state, DesiredServerState::Stopped);
+        assert_eq!(orchestrator.active_count(), 0);
+        assert_eq!(
+            orchestrator
+                .snapshot(&server_id)
+                .map(|snapshot| snapshot.state),
+            Some(ServerState::Stopped)
+        );
+        TcpListener::bind((Ipv4Addr::LOCALHOST, port))
+            .expect("orchestrated stop should release the port");
+    }
+
+    #[test]
+    fn orchestrator_rejects_duplicate_start_and_non_running_stop() {
+        let port = free_port();
+        let profile = profile_with_id("duplicate", port);
+        let server_id = profile.id.clone();
+        let mut orchestrator = orchestrator();
+        orchestrator
+            .start(&profile)
+            .expect("server should initially start");
+        assert!(matches!(
+            orchestrator.start(&profile),
+            Err(RuntimeError::AlreadyRunning(_))
+        ));
+        orchestrator.stop(&server_id).expect("server should stop");
+        assert!(matches!(
+            orchestrator.stop(&server_id),
+            Err(RuntimeError::NotRunning(_))
+        ));
+    }
+
+    #[test]
+    fn orchestrator_keeps_second_http_server_active_when_first_stops() {
+        let first_port = free_port();
+        let mut second_port = free_port();
+        while second_port == first_port {
+            second_port = free_port();
+        }
+        let first = profile_with_id("first", first_port);
+        let second = profile_with_id("second", second_port);
+        let mut orchestrator = orchestrator();
+        orchestrator
+            .start(&first)
+            .expect("first HTTP server should start");
+        orchestrator
+            .start(&second)
+            .expect("second HTTP server should start");
+        assert_eq!(orchestrator.active_count(), 2);
+        assert!(get_with_retry(first_port).contains("200 OK"));
+        assert!(get_with_retry(second_port).contains("200 OK"));
+
+        orchestrator
+            .stop(&first.id)
+            .expect("first HTTP server should stop");
+        assert_eq!(orchestrator.active_count(), 1);
+        assert!(orchestrator.is_active(&second.id));
+        assert!(get_with_retry(second_port).contains("200 OK"));
+        orchestrator
+            .stop(&second.id)
+            .expect("second HTTP server should stop");
+    }
+
+    #[test]
+    fn orchestrator_records_http_start_failure_as_failed_state() {
+        let occupied =
+            TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("fixture port should bind");
+        let port = occupied
+            .local_addr()
+            .expect("fixture address should be available")
+            .port();
+        let profile = profile_with_id("failed", port);
+        let mut orchestrator = orchestrator();
+        assert!(matches!(
+            orchestrator.start(&profile),
+            Err(RuntimeError::Process(_))
+        ));
+        let failed = orchestrator
+            .snapshot(&profile.id)
+            .expect("failed state should remain queryable");
+        assert_eq!(failed.state, ServerState::Failed);
+        assert!(failed.last_error.is_some());
+        assert_eq!(orchestrator.active_count(), 0);
     }
 }

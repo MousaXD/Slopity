@@ -13,3 +13,6 @@ tauri-plugin = { workspace = true, features = ["build"] }
 [dependencies]
 serde.workspace = true
 tauri.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
