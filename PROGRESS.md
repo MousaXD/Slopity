@@ -246,7 +246,7 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - Website currently creates the fixed built-in HTTP probe foundation; it does not serve a user-selected static folder or deploy a web application.
 - Minecraft, Node.js, import, custom, Java, Python, PHP, and native providers remain unavailable or configuration-only and expose no false start path.
 - Settings is a planned drawer entry without a settings screen.
-- Runtime state remains process-local and resets to stopped after the application process exits, as documented by Step 008.
+- Runtime state remains process-local and resets to stopped after application process exits, as documented by Step 008.
 - Android compilation does not prove OEM background behavior, app-restart behavior, or Google Play foreground-service policy acceptance.
 - The Android build still reports existing non-blocking generated-code, Gradle deprecation, and duplicate `com.slopity.host` namespace warnings.
 - The dashboard uses bundled CSS and generic SVG illustrations rather than licensed game artwork from the mockup.
@@ -539,7 +539,7 @@ Replace the self-hosted Linux job's interactive package installation with a dete
 
 ### Follow-up
 
-Step 006 begins versioned profile persistence and CRUD. Windows remains deferred.
+Step 006 begins versioned Rust profile persistence and CRUD. Windows remains deferred.
 
 ## Step 004: supply Tauri icon and clear compile warning
 
