@@ -2,6 +2,51 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 018: reconcile workload foundation
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-18
+
+### Scope
+
+Reconcile the compatible, still-desired foundation work from draft pull requests #5, #6, #9, and #10 into one coherent branch based on the current `main`. Make the platform-neutral `ServerOrchestrator` the authoritative lifecycle owner, retain structured desired/observed runtime state and bounded observations, integrate aggregate resource accounting and proven host telemetry, harden profile recovery/migrations/backend validation, and combine the Android foreground-host status/permission improvements behind the existing native plugin boundary.
+
+### Non-goals
+
+- Enabling Minecraft, Java/JVM workloads, Jellyfin, GitHub deployment, Node.js, Python, PHP, native-package workloads, custom commands, or arbitrary external runtimes.
+- Registering the desktop local-process adapter as a supported runtime or reusing desktop `std::process` execution on Android.
+- Adding shell command strings, package downloads, runtime installers, remote management, or trusted-package implementation.
+- Claiming Android background durability, OEM survival, notification behavior, process-death recovery, or real-device hosting proof from compilation.
+- Merging any source pull request or this integration branch, rebasing shared branches, force-pushing, or rewriting completed progress history.
+
+### Risks and reconciliation decisions
+
+- `apps/slopity/src-tauri/src/lib.rs` overlaps all lifecycle/resource work. It will own one `ServerOrchestrator`, not a parallel `HttpServerManager`; built-in HTTP remains the only registered runnable adapter.
+- `crates/slopity-core/src/lib.rs` must combine orchestrator, accounting, recovery, migration, and validation exports while keeping the crate pure Rust and platform-neutral.
+- The host plugin overlaps telemetry and Android lifecycle changes. Its Rust/mobile/Kotlin surfaces will combine optional device telemetry with native status reconciliation and notification permission handling without changing the durability claim.
+- Profile validity stays independent from runtime availability. Unsupported external profiles may remain structurally valid while runtime availability remains false.
+- PR #6's exact head currently fails only the formatting gate, so the integration will apply Rust 1.89 formatting rather than inheriting that stale failure.
+- PR #5 and PR #10 exact-head CI runs were cancelled after earlier partial proof. The integration requires fresh exact-head CI instead of treating source-branch evidence as sufficient.
+
+### Intended files
+
+- `crates/slopity-core/src/{lib.rs,runtime.rs,orchestrator.rs,capability.rs,profile_store.rs,validation.rs}`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `apps/slopity/web/{index.html,resource-status.js}`
+- `plugins/tauri-plugin-slopity-host/{Cargo.toml,src/**,android/**}`
+- `.github/workflows/ci.yml`
+- `PROGRESS.md`
+
+### Acceptance checks
+
+- Tests cover adapter registration and duplicate rejection, successful start/stop, runtime failure and terminal-exit observation, deterministic bounded event retention, profile migration and interrupted-write recovery, corrupt-primary/valid-recovery behavior, backend profile validation, port conflicts, aggregate resource budgets including active disabled profiles, unknown telemetry, and Android capability/status serialization where testable.
+- `cargo fmt --all -- --check` passes.
+- `cargo test --workspace --all-features` passes.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes.
+- Repository Linux Tauri validation passes on the self-hosted Linux runner.
+- Android initialization and ARM64 debug build pass, including the merged-manifest host-service assertions, without treating compilation as physical-device durability proof.
+
 ## Step 011: publish Linux and Android GitHub releases
 
 **Status:** PARTIAL  
@@ -438,7 +483,7 @@ Replace the self-hosted Linux job's interactive package installation with a dete
 
 ### Follow-up
 
-Step 006 begins versioned Rust profile persistence and CRUD. Windows remains deferred.
+Step 006 begins versioned profile persistence and CRUD. Windows remains deferred.
 
 ## Step 004: supply Tauri icon and clear compile warning
 
