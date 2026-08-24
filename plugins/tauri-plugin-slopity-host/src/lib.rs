@@ -85,7 +85,9 @@ impl HostDeviceTelemetry {
             self.available_memory_mib = Some(available.min(total));
         }
 
-        self.battery_percentage = self.battery_percentage.filter(|percentage| *percentage <= 100);
+        self.battery_percentage = self
+            .battery_percentage
+            .filter(|percentage| *percentage <= 100);
         self.battery_temperature_celsius = self
             .battery_temperature_celsius
             .filter(|temperature| temperature.is_finite());
@@ -167,7 +169,9 @@ impl<R: Runtime> HostServiceBridge<R> {
 
     #[cfg(target_os = "android")]
     fn telemetry(&self) -> Result<HostDeviceTelemetry, String> {
-        self.mobile.telemetry().map(HostDeviceTelemetry::conservative)
+        self.mobile
+            .telemetry()
+            .map(HostDeviceTelemetry::conservative)
     }
 
     #[cfg(not(target_os = "android"))]
@@ -179,7 +183,8 @@ impl<R: Runtime> HostServiceBridge<R> {
         #[cfg(target_os = "android")]
         let status = {
             let mut current = self.mobile.status()?;
-            if current.notification_permission_required && !current.notification_permission_granted {
+            if current.notification_permission_required && !current.notification_permission_granted
+            {
                 let permission_state = self.mobile.notification_permission_state()?;
                 let permission_state = if matches!(
                     permission_state,
@@ -392,10 +397,7 @@ mod tests {
             Some(true)
         );
         assert_eq!(value["notificationsEnabled"].as_bool(), Some(true));
-        assert_eq!(
-            value["notificationChannelEnabled"].as_bool(),
-            Some(true)
-        );
+        assert_eq!(value["notificationChannelEnabled"].as_bool(), Some(true));
         assert_eq!(value["label"].as_str(), Some("Hosting Test Server"));
         assert_eq!(value["activeServerCount"].as_u64(), Some(2));
         assert_eq!(value["stopRequestPending"].as_bool(), Some(true));

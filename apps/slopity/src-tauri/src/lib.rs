@@ -334,9 +334,7 @@ fn host_reconciliation_action(
     HostReconciliationAction::None
 }
 
-fn observed_active_count(
-    orchestrator: &State<'_, SharedOrchestrator>,
-) -> Result<usize, String> {
+fn observed_active_count(orchestrator: &State<'_, SharedOrchestrator>) -> Result<usize, String> {
     let mut orchestrator = orchestrator
         .lock()
         .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
@@ -399,7 +397,9 @@ fn fail_safe_after_missing_host(
         ));
     }
     if let Err(cleanup_error) = cleanup_result {
-        details.push(format!("host cleanup/recovery also failed: {cleanup_error}"));
+        details.push(format!(
+            "host cleanup/recovery also failed: {cleanup_error}"
+        ));
     }
     Err(details.join("; "))
 }
