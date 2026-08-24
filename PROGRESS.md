@@ -2,6 +2,74 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 019: public release hardening and source-available transition
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-24  
+**Updated:** 2026-08-24
+
+### Scope
+
+Prepare Slopity for a high-quality public source-available release:
+1. Licensing: Adopt the standard, official, unmodified PolyForm Noncommercial License 1.0.0 (`PolyForm-Noncommercial-1.0.0`), update Cargo package license metadata, add `LICENSE.md`, add `COMMERCIAL-LICENSE.md`, update all documentation to describe Slopity as source-available rather than open-source, and document external contribution policy.
+2. Dependency Reproducibility: Commit root `Cargo.lock` and `apps/slopity/package-lock.json`, update CI/build workflows and scripts to use `--locked` and `npm ci`.
+3. GitHub Actions Hardening: Migrate CI and release workflows from self-hosted runners to standard GitHub-hosted `ubuntu-latest` runners, pin third-party actions to immutable commit SHAs with version comments, enforce strict top-level read-only permissions with minimal write scopes.
+4. Dependency Security: Add `.github/dependabot.yml` covering cargo, npm, and github-actions, add a security/audit workflow with `cargo-audit`, `actions/dependency-review-action`, and `npm audit`.
+5. Secret and History Hygiene: Audit Git history and codebase for secrets and credentials.
+6. Profile-ID Hardening: Implement strict identifier validation grammar `[A-Za-z0-9._-]{1,128}` in `slopity-core` to prevent control-character injection, interior NUL panics in thread naming, directory traversal, and malformed identifiers. Add regression tests covering edge cases.
+7. Security Policy: Expand and harden `SECURITY.md` with supported versions, pre-release boundaries, responsible disclosure instructions, and testing rules.
+8. Contributing Guidelines: Update `CONTRIBUTING.md` with clear licensing and external contribution terms, testing commands, and PR guidelines.
+9. Documentation & Hygiene: Refresh `README.md`, `TASK.md`, and `docs/releases.md` to accurately represent current functionality, pre-production status, and source-available licensing.
+
+### Non-goals
+
+- Claiming external runtimes (Java/Minecraft, Node.js, Python, PHP, etc.) are implemented or operational.
+- Weakening existing security boundaries or introducing shell execution.
+- Modifying production signing infrastructure before keys/procedures are formally established.
+- Merging PR #12 or any other open PR branches.
+- Committing signing keys, credentials, APKs, or binaries.
+
+### Risks and mitigation
+
+- Risk: CI workflow failures when switching from self-hosted to GitHub-hosted runners due to missing system libraries.
+  Mitigation: Explicitly install WebKitGTK and Tauri Linux build prerequisites in GitHub Actions workflow steps before running checks.
+- Risk: Cargo rejecting non-standard SPDX license identifier in `Cargo.toml`.
+  Mitigation: Verify Cargo 1.89+ acceptance of `PolyForm-Noncommercial-1.0.0` or supplement with `license-file`.
+- Risk: Breaking valid existing profile identifiers during ID hardening.
+  Mitigation: Ensure standard sample IDs (`http-example`, etc.) strictly comply with `[A-Za-z0-9._-]{1,128}` and test boundary conditions thoroughly.
+
+### Intended files
+
+- `PROGRESS.md`
+- `LICENSE.md`
+- `COMMERCIAL-LICENSE.md`
+- `Cargo.toml`
+- `Cargo.lock`
+- `apps/slopity/package.json`
+- `apps/slopity/package-lock.json`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `.github/workflows/audit.yml`
+- `.github/dependabot.yml`
+- `.gitignore`
+- `crates/slopity-core/src/validation.rs`
+- `crates/slopity-core/src/lib.rs`
+- `README.md`
+- `SECURITY.md`
+- `CONTRIBUTING.md`
+- `TASK.md`
+- `docs/releases.md`
+
+### Acceptance checks
+
+1. `cargo fmt --all -- --check` passes cleanly.
+2. `cargo test --workspace --all-features --locked` passes all existing and new unit/integration tests.
+3. `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` reports 0 warnings.
+4. `cd apps/slopity && npm ci && npm run tauri:check` passes without error.
+5. Profile ID validation rejects empty, oversized (>128), NUL-byte, control-character, space, and path-traversal IDs while accepting valid alphanumeric, dot, underscore, and hyphen IDs.
+6. All stale "open-source", "MIT", "Apache" references in repository docs are replaced with source-available terms.
+7. Workflows are migrated to `ubuntu-latest`, third-party actions pinned by SHA, and dependabot configuration added.
+
 ## Step 011: publish Linux and Android GitHub releases
 
 **Status:** PARTIAL  
