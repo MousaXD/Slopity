@@ -2,6 +2,61 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 024: harden Android host durability and device validation
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Scope
+
+1. Harden the Android foreground-service lifecycle so start/update/stop requests are idempotent, notification delivery constraints are reported conservatively, native stop requests are reconciled by the Rust/Tauri layer, and host-service failures cannot silently leave newly started Rust hosting without required foreground state.
+2. Reconcile observed Rust server state with native host-service state on fresh dashboard/list observations, including multiple-server counts, final-server stop, notification stop requests, service loss, runtime exits, and failed foreground-service restarts.
+3. Harden Android telemetry collection so missing/unknown values remain unavailable, individual Android API failures do not crash telemetry collection, and Rust-side normalization remains conservative for resource planning.
+4. Add Rust-side tests for host reconciliation decisions and telemetry normalization where the Android framework itself is not available to workspace tests.
+5. Add a reproducible physical Android ARM64 durability procedure and evidence template, plus a host-side ADB/curl probe helper for multi-hour reachability, battery, temperature, thermal, storage, notification, state-reconciliation, and port-release evidence.
+6. Document OEM validation expectations for stock/AOSP-ish Android, Samsung, and Xiaomi/Poco without adding vendor-specific bypasses or background-execution hacks.
+7. Use existing GitHub Actions as the remote proof for Rust quality, Linux/Tauri compile, Android ARM64 build, merged manifest verification, and APK/AAB artifact generation. Inspect actual run/job results before closing the step.
+
+### Non-goals
+
+- Claiming production-ready or durable Android hosting without physical-device evidence.
+- Adding Minecraft, Jellyfin, Java/JVM downloads, Node.js, Python, PHP, generic native execution, arbitrary commands, runtime downloads, or GUI V2 work.
+- Bypassing Android background execution restrictions, hiding foreground hosting, suppressing required user visibility, adding boot receivers, or implementing vendor-specific battery-killer hacks.
+- Broad `.github/workflows/**`, `apps/slopity/web/**`, or `slopity-core` redesigns.
+- Merging this branch, rebasing shared branches, force-pushing, or modifying `main`/`dev` directly.
+
+### Risks
+
+- Android foreground-service startup is asynchronous; a successful `startForegroundService` request is not itself proof that the service entered foreground state.
+- A notification stop action cannot directly mutate Rust orchestrator state without crossing the Tauri/native boundary, so safe stop semantics require reconciliation when the application regains control.
+- Runtime crashes while the UI is fully backgrounded may not be observed by the process-local orchestrator until its next observation pass; documentation must not imply proactive crash reconciliation that is not implemented.
+- OEM process-management behavior varies and cannot be proven by CI/emulator compilation.
+- Android 13+ notification permission and app/channel notification settings can make a foreground service less visible even when Android permits it to run; Slopity must fail conservatively rather than treating hidden hosting as equivalent to visible hosting.
+
+### Intended files
+
+- `PROGRESS.md`
+- `plugins/tauri-plugin-slopity-host/src/lib.rs`
+- `plugins/tauri-plugin-slopity-host/src/mobile.rs` if bridge changes are required
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostForegroundService.kt`
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostPlugin.kt`
+- `plugins/tauri-plugin-slopity-host/android/README.md`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `docs/android-device-durability.md`
+- `scripts/android-durability-probe.sh`
+
+### Acceptance checks
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- Linux Tauri compile through the existing pull-request CI chain.
+- Android ARM64 debug build through the existing pull-request CI chain.
+- Merged Android manifest verification retains `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, the non-exported host service, and `foregroundServiceType="specialUse"`.
+- Debug APK/AAB artifacts are produced by CI if the configured workflow reaches the Android job.
+- Physical durability results remain explicitly pending until a real device run is supplied; only the reproducible procedure and raw-evidence harness are implemented here.
+
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
 **Status:** DONE  
