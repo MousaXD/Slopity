@@ -15,37 +15,51 @@ permissions:
 jobs:
   rust:
     name: Rust quality
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
         with:
           components: rustfmt, clippy
       - name: Require progress ledger
         if: github.event_name == 'pull_request'
         run: ./scripts/check-progress-ledger.sh "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA"
       - run: cargo fmt --all -- --check
-      - run: cargo test --workspace --all-features
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --all-features --locked
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
   linux:
     name: Linux Tauri shell
     needs: rust
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.89.0
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: 22
+      - name: Install Linux Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
       - name: Verify Linux Tauri prerequisites
         run: bash scripts/check-linux-prerequisites.sh
       - working-directory: apps/slopity
-        run: npm install --no-audit --no-fund
+        run: npm ci
       - name: Compile Linux Tauri shell without bundling
         working-directory: apps/slopity
         run: npm run tauri:check
@@ -53,21 +67,21 @@ jobs:
   android:
     name: Android ARM64 debug
     needs: linux
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: 22
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@d24156dbc98afec1657d3bb4948a729ce8407815 # v3.1.0
       - name: Install Android SDK and NDK
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.3.13750724"
       - name: Configure Android environment
@@ -75,7 +89,7 @@ jobs:
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
       - working-directory: apps/slopity
-        run: npm install --no-audit --no-fund
+        run: npm ci
       - name: Initialize Android project
         working-directory: apps/slopity
         run: npm run android:init -- --ci
@@ -99,7 +113,7 @@ jobs:
           grep -q 'android:foregroundServiceType="specialUse"' "$manifest"
           echo "Validated merged host manifest: $manifest"
       - name: Upload Android debug packages
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: slopity-android-debug-${{ github.sha }}
           path: |

@@ -13,8 +13,8 @@
 - [x] Desktop process adapter boundary.
 - [x] Tauri 2 shell with Linux, Android, and future Windows portability.
 - [x] Host-service capability plugin boundary.
-- [x] Rust, Linux, and Android CI on the self-hosted Pop!_OS runner.
-- [ ] Restore Windows CI and packaging after functional maturity and open-source publication.
+- [x] Rust, Linux, and Android CI on GitHub-hosted runners.
+- [ ] Restore Windows CI and packaging after functional maturity and public release.
 
 ## Phase 1: durable profiles and UI
 
@@ -66,5 +66,5 @@ Each provider requires its own threat model, licensing review, integrity rules, 
 - [ ] Atomic backups and verified restore.
 - [ ] Authenticated remote management.
 - [ ] Reproducible signed Linux and Android release pipeline.
-- [ ] Make the repository public with an explicit open-source license and contribution policy.
+- [ ] Make the repository public with PolyForm Noncommercial License 1.0.0 and clear contribution policy.
 - [ ] Restore and validate Windows CI, packaging, and platform behavior.

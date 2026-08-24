@@ -1,74 +1,115 @@
 # Slopity
 
-Slopity is a Rust-first, lightweight control plane for hosting and managing multiple local server workloads. The shared core is designed for Linux, Android, and a later Windows build through Tauri 2.
+Slopity is a Rust-first, lightweight control plane for hosting and managing multiple local server workloads. Built with a shared Rust core and a Tauri 2 shell, it targets Linux and Android, with Windows retained as a portable target.
 
-## Current platform priority
+## License & Source Availability
 
-Active development and CI target:
+Slopity is released as a **source-available** project under the **[PolyForm Noncommercial License 1.0.0](LICENSE.md)** (`PolyForm-Noncommercial-1.0.0`).
 
-- Linux on the self-hosted Pop!_OS runner.
-- Android ARM64 using the same runner for toolchain and APK validation.
+- **Noncommercial Use:** You are free to inspect, run, modify, and redistribute Slopity for personal, educational, research, and noncommercial purposes.
+- **Commercial Use:** Commercial use, commercial redistribution, commercial forks, paid server hosting, resale, or embedding into commercial services requires a separate commercial license from the copyright holder. See **[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)** for inquiries.
+- Slopity is **not** licensed under an OSI open-source license.
 
-Windows portability remains in the architecture, but Windows builds and CI are paused until the application is functionally mature and the repository is public.
+## Current State and Roadmap
 
-## What exists now
+Slopity is pre-production software under active development.
 
-- A platform-neutral Rust core for server profiles, resource planning, lifecycle states, validation, and runtime contracts.
-- A desktop local-process adapter that launches explicit executables with structured argument arrays and never routes profiles through `sh -c` or `cmd /C`.
-- A Tauri 2 shell with one static HTML/CSS/JavaScript frontend for Linux and Android, with Windows retained as a future target.
-- A host-service plugin boundary that reports platform capabilities honestly. The Android foreground-service implementation is deliberately marked pending until native integration and an ARM64 device test exist.
-- GitHub Actions for Rust checks, Linux Tauri compilation, and Android ARM64 initialization/build validation on the self-hosted Pop!_OS runner.
+### What is implemented in this release candidate
 
-Slopity does **not** yet bundle Java, Node.js, Python, PHP, Minecraft, or any other server engine. A profile can describe those runtimes, but the UI labels them unavailable until an adapter and runtime provider have been proven.
+- **Shared Rust Core (`slopity-core`)**: Platform-neutral domain model, authoritative `ServerOrchestrator` lifecycle engine, strict identifier grammar `[A-Za-z0-9._-]{1,128}` (`is_valid_profile_id`), aggregate resource accounting with host reserve policies, deterministic port reservations, and memory budgeting.
+- **Profile Persistence & Resilience**: Schema v1 JSON storage with atomic writes, parent-directory synchronization, schema migration infrastructure (v0 to v1), interrupted-write recovery, and backup restoration (`slopity-core`).
+- **Host Telemetry**: Linux `/proc/meminfo` telemetry and Android system-service telemetry (memory, battery, temperature, thermal state, storage headroom). Unknown measurements remain conservatively unallocated.
+- **Built-in HTTP Test Runtime (`slopity-runtime-http`)**: Safe native Rust HTTP test server supporting loopback and LAN binding, request counters, deterministic lifecycle transitions, and bounded circular log buffers.
+- **Process Boundary (`slopity-runtime-local`)**: Direct process execution using structured argument vectors—never routed through `sh -c` or `cmd /C`. (Kept as an unexposed internal desktop adapter foundation).
+- **Host Service Boundary (`tauri-plugin-slopity-host`)**: Native capability probing, Android POST_NOTIFICATIONS permission handling, foreground service lifecycle status, and persistent notification control boundary.
+- **Tauri 2 Frontend (`apps/slopity`)**: Mobile-first responsive dashboard, server card list, drawer navigation, add-server bottom sheet, action menu, details modal, resource status display, and profile editor.
+- **Reproducible Dependencies & Workflows**: Committed and locked `Cargo.lock` (434 crates) and `package-lock.json`, with GitHub Actions workflows configured for hosted Linux runners and SHA-pinned actions.
+
+### What is NOT yet bundled or runnable
+
+Slopity does **not** currently bundle Java, Node.js, Python, PHP, Minecraft (Paper/Bedrock), Jellyfin, or any third-party server binaries. A server profile can describe those runtimes, but the interface marks them unavailable until verified adapters and runtime packages are implemented and tested on physical hardware. Only the built-in HTTP server runtime is registered and runnable.
+
+## Platform Support Matrix
+
+| Platform | Build Status | Runtime Status | Notes |
+| -------- | ------------ | -------------- | ----- |
+| **Linux (x86_64)** | Validated locally & workflow configured | Operational (Built-in HTTP & Process adapter) | Tauri desktop app, `.deb`, and AppImage |
+| **Android (ARM64)** | Compiles locally & workflow configured | In Progress (Foreground bridge) | Rust `.so` compiles cleanly; physical-device durability testing pending |
+| **Windows (x64)** | Architectural target | Deferred | CI and packaging paused until core features mature |
 
 ## Architecture
 
 ```text
-apps/slopity/web                   shared lightweight UI
-apps/slopity/src-tauri             Tauri desktop/mobile shell
-crates/slopity-core                portable domain and orchestration contracts
-crates/slopity-runtime-local       desktop child-process adapter
-plugins/tauri-plugin-slopity-host  platform host-service capability boundary
+apps/slopity/web                   Shared lightweight HTML/CSS/JS frontend
+apps/slopity/src-tauri             Tauri 2 desktop and mobile shell
+crates/slopity-core                Portable domain contracts, persistence, validation
+crates/slopity-runtime-http        Safe built-in Rust HTTP server runtime
+crates/slopity-runtime-local       Desktop child-process adapter (explicit args only)
+plugins/tauri-plugin-slopity-host  Platform host-service capability boundary
 ```
 
-The Rust core has no Tauri, WebView, Kotlin, or operating-system UI dependency. Android-specific lifecycle work belongs behind the plugin boundary rather than leaking into server profile logic.
+The domain core (`slopity-core`) maintains zero dependencies on Tauri, WebViews, Kotlin, or OS-specific UI frameworks.
 
-## Local development
+For in-depth documentation, see:
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Security Model & Boundaries](docs/SECURITY_MODEL.md)
+- [Release Packaging Guide](docs/releases.md)
 
-Install Rust, Node.js, and the platform prerequisites listed by Tauri.
+## Getting Started
+
+### Prerequisites
+
+- Rust 1.82+ (or current stable)
+- Node.js 22+
+- Platform build dependencies (see below)
+
+### Building and Testing
 
 ```bash
+# Verify formatting, unit tests, and clippy
 cargo fmt --all -- --check
-cargo test --workspace --all-features
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
+# Run the Tauri development shell
 cd apps/slopity
-npm install
+npm ci
 npm run tauri:dev
 ```
 
-### Linux
+### Linux Dependencies (Debian / Ubuntu)
 
-Install WebKitGTK 4.1 and the other Tauri system packages for your distribution. Then run `npm run tauri:build` from `apps/slopity`.
+```bash
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+  libwebkit2gtk-4.1-dev \
+  build-essential \
+  curl \
+  wget \
+  file \
+  libxdo-dev \
+  libssl-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf
+```
 
-### Android
+### Android Development (ARM64)
 
-Install Android Studio, SDK Platform 36, Build Tools 36.0.0, Android NDK r27d (`27.3.13750724`), and the Rust Android targets.
+Install Android Studio, Android SDK Platform 36, Build Tools 36.0.0, and Android NDK r27d (`27.3.13750724`):
 
 ```bash
 rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 cd apps/slopity
-npm install
+npm ci
 npm run android:init
 npm run android:dev
 ```
 
-The initial supported physical-device target is ARM64. The Android shell can be built now, but reliable background server hosting is not claimed until the foreground-service bridge and on-device runtime evidence are complete.
+## Security & Vulnerability Reporting
 
-### Windows, deferred
+Please review our [Security Policy](SECURITY.md) for details on responsible vulnerability disclosure. Do not report security vulnerabilities via public GitHub issues.
 
-Do not spend CI time on Windows during the current product phase. Restore Windows compilation and packaging after the core application is mature and the repository is public.
+## Contributing
 
-## Agent workflow
-
-Read `AGENTS.md`, `TASK.md`, and `PROGRESS.md` before changing code. Every implementation milestone requires a documentation-only planning commit before its code commit.
+Please review [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before submitting contributions.

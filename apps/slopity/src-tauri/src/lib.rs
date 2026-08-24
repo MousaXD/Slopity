@@ -61,10 +61,7 @@ fn dashboard_snapshot(
         let store = store
             .lock()
             .map_err(|_| "profile store lock is poisoned".to_string())?;
-        (
-            store.profiles().to_vec(),
-            store.recovery_notices().to_vec(),
-        )
+        (store.profiles().to_vec(), store.recovery_notices().to_vec())
     };
     let (server_snapshots, active_count, runtimes) = {
         let mut orchestrator = orchestrator

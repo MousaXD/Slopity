@@ -25,6 +25,14 @@ pub struct ValidationIssue {
     pub message: String,
 }
 
+pub fn is_valid_profile_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= MAX_PROFILE_ID_LENGTH
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
+}
+
 pub fn validate_profile(
     profile: &ServerProfile,
     reserved_ports: &HashSet<u16>,
@@ -33,13 +41,26 @@ pub fn validate_profile(
 
     if profile.id.0.trim().is_empty() {
         issues.push(error("profile-id-empty", "Profile ID cannot be empty."));
+    } else {
+        if profile.id.0.len() > MAX_PROFILE_ID_LENGTH {
+            issues.push(error(
+                "profile-id-too-long",
+                &format!("Profile ID must not exceed {MAX_PROFILE_ID_LENGTH} characters."),
+            ));
+        }
+        if !profile
+            .id
+            .0
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
+        {
+            issues.push(error(
+                "profile-id-invalid",
+                "Profile ID may only contain ASCII alphanumeric characters, '.', '_', and '-'.",
+            ));
+        }
     }
-    if profile.id.0.len() > MAX_PROFILE_ID_LENGTH {
-        issues.push(error(
-            "profile-id-too-long",
-            &format!("Profile ID cannot exceed {MAX_PROFILE_ID_LENGTH} UTF-8 bytes."),
-        ));
-    }
+
     if profile.name.trim().is_empty() {
         issues.push(error("profile-name-empty", "Profile name cannot be empty."));
     }
@@ -272,5 +293,104 @@ mod tests {
         ));
         let issues = validate_profile(&candidate, &HashSet::new());
         assert!(has_error(&issues, "working-directory-path-too-long"));
+    }
+
+    #[test]
+    fn valid_profile_ids() {
+        let valid_ids = [
+            "a",
+            "server-1",
+            "server_2",
+            "my.server.3",
+            "SERVER-A_b.1",
+            &"a".repeat(128),
+        ];
+
+        for id in valid_ids {
+            assert!(is_valid_profile_id(id), "expected valid: {id}");
+            let mut p = profile();
+            p.id = ServerId(id.to_string());
+            let issues = validate_profile(&p, &HashSet::new());
+            assert!(
+                !issues.iter().any(|i| i.code == "profile-id-empty"
+                    || i.code == "profile-id-too-long"
+                    || i.code == "profile-id-invalid"),
+                "expected no profile-id error for: {id}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_and_whitespace_profile_ids_are_rejected() {
+        for empty in ["", "   ", "\t", "\n"] {
+            assert!(!is_valid_profile_id(empty));
+            let mut p = profile();
+            p.id = ServerId(empty.to_string());
+            let issues = validate_profile(&p, &HashSet::new());
+            assert!(
+                issues.iter().any(|i| i.code == "profile-id-empty"),
+                "expected profile-id-empty for: {empty:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn oversized_profile_id_is_rejected() {
+        let oversized = "a".repeat(129);
+        assert!(!is_valid_profile_id(&oversized));
+        let mut p = profile();
+        p.id = ServerId(oversized);
+        let issues = validate_profile(&p, &HashSet::new());
+        assert!(issues.iter().any(|i| i.code == "profile-id-too-long"));
+    }
+
+    #[test]
+    fn profile_id_with_nul_byte_is_rejected() {
+        let with_nul = "server\0crash";
+        assert!(!is_valid_profile_id(with_nul));
+        let mut p = profile();
+        p.id = ServerId(with_nul.to_string());
+        let issues = validate_profile(&p, &HashSet::new());
+        assert!(issues.iter().any(|i| i.code == "profile-id-invalid"));
+    }
+
+    #[test]
+    fn profile_id_with_control_chars_is_rejected() {
+        for invalid in [
+            "server\nname",
+            "server\rname",
+            "server\tname",
+            "\x1b[31mred",
+        ] {
+            assert!(!is_valid_profile_id(invalid));
+            let mut p = profile();
+            p.id = ServerId(invalid.to_string());
+            let issues = validate_profile(&p, &HashSet::new());
+            assert!(
+                issues.iter().any(|i| i.code == "profile-id-invalid"),
+                "expected profile-id-invalid for: {invalid:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn profile_id_with_spaces_or_path_traversal_is_rejected() {
+        for invalid in [
+            "server name",
+            "../etc/passwd",
+            "foo/bar",
+            "foo\\bar",
+            "server:1",
+            "server;rm",
+        ] {
+            assert!(!is_valid_profile_id(invalid));
+            let mut p = profile();
+            p.id = ServerId(invalid.to_string());
+            let issues = validate_profile(&p, &HashSet::new());
+            assert!(
+                issues.iter().any(|i| i.code == "profile-id-invalid"),
+                "expected profile-id-invalid for: {invalid:?}"
+            );
+        }
     }
 }
