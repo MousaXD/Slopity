@@ -35,10 +35,14 @@ class HostForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_REQUEST_STOP) {
             markStopRequested()
-            getSystemService(NotificationManager::class.java).notify(
-                NOTIFICATION_ID,
-                buildNotification(snapshot())
-            )
+            val current = snapshot()
+            if (current.active) {
+                getSystemService(NotificationManager::class.java).notify(
+                    NOTIFICATION_ID,
+                    buildNotification(current)
+                )
+            }
+            openSlopityForStopReconciliation()
             return START_NOT_STICKY
         }
 
@@ -49,19 +53,25 @@ class HostForegroundService : Service() {
             ?.getIntExtra(EXTRA_ACTIVE_SERVER_COUNT, 1)
             ?.coerceAtLeast(1)
             ?: 1
-        markActive(label, activeServerCount)
-        val notification = buildNotification(snapshot())
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        return try {
+            markActive(label, activeServerCount)
+            val notification = buildNotification(snapshot())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            START_NOT_STICKY
+        } catch (error: RuntimeException) {
+            markStartFailed()
+            stopSelf(startId)
+            throw error
         }
-        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -71,6 +81,15 @@ class HostForegroundService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun openSlopityForStopReconciliation() {
+        runCatching {
+            packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                startActivity(launchIntent)
+            }
+        }
+    }
 
     private fun buildNotification(snapshot: HostServiceSnapshot) =
         NotificationCompat.Builder(this, CHANNEL_ID)
@@ -102,19 +121,20 @@ class HostForegroundService : Service() {
                         stopIntent,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                    addAction(0, "Request stop", stopPendingIntent)
+                    addAction(0, "Stop safely", stopPendingIntent)
                 }
             }
             .build()
 
     private fun notificationTitle(activeServerCount: Int): String = when (activeServerCount) {
         1 -> "Slopity server active"
-        else -> "Slopity hosting $activeServerCount servers"
+        in 2..Int.MAX_VALUE -> "Slopity hosting $activeServerCount servers"
+        else -> "Slopity hosting"
     }
 
     private fun notificationText(snapshot: HostServiceSnapshot): String = when {
         snapshot.stopRequestPending ->
-            "Stop requested. Open Slopity to finish shutting down hosted servers safely."
+            "Stop requested. Slopity is opening to shut down hosted servers safely."
         snapshot.label.isNotBlank() -> snapshot.label
         else -> "Hosting a Slopity server"
     }
@@ -158,6 +178,12 @@ class HostForegroundService : Service() {
                 if (state.active) {
                     state = state.copy(stopRequestPending = true, startRequestPending = false)
                 }
+            }
+        }
+
+        internal fun markStartFailed() {
+            synchronized(stateLock) {
+                state = HostServiceSnapshot()
             }
         }
 
