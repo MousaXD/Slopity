@@ -36,6 +36,15 @@ struct DashboardSnapshot {
     resource_accounting: ResourceAccountingSnapshot,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HostReconciliationAction {
+    None,
+    StopHost,
+    StartHost,
+    UpdateHost,
+    StopServersAndHost,
+}
+
 #[tauri::command]
 fn dashboard_snapshot(
     app: tauri::AppHandle,
@@ -63,17 +72,15 @@ fn dashboard_snapshot(
             .map_err(|_| "profile store lock is poisoned".to_string())?;
         (store.profiles().to_vec(), store.recovery_notices().to_vec())
     };
-    let (server_snapshots, active_count, runtimes) = {
+
+    let host_service_status = reconcile_host_service(&app, &orchestrator)?;
+    let (server_snapshots, runtimes) = {
         let mut orchestrator = orchestrator
             .lock()
             .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
         let server_snapshots = orchestrator.snapshots();
-        let active_count = server_snapshots
-            .iter()
-            .filter(|server| is_active_state(server.state))
-            .count();
         let runtimes = runtime_catalog(&orchestrator);
-        (server_snapshots, active_count, runtimes)
+        (server_snapshots, runtimes)
     };
     let active_server_ids = server_snapshots
         .iter()
@@ -83,7 +90,6 @@ fn dashboard_snapshot(
     let resource_plan = ResourcePlanner::plan(&capability);
     let resource_accounting =
         ResourceAccounting::summarize(&capability, &profiles, &active_server_ids);
-    let host_service_status = host_status_after_observation(&app, active_count)?;
 
     Ok(DashboardSnapshot {
         application: "Slopity",
@@ -104,8 +110,11 @@ fn dashboard_snapshot(
 }
 
 #[tauri::command]
-fn host_service_status(app: tauri::AppHandle) -> Result<HostServiceStatus, String> {
-    app.slopity_host_status()
+fn host_service_status(
+    app: tauri::AppHandle,
+    orchestrator: State<'_, SharedOrchestrator>,
+) -> Result<HostServiceStatus, String> {
+    reconcile_host_service(&app, &orchestrator)
 }
 
 #[tauri::command]
@@ -207,21 +216,11 @@ fn list_builtin_http_servers(
     app: tauri::AppHandle,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<Vec<ServerRuntimeSnapshot>, String> {
-    let (snapshots, active_count) = {
-        let mut orchestrator = orchestrator
-            .lock()
-            .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
-        let snapshots = orchestrator.snapshots();
-        let active_count = snapshots
-            .iter()
-            .filter(|server| is_active_state(server.state))
-            .count();
-        (snapshots, active_count)
-    };
-    if active_count == 0 {
-        app.slopity_host_stop()?;
-    }
-    Ok(snapshots)
+    reconcile_host_service(&app, &orchestrator)?;
+    let mut orchestrator = orchestrator
+        .lock()
+        .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
+    Ok(orchestrator.snapshots())
 }
 
 #[tauri::command]
@@ -259,19 +258,25 @@ fn start_builtin_http_server(
 
     let label = hosting_label(Some(&profile.name), active_count);
     if let Err(error) = app.slopity_host_start(label, host_count(active_count)) {
-        let remaining_active = {
+        let rollback_error = {
             let mut orchestrator = orchestrator
                 .lock()
                 .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
-            let _ = orchestrator.stop(&id);
-            orchestrator.active_count()
+            orchestrator.stop(&id).err().map(|error| error.to_string())
         };
-        if remaining_active == 0 {
-            let _ = app.slopity_host_stop();
-        }
-        return Err(format!(
+        let reconciliation_error = reconcile_host_service(&app, &orchestrator).err();
+        let mut details = vec![format!(
             "server runtime was rolled back because the host service failed: {error}"
-        ));
+        )];
+        if let Some(rollback_error) = rollback_error {
+            details.push(format!("runtime rollback also failed: {rollback_error}"));
+        }
+        if let Some(reconciliation_error) = reconciliation_error {
+            details.push(format!(
+                "remaining host state could not be reconciled: {reconciliation_error}"
+            ));
+        }
+        return Err(details.join("; "));
     }
 
     Ok(snapshot)
@@ -283,19 +288,14 @@ fn stop_builtin_http_server(
     id: ServerId,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<ServerRuntimeSnapshot, String> {
-    let (snapshot, active_count) = {
+    let snapshot = {
         let mut orchestrator = orchestrator
             .lock()
             .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
-        let snapshot = orchestrator.stop(&id).map_err(|error| error.to_string())?;
-        let active_count = orchestrator.active_count();
-        (snapshot, active_count)
+        orchestrator.stop(&id).map_err(|error| error.to_string())?
     };
-    if active_count == 0 {
-        app.slopity_host_stop()?;
-    } else {
-        app.slopity_host_start(hosting_label(None, active_count), host_count(active_count))?;
-    }
+    reconcile_host_service(&app, &orchestrator)
+        .map_err(|error| format!("server stopped, but host reconciliation failed: {error}"))?;
     Ok(snapshot)
 }
 
@@ -311,15 +311,162 @@ fn host_count(active_count: usize) -> u32 {
     u32::try_from(active_count).unwrap_or(u32::MAX)
 }
 
-fn host_status_after_observation(
-    app: &tauri::AppHandle,
+fn host_reconciliation_action(
     active_count: usize,
+    status: &HostServiceStatus,
+) -> HostReconciliationAction {
+    if active_count == 0 {
+        if status.active || status.start_request_pending || status.stop_request_pending {
+            return HostReconciliationAction::StopHost;
+        }
+        return HostReconciliationAction::None;
+    }
+
+    if status.stop_request_pending || !status.notification_delivery_available() {
+        return HostReconciliationAction::StopServersAndHost;
+    }
+    if !status.active {
+        return HostReconciliationAction::StartHost;
+    }
+    if status.active_server_count != host_count(active_count) {
+        return HostReconciliationAction::UpdateHost;
+    }
+    HostReconciliationAction::None
+}
+
+fn observed_active_count(
+    orchestrator: &State<'_, SharedOrchestrator>,
+) -> Result<usize, String> {
+    let mut orchestrator = orchestrator
+        .lock()
+        .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
+    Ok(orchestrator
+        .snapshots()
+        .iter()
+        .filter(|server| is_active_state(server.state))
+        .count())
+}
+
+fn stop_all_active_servers(
+    orchestrator: &State<'_, SharedOrchestrator>,
+) -> Result<(usize, Vec<String>), String> {
+    let mut orchestrator = orchestrator
+        .lock()
+        .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
+    let active_ids = orchestrator
+        .snapshots()
+        .into_iter()
+        .filter(|server| is_active_state(server.state))
+        .map(|server| server.server_id)
+        .collect::<Vec<_>>();
+    let mut errors = Vec::new();
+    for id in active_ids {
+        if let Err(error) = orchestrator.stop(&id) {
+            errors.push(format!("{}: {error}", id.0));
+        }
+    }
+    Ok((orchestrator.active_count(), errors))
+}
+
+fn fail_safe_after_missing_host(
+    app: &tauri::AppHandle,
+    orchestrator: &State<'_, SharedOrchestrator>,
+    host_error: String,
+) -> Result<HostServiceStatus, String> {
+    let (remaining_active, stop_errors) = stop_all_active_servers(orchestrator)?;
+    let cleanup_result = if remaining_active == 0 {
+        app.slopity_host_stop().map(|_| ())
+    } else {
+        app.slopity_host_start(
+            hosting_label(None, remaining_active),
+            host_count(remaining_active),
+        )
+        .map(|_| ())
+    };
+
+    let mut details = vec![format!(
+        "Android host service could not be restored while servers were active: {host_error}"
+    )];
+    if !stop_errors.is_empty() {
+        details.push(format!(
+            "failed to stop every active server: {}",
+            stop_errors.join(", ")
+        ));
+    }
+    if remaining_active > 0 {
+        details.push(format!(
+            "{remaining_active} server(s) remain active and still require a visible host service"
+        ));
+    }
+    if let Err(cleanup_error) = cleanup_result {
+        details.push(format!("host cleanup/recovery also failed: {cleanup_error}"));
+    }
+    Err(details.join("; "))
+}
+
+fn stop_servers_after_native_request(
+    app: &tauri::AppHandle,
+    orchestrator: &State<'_, SharedOrchestrator>,
+) -> Result<HostServiceStatus, String> {
+    let (remaining_active, stop_errors) = stop_all_active_servers(orchestrator)?;
+    if remaining_active == 0 {
+        let status = app.slopity_host_stop()?;
+        if stop_errors.is_empty() {
+            return Ok(status);
+        }
+        return Err(format!(
+            "host stop request completed, but one or more runtime stops reported errors: {}",
+            stop_errors.join(", ")
+        ));
+    }
+
+    let host_update = app.slopity_host_start(
+        hosting_label(None, remaining_active),
+        host_count(remaining_active),
+    );
+    let mut details = if stop_errors.is_empty() {
+        vec![format!(
+            "native host stop request left {remaining_active} server(s) active"
+        )]
+    } else {
+        vec![format!(
+            "native host stop request could not stop every server: {}",
+            stop_errors.join(", ")
+        )]
+    };
+    if let Err(error) = host_update {
+        details.push(format!(
+            "foreground notification could not be restored for remaining servers: {error}"
+        ));
+    }
+    Err(details.join("; "))
+}
+
+fn reconcile_host_service(
+    app: &tauri::AppHandle,
+    orchestrator: &State<'_, SharedOrchestrator>,
 ) -> Result<HostServiceStatus, String> {
     let status = app.slopity_host_status()?;
-    if active_count == 0 && status.active {
-        app.slopity_host_stop()
-    } else {
-        Ok(status)
+    let active_count = observed_active_count(orchestrator)?;
+    match host_reconciliation_action(active_count, &status) {
+        HostReconciliationAction::None => Ok(status),
+        HostReconciliationAction::StopHost => app.slopity_host_stop(),
+        HostReconciliationAction::StartHost => {
+            match app.slopity_host_start(hosting_label(None, active_count), host_count(active_count)) {
+                Ok(status) => Ok(status),
+                Err(error) => fail_safe_after_missing_host(app, orchestrator, error),
+            }
+        }
+        HostReconciliationAction::UpdateHost => app
+            .slopity_host_start(hosting_label(None, active_count), host_count(active_count))
+            .map_err(|error| {
+                format!(
+                    "active foreground host service could not update its server count; existing hosting remains foregrounded and the next observation will retry: {error}"
+                )
+            }),
+        HostReconciliationAction::StopServersAndHost => {
+            stop_servers_after_native_request(app, orchestrator)
+        }
     }
 }
 
@@ -391,4 +538,80 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .unwrap_or_else(|error| eprintln!("Slopity failed to start: {error}"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{host_reconciliation_action, HostReconciliationAction};
+    use tauri_plugin_slopity_host::HostServiceStatus;
+
+    fn android_status(active: bool, active_server_count: u32) -> HostServiceStatus {
+        HostServiceStatus {
+            platform: "android".into(),
+            active,
+            start_request_pending: false,
+            notification_visible: active,
+            notification_permission_granted: true,
+            notification_permission_required: true,
+            notifications_enabled: true,
+            notification_channel_enabled: true,
+            label: "Hosting".into(),
+            active_server_count,
+            stop_request_pending: false,
+            reason: String::new(),
+        }
+    }
+
+    #[test]
+    fn reconciliation_stops_stale_host_when_no_servers_remain() {
+        assert_eq!(
+            host_reconciliation_action(0, &android_status(true, 1)),
+            HostReconciliationAction::StopHost
+        );
+    }
+
+    #[test]
+    fn reconciliation_restarts_missing_host_for_active_servers() {
+        assert_eq!(
+            host_reconciliation_action(2, &android_status(false, 0)),
+            HostReconciliationAction::StartHost
+        );
+    }
+
+    #[test]
+    fn reconciliation_updates_stale_multi_server_count() {
+        assert_eq!(
+            host_reconciliation_action(3, &android_status(true, 1)),
+            HostReconciliationAction::UpdateHost
+        );
+    }
+
+    #[test]
+    fn reconciliation_consumes_native_stop_request() {
+        let mut status = android_status(true, 2);
+        status.stop_request_pending = true;
+        assert_eq!(
+            host_reconciliation_action(2, &status),
+            HostReconciliationAction::StopServersAndHost
+        );
+    }
+
+    #[test]
+    fn reconciliation_refuses_hidden_android_hosting() {
+        let mut status = android_status(true, 1);
+        status.notifications_enabled = false;
+        status.notification_visible = false;
+        assert_eq!(
+            host_reconciliation_action(1, &status),
+            HostReconciliationAction::StopServersAndHost
+        );
+    }
+
+    #[test]
+    fn reconciliation_leaves_aligned_host_state_untouched() {
+        assert_eq!(
+            host_reconciliation_action(2, &android_status(true, 2)),
+            HostReconciliationAction::None
+        );
+    }
 }
