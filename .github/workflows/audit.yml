@@ -8,13 +8,14 @@ on:
       - 'apps/slopity/package.json'
       - 'apps/slopity/package-lock.json'
       - '.github/workflows/**'
+      - '.github/dependabot.yml'
   push:
-    branches: [main]
+    branches: [main, dev]
   schedule:
-    - cron: '0 6 * * 1' # Weekly on Monday 06:00 UTC
+    - cron: '0 6 * * 1'
 
 concurrency:
-  group: audit-${{ github.ref }}
+  group: audit-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -26,30 +27,40 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run cargo audit
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   dependency-review:
     name: Dependency review
-    runs-on: ubuntu-latest
-    # Dependency review operates on public repositories or private repositories with GitHub Advanced Security (GHAS).
-    # Skipped on private repositories without GHAS; automatically activates once repository becomes public.
     if: github.event_name == 'pull_request' && !github.event.repository.private
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/dependency-review-action@3b139cfc5fae8b618d3eae3675e383bb1769c019 # v4.5.0
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
 
   npm-audit:
     name: npm audit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - working-directory: apps/slopity
-        run: npm audit --audit-level=high
+          cache: npm
+          cache-dependency-path: apps/slopity/package-lock.json
+      - name: Install locked frontend dependencies
+        working-directory: apps/slopity
+        run: npm ci
+      - name: Audit frontend dependencies
+        working-directory: apps/slopity
+        run: npm audit
