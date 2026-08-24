@@ -199,6 +199,17 @@ jobs:
       - name: Install frontend dependencies
         working-directory: apps/slopity
         run: npm ci
+      - name: Generate Windows resource icon from canonical PNG
+        working-directory: apps/slopity
+        run: npx tauri icon src-tauri/icons/icon.png --output src-tauri/icons
+      - name: Verify generated Windows resource icon
+        shell: pwsh
+        working-directory: apps/slopity
+        run: |
+          if (!(Test-Path "src-tauri\icons\icon.ico")) {
+            Write-Error "Tauri icon generation did not produce src-tauri\icons\icon.ico."
+            exit 1
+          }
       - name: Build Windows debug NSIS package
         working-directory: apps/slopity
         run: npm run tauri:build -- --bundles nsis --debug
