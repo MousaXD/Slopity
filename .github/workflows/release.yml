@@ -15,16 +15,19 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Version tag matching tauri.conf.json, for example v0.1.0'
+        description: 'New version tag matching application metadata, for example v0.2.0'
         required: true
         type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   prepare:
@@ -37,7 +40,8 @@ jobs:
       build: ${{ steps.meta.outputs.build }}
       publish: ${{ steps.meta.outputs.publish }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Validate version metadata and release intent
@@ -45,6 +49,7 @@ jobs:
         shell: bash
         env:
           DISPATCH_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -52,9 +57,9 @@ jobs:
           import json
           import tomllib
 
-          with open('apps/slopity/src-tauri/tauri.conf.json', 'rb') as handle:
+          with open('apps/slopity/src-tauri/tauri.conf.json', encoding='utf-8') as handle:
               tauri = json.load(handle)
-          with open('apps/slopity/package.json', 'rb') as handle:
+          with open('apps/slopity/package.json', encoding='utf-8') as handle:
               package = json.load(handle)
           with open('Cargo.toml', 'rb') as handle:
               cargo = tomllib.load(handle)
@@ -75,41 +80,67 @@ jobs:
             printf 'Version mismatch: tauri=%s package=%s cargo=%s\n' "${versions[0]}" "${versions[1]}" "${versions[2]}" >&2
             exit 1
           fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Application version %s is not an accepted release version.\n' "$version" >&2
+            exit 1
+          fi
 
           expected_tag="v${version}"
           release_tag="$expected_tag"
           build=true
           publish=false
 
-          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
-            publish=false
-          elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
-            release_tag="$DISPATCH_TAG"
-            publish=true
-          elif [[ "$GITHUB_REF_TYPE" == 'tag' ]]; then
-            release_tag="$GITHUB_REF_NAME"
-            publish=true
-          elif [[ "$GITHUB_EVENT_NAME" == 'push' && "$GITHUB_REF_NAME" == 'main' ]]; then
-            if git ls-remote --exit-code --tags origin "refs/tags/$expected_tag" >/dev/null 2>&1; then
-              echo "$expected_tag already exists; this main push does not need another package build."
-              build=false
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
               publish=false
-            else
+              ;;
+            workflow_dispatch)
+              if [[ "$GITHUB_REF_TYPE" != 'branch' || "$GITHUB_REF_NAME" != 'main' ]]; then
+                printf 'Manual release dispatch must run from main, not %s/%s.\n' "$GITHUB_REF_TYPE" "$GITHUB_REF_NAME" >&2
+                exit 1
+              fi
+              release_tag="$DISPATCH_TAG"
               publish=true
-            fi
-          fi
+              if git ls-remote --exit-code --tags origin "refs/tags/$release_tag" >/dev/null 2>&1; then
+                printf 'Manual release tag %s already exists. Reused tags are not published or mutated; bump the version instead.\n' "$release_tag" >&2
+                exit 1
+              fi
+              ;;
+            push)
+              if [[ "$GITHUB_REF_TYPE" == 'tag' ]]; then
+                release_tag="$GITHUB_REF_NAME"
+                publish=true
+                git fetch --no-tags origin main
+                if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+                  printf 'Release tag %s points to %s, which is not reachable from main.\n' "$release_tag" "$GITHUB_SHA" >&2
+                  exit 1
+                fi
+                if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                  printf 'GitHub Release %s already exists. Reruns do not mutate an existing release.\n' "$release_tag" >&2
+                  exit 1
+                fi
+              elif [[ "$GITHUB_REF_NAME" == 'main' ]]; then
+                if git ls-remote --exit-code --tags origin "refs/tags/$expected_tag" >/dev/null 2>&1; then
+                  echo "$expected_tag already exists; duplicate main pushes intentionally skip package build and publication."
+                  build=false
+                  publish=false
+                else
+                  publish=true
+                fi
+              else
+                echo "Unsupported release push ref: $GITHUB_REF" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported release event: $GITHUB_EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
 
           if [[ "$release_tag" != "$expected_tag" ]]; then
             printf 'Release tag %s does not match application version %s. Expected %s.\n' "$release_tag" "$version" "$expected_tag" >&2
             exit 1
-          fi
-
-          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]] && git show-ref --verify --quiet "refs/tags/$release_tag"; then
-            tag_commit="$(git rev-list -n 1 "$release_tag")"
-            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
-              printf 'Existing tag %s points to %s, not selected commit %s. Dispatch the workflow from the tagged commit or bump the version.\n' "$release_tag" "$tag_commit" "$GITHUB_SHA" >&2
-              exit 1
-            fi
           fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -125,13 +156,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
-      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.89.0
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.89.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: apps/slopity/package-lock.json
       - name: Install Linux Tauri system dependencies
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
@@ -146,7 +186,7 @@ jobs:
             patchelf
       - name: Verify Linux Tauri prerequisites
         run: bash scripts/check-linux-prerequisites.sh
-      - name: Install frontend build tooling
+      - name: Install frontend dependencies
         working-directory: apps/slopity
         run: npm ci
       - name: Build Linux release bundles
@@ -158,7 +198,6 @@ jobs:
           set -euo pipefail
           rm -rf release-staging/linux
           mkdir -p release-staging/linux
-
           mapfile -d '' debs < <(find "$GITHUB_WORKSPACE" -type f -path '*/target/release/bundle/deb/*.deb' -print0)
           mapfile -d '' appimages < <(find "$GITHUB_WORKSPACE" -type f -path '*/target/release/bundle/appimage/*.AppImage' -print0)
 
@@ -177,7 +216,7 @@ jobs:
           cp "${appimages[0]}" release-staging/linux/
           ls -lh release-staging/linux
       - name: Upload Linux package artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-linux-${{ github.sha }}
           path: release-staging/linux/*
@@ -187,30 +226,39 @@ jobs:
 
   android:
     name: Android ARM64 debug packages
-    needs: [prepare, linux]
+    needs: prepare
     if: needs.prepare.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 100
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.89.0 and Android targets
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
+          toolchain: 1.89.0
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
+          cache: npm
+          cache-dependency-path: apps/slopity/package-lock.json
+      - name: Set up Java 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@d24156dbc98afec1657d3bb4948a729ce8407815 # v3.1.0
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
       - name: Install Android SDK and NDK
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.3.13750724"
       - name: Configure Android environment
+        shell: bash
         run: |
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
-      - name: Install frontend build tooling
+      - name: Install frontend dependencies
         working-directory: apps/slopity
         run: npm ci
       - name: Initialize Android project
@@ -219,25 +267,39 @@ jobs:
       - name: Build ARM64 debug APK and AAB
         working-directory: apps/slopity
         run: npm run android:build -- --debug --target aarch64
-      - name: Collect Android release assets
+      - name: Validate merged Android host manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=""
+          while IFS= read -r candidate; do
+            if grep -q 'com.slopity.host.HostForegroundService' "$candidate"; then
+              manifest="$candidate"
+              break
+            fi
+          done < <(find apps/slopity/src-tauri/gen/android/app/build/intermediates -type f -name AndroidManifest.xml -print)
+          test -n "$manifest"
+          grep -q 'android.permission.POST_NOTIFICATIONS' "$manifest"
+          grep -q 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$manifest"
+          grep -q 'android:foregroundServiceType="specialUse"' "$manifest"
+          echo "Validated merged host manifest: $manifest"
+      - name: Collect Android debug release assets
         shell: bash
         run: |
           set -euo pipefail
           apk='apps/slopity/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk'
           aab='apps/slopity/src-tauri/gen/android/app/build/outputs/bundle/universalDebug/app-universal-debug.aab'
-
           test -f "$apk"
           test -f "$aab"
-
           rm -rf release-staging/android
           mkdir -p release-staging/android
           cp "$apk" release-staging/android/
           cp "$aab" release-staging/android/
           ls -lh release-staging/android
-      - name: Upload Android package artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+      - name: Upload Android debug package artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-android-${{ github.sha }}
+          name: release-android-arm64-debug-${{ github.sha }}
           path: release-staging/android/*
           if-no-files-found: error
           retention-days: 7
@@ -253,16 +315,27 @@ jobs:
       contents: write
     steps:
       - name: Download Linux packages
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-linux-${{ github.sha }}
           path: dist/linux
-      - name: Download Android packages
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+      - name: Download Android debug packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-android-${{ github.sha }}
+          name: release-android-arm64-debug-${{ github.sha }}
           path: dist/android
-      - name: Name assets and generate checksums
+      - name: Reject an existing GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            printf 'GitHub Release %s already exists. Existing releases are immutable to this workflow.\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+      - name: Name assets and generate SHA-256 checksums
         shell: bash
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
@@ -288,8 +361,8 @@ jobs:
 
           (cd release-assets && sha256sum Slopity_* > SHA256SUMS.txt)
           cat release-assets/SHA256SUMS.txt
-      - name: Publish preview release
-        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+      - name: Publish immutable preview release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -297,15 +370,17 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: Slopity ${{ needs.prepare.outputs.tag }} Preview
           prerelease: true
+          make_latest: false
           fail_on_unmatched_files: true
           body: |
             Preview packages for Slopity ${{ needs.prepare.outputs.version }}.
 
             - Linux `.deb` and AppImage are release-mode Tauri bundles built on hosted Linux x86_64.
-            - Android APK/AAB are ARM64 **debug** packages. Production Android signing is not configured yet.
-            - `SHA256SUMS.txt` contains checksums for all four packages.
+            - Android APK/AAB are ARM64 **debug** packages. Production Android signing is not configured.
+            - `SHA256SUMS.txt` contains SHA-256 checksums for all four packages.
+            - Existing tags/releases are never overwritten by this workflow.
 
-            This release is intentionally marked as a prerelease until production signing and physical-device release validation are complete.
+            This release remains a prerelease until production signing and physical-device release validation are complete.
           files: |
             release-assets/*.deb
             release-assets/*.AppImage

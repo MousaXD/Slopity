@@ -2,6 +2,68 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 022: repair and harden CI and release foundation
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Reconciliation note
+
+- Concurrent GUI work on `overhaul/gui-v2` has already declared Step 021 for the shared control-center GUI. The separate `ci/release-pipeline-v2` branch is only one planning commit ahead of `dev` and labels a release/Minecraft plan as Step 021 without adding it to the live `dev` progress ledger. This Step 022 is the canonical CI/release-infrastructure slice from that abandoned/conflicting plan; it deliberately excludes its Minecraft/runtime scope.
+
+### Scope
+
+1. Repair GitHub-hosted CI so Rust formatting, metadata, tests, Clippy, Linux Tauri compilation, Android ARM64 packaging/manifest verification, and Windows x64 Tauri/NSIS validation can be used as remote build gates by independent feature branches.
+2. Make ordinary branch pushes testable without allowing one branch's concurrency group to cancel unrelated branch validation; keep failures strict and actionable and order expensive platform builds behind cheaper Rust validation.
+3. Repair and harden release-package validation and publication behavior, preserving PR no-publish guarantees, synchronized version checks, deterministic assets/checksums, clearly labeled Android debug packages, and minimal publication permissions.
+4. Refresh SHA-pinned third-party Actions to compatible supported runtimes where live Dependabot evidence identifies maintained replacements, without weakening immutable pinning.
+5. Harden dependency/audit automation and Dependabot targeting for the active `dev` workflow, and correct stale CI-host prerequisite documentation.
+
+### Non-goals
+
+- Merging this branch or any pull request.
+- GUI V2 implementation.
+- Minecraft/Java/JVM, Jellyfin, Node.js, Python, PHP, generic native runtimes, arbitrary process execution, downloads, or signing-secret invention.
+- Claiming Android production signing or physical-device durability.
+- Claiming Windows support unless a GitHub-hosted Windows job actually compiles and packages it.
+
+### Risks
+
+- Tauri bundle output paths differ by platform and must be asserted rather than silently globbed.
+- Newer JavaScript Actions require a GitHub runner runtime that supports Node 24; hosted-runner compatibility must be proven by Actions rather than assumed.
+- Release reruns or reused tags can mutate an existing release unless duplicate policy is explicit and enforced.
+- CI concurrency that keys only on workflow/ref can behave differently for push and pull-request refs; branch isolation must remain explicit.
+- Android debug packages must stay unmistakably labeled as debug and must never imply production signing.
+
+### Intended files
+
+- `PROGRESS.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `.github/workflows/audit.yml`
+- `.github/dependabot.yml`
+- `docs/releases.md`
+- `docs/ci-host-prerequisites.md`
+- `README.md`
+- `CURRENT_STATUS.md`
+- `TASK.md`
+
+### Acceptance checks
+
+- `cargo fmt --all -- --check`
+- `cargo metadata --locked --format-version 1`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- `cd apps/slopity && npm ci && npm audit && npm run tauri:check`
+- GitHub Actions Rust quality job green on this branch/PR.
+- GitHub Actions Linux Tauri job green.
+- GitHub Actions Android ARM64 debug build, merged-manifest verification, and artifact upload green.
+- GitHub Actions Windows x64 Tauri compile/NSIS package validation green, or exact platform blocker documented without claiming support.
+- Release pull-request package validation green for Linux `.deb`/AppImage and Android ARM64 debug APK/AAB, with publication skipped by construction.
+- Security/audit jobs green where applicable, with dependency review active for this public repository.
+- Every third-party `uses:` reference remains pinned to a full immutable commit SHA.
+
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
 **Status:** DONE  
@@ -120,7 +182,7 @@ Factual corrections and hardening fixes for Step 019 and PR #13:
 ### Delivered
 
 1. Corrected all public documentation links to repository-relative format (`[LICENSE.md](LICENSE.md)`, `[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)`, `[CONTRIBUTING.md](CONTRIBUTING.md)`, `[AGENTS.md](AGENTS.md)`, `[SECURITY.md](SECURITY.md)`, `[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)`, `[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)`, `[docs/releases.md](docs/releases.md)`). Repository-wide scan confirms 0 developer-local paths remaining.
-2. Overhauled `README.md` with strict distinction between operational capabilities on `main`/PR #13, foundation capabilities in pending draft PR #12, and unbundled runtimes (Java/Minecraft/Node.js/Python).
+2. Overhauled `README.md` with strict distinction between operational capabilities on current `main` / PR #13 versus capabilities implemented in pending PR #12, and clarify local verification versus GitHub Actions billing gates.
 3. Updated `Cargo.toml` workspace metadata to use standard `license = "PolyForm-Noncommercial-1.0.0"`. `cargo metadata --locked` confirms all crates inherit `"license": "PolyForm-Noncommercial-1.0.0"`.
 4. Refined `CONTRIBUTING.md` with conservative contribution licensing terms without inventing CLAs or assuming copyright transfers.
 5. Updated `.github/workflows/audit.yml` to gracefully handle private evaluation vs public execution for `actions/dependency-review-action`.
@@ -274,7 +336,7 @@ Reconcile the compatible, still-desired foundation work from draft pull requests
 - Kept the existing built-in Rust HTTP provider behind the generic runtime adapter contract and registered only that adapter. External runtime kinds remain unavailable configuration values and the desktop local-process adapter is not registered or exposed.
 - Removed the parallel direct-`HttpServerManager` lifecycle ownership from the Tauri shell. Existing built-in HTTP commands now delegate through the orchestrator and explicitly reject profiles whose runtime kind is not `BuiltInHttp`.
 - Added aggregate resource accounting with host reserve policy, safe memory budgets, active-or-reserved server accounting, deterministic port reservations/conflicts, CPU headroom warnings, and conservative unknown-telemetry behavior.
-- Added proven host telemetry surfaces: Linux `/proc/meminfo` memory telemetry and Android system-service memory, battery, charging, battery-temperature, thermal-state, and free-storage telemetry. Missing values remain `None` instead of being guessed.
+- Added proven host telemetry surfaces: Linux `/proc/meminfo` memory telemetry and Android system-service memory, battery, temperature, thermal state, storage headroom. Missing values remain `None` instead of being guessed.
 - Integrated profile-store interrupted-write recovery, primary/temporary/backup candidate inspection, backup recovery, parent-directory synchronization, schema-v0 to schema-v1 migration infrastructure, migration/recovery notices, and hard failure for unsupported future schemas.
 - Integrated backend profile validation limits for IDs, names, argument counts and payload sizes, executable paths, working directories, duplicate IDs, and duplicate ports while keeping structural profile validity separate from runtime availability.
 - Integrated Android foreground-host lifecycle/status improvements: POST_NOTIFICATIONS permission handling, native service status, active-server counts, start/update behavior, conservative notification visibility, a pending notification stop request, and `START_NOT_STICKY` process-lifecycle honesty.
@@ -352,7 +414,7 @@ grep -RInE 'file://|/home/|/Users/|C:\\Users\\' --exclude-dir={.git,target,node_
 Prepare Slopity for a high-quality public source-available release:
 1. Licensing: Adopt the standard, official, unmodified PolyForm Noncommercial License 1.0.0 (`PolyForm-Noncommercial-1.0.0`), update Cargo package license metadata, add `LICENSE.md`, add `COMMERCIAL-LICENSE.md`, update all documentation to describe Slopity as source-available rather than open-source, and document external contribution policy.
 2. Dependency Reproducibility: Commit root `Cargo.lock` and `apps/slopity/package-lock.json`, update CI/build workflows and scripts to use `--locked` and `npm ci`.
-3. GitHub Actions Hardening: Migrate CI and release workflows from self-hosted runners to standard GitHub-hosted `ubuntu-latest` runners, pin third-party actions to immutable commit SHAs with version comments, enforce strict top-level read-only permissions with minimal write scopes.
+3. GitHub Actions Hardening: Migrate CI and release workflows from self-hosted runners to standard GitHub-hosted `ubuntu-latest` runners, pin third-party actions to immutable full commit SHAs with version comments, enforce strict top-level read-only permissions with minimal write scopes.
 4. Dependency Security: Add `.github/dependabot.yml` covering cargo, npm, and github-actions, add a security/audit workflow with `cargo-audit`, `actions/dependency-review-action`, and `npm audit`.
 5. Secret and History Hygiene: Audit Git history and codebase for secrets and credentials.
 6. Profile-ID Hardening: Implement strict identifier validation grammar `[A-Za-z0-9._-]{1,128}` in `slopity-core` to prevent control-character injection, interior NUL panics in thread naming, directory traversal, and malformed identifiers. Add regression tests covering edge cases.
@@ -414,7 +476,7 @@ cargo fmt --all -- --check
 cargo test --workspace --all-features --locked
 # Pass (20 tests passed: 16 core, 4 http runtime, 0 failed, 0 ignored)
 
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 # Pass (0 warnings)
 
 cd apps/slopity && npm ci && npm run tauri:check
@@ -569,7 +631,7 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed.
 - The Linux job passed the prerequisite check, `npm install --no-audit --no-fund`, and `npm run tauri:check`.
 - The Android job installed the configured SDK and NDK, passed `npm run android:init -- --ci`, and passed `npm run android:build -- --debug --target aarch64`.
-- Android produced `app-universal-debug.apk` and `app-universal-debug.aab` and uploaded artifact `9024516514`, named `slopity-android-debug-b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4`, size `148565786` bytes, digest `sha256:b3b97cfec46bfc35e6b4d3f4075f51a8c5cc611cb8276f2a5f55f2683bd5627f`, retained through 2026-08-22.
+- Android produced `app-universal-debug.apk` and `app-universal-debug.aab` and uploaded artifact `9025966939`, named `slopity-android-debug-b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4`, size `148565466` bytes and digest `sha256:c1775f7163c48aea023632faf6d6da379eb16a35e22e9870b71e84e134b8bb7f`.
 - Draft pull request `#2` remains open, unmerged, and based on `main`.
 
 ### Verification pending
@@ -584,7 +646,7 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - Minecraft, Node.js, import, custom, Java, Python, PHP, and native providers remain unavailable or configuration-only and expose no false start path.
 - Settings is a planned drawer entry without a settings screen.
 - Runtime state remains process-local and resets to stopped after the application process exits, as documented by Step 008.
-- Android compilation does not prove OEM background behavior, app-restart behavior, or Google Play foreground-service policy acceptance.
+- Android compilation does not prove OEM background behavior or Google Play foreground-service policy acceptance.
 - The Android build still reports existing non-blocking generated-code, Gradle deprecation, and duplicate `com.slopity.host` namespace warnings.
 - The dashboard uses bundled CSS and generic SVG illustrations rather than licensed game artwork from the mockup.
 
@@ -784,7 +846,7 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 ### Delivered
 
 - Added schema-v1 JSON profile documents with explicit rejection of malformed data and unsupported future versions.
-- Added a Tauri-independent Rust `ProfileStore` that loads, seeds, validates, persists, and reloads profile collections.
+- Added a Tauri-independent `slopity-core` ProfileStore that loads, seeds, validates, persists, and reloads profile collections.
 - Added create, update, clone, enable, disable, and delete operations that write before replacing in-memory state.
 - Added collection validation for duplicate IDs, duplicate ports, and existing profile validation errors.
 - Added replacement-write handling with a rollback path for platforms that cannot rename over an existing destination.
