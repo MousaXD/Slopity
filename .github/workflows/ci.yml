@@ -1,16 +1,20 @@
-name: Linux and Android CI
+name: Cross-platform CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ['**']
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
   contents: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   rust:
@@ -18,32 +22,66 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
+      - name: Install Rust 1.89.0
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
+          toolchain: 1.89.0
           components: rustfmt, clippy
       - name: Require progress ledger
         if: github.event_name == 'pull_request'
+        shell: bash
         run: ./scripts/check-progress-ledger.sh "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA"
-      - run: cargo fmt --all -- --check
-      - run: cargo test --workspace --all-features --locked
-      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Validate locked Cargo metadata
+        run: cargo metadata --locked --format-version 1 > /dev/null
+      - name: Install native dependencies for all-features Rust checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+      - name: Run Rust workspace tests
+        run: cargo test --workspace --all-features --locked
+      - name: Run strict Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
   linux:
-    name: Linux Tauri shell
+    name: Linux Tauri compile
     needs: rust
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
-      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.89.0
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.89.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: apps/slopity/package-lock.json
       - name: Install Linux Tauri system dependencies
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
@@ -58,42 +96,56 @@ jobs:
             patchelf
       - name: Verify Linux Tauri prerequisites
         run: bash scripts/check-linux-prerequisites.sh
-      - working-directory: apps/slopity
+      - name: Install frontend dependencies
+        working-directory: apps/slopity
         run: npm ci
-      - name: Compile Linux Tauri shell without bundling
+      - name: Audit frontend dependencies
+        working-directory: apps/slopity
+        run: npm audit
+      - name: Compile Linux Tauri shell
         working-directory: apps/slopity
         run: npm run tauri:check
 
   android:
     name: Android ARM64 debug
-    needs: linux
+    needs: rust
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.89.0
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.89.0 and Android targets
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
+          toolchain: 1.89.0
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
+          cache: npm
+          cache-dependency-path: apps/slopity/package-lock.json
+      - name: Set up Java 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@d24156dbc98afec1657d3bb4948a729ce8407815 # v3.1.0
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
       - name: Install Android SDK and NDK
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.3.13750724"
       - name: Configure Android environment
+        shell: bash
         run: |
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
-      - working-directory: apps/slopity
+      - name: Install frontend dependencies
+        working-directory: apps/slopity
         run: npm ci
       - name: Initialize Android project
         working-directory: apps/slopity
         run: npm run android:init -- --ci
-      - name: Build ARM64 debug APK
+      - name: Build ARM64 debug APK and AAB
         working-directory: apps/slopity
         run: npm run android:build -- --debug --target aarch64
       - name: Validate merged Android host manifest
@@ -107,18 +159,65 @@ jobs:
               break
             fi
           done < <(find apps/slopity/src-tauri/gen/android/app/build/intermediates -type f -name AndroidManifest.xml -print)
-          test -n "$manifest"
+          if [[ -z "$manifest" ]]; then
+            echo "No merged AndroidManifest.xml containing HostForegroundService was found." >&2
+            exit 1
+          fi
           grep -q 'android.permission.POST_NOTIFICATIONS' "$manifest"
           grep -q 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$manifest"
           grep -q 'android:foregroundServiceType="specialUse"' "$manifest"
           echo "Validated merged host manifest: $manifest"
       - name: Upload Android debug packages
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: slopity-android-debug-${{ github.sha }}
+          name: slopity-android-arm64-debug-${{ github.sha }}
           path: |
             apps/slopity/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
             apps/slopity/src-tauri/gen/android/app/build/outputs/bundle/universalDebug/app-universal-debug.aab
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  windows:
+    name: Windows x64 NSIS
+    needs: rust
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Rust 1.89.0
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.89.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/slopity/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: apps/slopity
+        run: npm ci
+      - name: Build Windows debug NSIS package
+        working-directory: apps/slopity
+        run: npm run tauri:build -- --bundles nsis --debug
+      - name: Validate Windows NSIS package
+        shell: pwsh
+        run: |
+          $packages = @(Get-ChildItem -Path "$env:GITHUB_WORKSPACE\target\debug\bundle\nsis" -Filter "*.exe" -File -ErrorAction SilentlyContinue)
+          if ($packages.Count -ne 1) {
+            Write-Error "Expected exactly one NSIS .exe under target\debug\bundle\nsis; found $($packages.Count)."
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\ci-artifacts\windows" | Out-Null
+          Copy-Item $packages[0].FullName "$env:GITHUB_WORKSPACE\ci-artifacts\windows\"
+          Write-Host "Validated NSIS package: $($packages[0].FullName)"
+      - name: Upload Windows NSIS package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: slopity-windows-x64-debug-nsis-${{ github.sha }}
+          path: ci-artifacts/windows/*.exe
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
