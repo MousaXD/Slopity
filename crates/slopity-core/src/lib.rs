@@ -12,4 +12,7 @@ pub use profile_store::{ProfileDocument, ProfileStore, ProfileStoreError, PROFIL
 pub use runtime::{
     RuntimeAdapter, RuntimeAvailability, RuntimeError, RuntimeHandle, RuntimeRequest,
 };
-pub use validation::{validate_profile, ValidationIssue, ValidationSeverity};
+pub use validation::{
+    is_valid_profile_id, validate_profile, ValidationIssue, ValidationSeverity,
+    MAX_PROFILE_ID_LENGTH,
+};

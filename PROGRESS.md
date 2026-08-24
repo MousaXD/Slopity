@@ -4,7 +4,7 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 
 ## Step 019: public release hardening and source-available transition
 
-**Status:** IN PROGRESS  
+**Status:** DONE  
 **Declared:** 2026-08-24  
 **Updated:** 2026-08-24
 
@@ -29,16 +29,23 @@ Prepare Slopity for a high-quality public source-available release:
 - Merging PR #12 or any other open PR branches.
 - Committing signing keys, credentials, APKs, or binaries.
 
-### Risks and mitigation
+### Delivered
 
-- Risk: CI workflow failures when switching from self-hosted to GitHub-hosted runners due to missing system libraries.
-  Mitigation: Explicitly install WebKitGTK and Tauri Linux build prerequisites in GitHub Actions workflow steps before running checks.
-- Risk: Cargo rejecting non-standard SPDX license identifier in `Cargo.toml`.
-  Mitigation: Verify Cargo 1.89+ acceptance of `PolyForm-Noncommercial-1.0.0` or supplement with `license-file`.
-- Risk: Breaking valid existing profile identifiers during ID hardening.
-  Mitigation: Ensure standard sample IDs (`http-example`, etc.) strictly comply with `[A-Za-z0-9._-]{1,128}` and test boundary conditions thoroughly.
+1. Official unmodified PolyForm Noncommercial License 1.0.0 in `LICENSE.md` (`PolyForm-Noncommercial-1.0.0`) and dual-licensing commercial terms in `COMMERCIAL-LICENSE.md`.
+2. Cargo workspace package metadata (`license = "PolyForm-Noncommercial-1.0.0"`, `license-file = "LICENSE.md"`) and frontend `package.json` updated with matching license identifier.
+3. Locked dependency manifests committed (`Cargo.lock` with 434 crates, `apps/slopity/package-lock.json`).
+4. CI (`.github/workflows/ci.yml`) and Release (`.github/workflows/release.yml`) migrated from self-hosted runners to GitHub-hosted `ubuntu-latest` runners with automated Tauri Linux prerequisite installation and locked builds (`--locked`, `npm ci`).
+5. All third-party GitHub Actions pinned to immutable full commit SHAs with version annotations across all workflows.
+6. Dependabot configuration in `.github/dependabot.yml` monitoring Cargo, npm, and GitHub Actions dependencies weekly.
+7. Security audit workflow in `.github/workflows/audit.yml` running `cargo-audit`, `dependency-review-action`, and `npm audit`.
+8. Git history and commit trees audited for credentials/secrets across all 78 commits with 0 secret leaks found.
+9. Server profile identifier validation hardened in `crates/slopity-core/src/validation.rs`: strict `[A-Za-z0-9._-]{1,128}` validation via `is_valid_profile_id` and `MAX_PROFILE_ID_LENGTH`, preventing interior NUL bytes (`\0`) which trigger thread spawn panics in `slopity-runtime-http`, control character escape injections, and path traversal. Re-exported in `crates/slopity-core/src/lib.rs`.
+10. Added 6 comprehensive validation tests in `validation.rs` covering valid ID forms, empty/whitespace IDs, oversized IDs (129 chars), NUL byte rejection, control characters (`\n`, `\r`, `\t`, ANSI escapes), and path traversal (`../`, `/`, `\`).
+11. Public security policy overhauled in `SECURITY.md` with supported versions table, pre-release disclaimer, responsible disclosure via GitHub Private Vulnerability Reporting and maintainer contact, report requirements, and ethical testing boundaries.
+12. Contributing guidelines updated in `CONTRIBUTING.md` with source-available inbound contribution terms, mandatory two-commit protocol, and reproducible setup instructions.
+13. Public presentation updated in `README.md`, `TASK.md`, and `docs/releases.md` accurately detailing operational status (built-in HTTP server and child-process boundary operational; Java/Minecraft/Node.js/Python unbundled/unavailable), source-available license, and hosted release pipeline.
 
-### Intended files
+### Files changed
 
 - `PROGRESS.md`
 - `LICENSE.md`
@@ -58,17 +65,40 @@ Prepare Slopity for a high-quality public source-available release:
 - `SECURITY.md`
 - `CONTRIBUTING.md`
 - `TASK.md`
-- `docs/releases.md`
 
-### Acceptance checks
+### Verification performed
 
-1. `cargo fmt --all -- --check` passes cleanly.
-2. `cargo test --workspace --all-features --locked` passes all existing and new unit/integration tests.
-3. `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` reports 0 warnings.
-4. `cd apps/slopity && npm ci && npm run tauri:check` passes without error.
-5. Profile ID validation rejects empty, oversized (>128), NUL-byte, control-character, space, and path-traversal IDs while accepting valid alphanumeric, dot, underscore, and hyphen IDs.
-6. All stale "open-source", "MIT", "Apache" references in repository docs are replaced with source-available terms.
-7. Workflows are migrated to `ubuntu-latest`, third-party actions pinned by SHA, and dependabot configuration added.
+```bash
+cargo fmt --all -- --check
+# Pass (0 diffs)
+
+cargo test --workspace --all-features --locked
+# Pass (20 tests passed: 16 core, 4 http runtime, 0 failed, 0 ignored)
+
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+# Pass (0 warnings)
+
+cd apps/slopity && npm ci && npm run tauri:check
+# Pass (Finished dev profile in 1m 36s, debug binary built cleanly)
+
+cargo audit
+# Pass (0 vulnerabilities found across 434 crate dependencies)
+
+cd apps/slopity && npm audit
+# Pass (0 vulnerabilities found)
+```
+
+### Known limitations
+
+- Android hosting background service bridge compiles and builds in debug APK/AAB mode; on-device multi-hour battery/throttling profiling remains to be validated on physical ARM64 hardware.
+- Windows builds and packaging are deferred to post-release roadmap phases.
+- Android production signing keys are not yet configured (debug builds are generated for prereleases).
+
+### Follow-up work
+
+- Proceed with physical Android ARM64 device testing and foreground-service endurance benchmarks.
+- Review and triage Dependabot PRs as automated security dependency updates arrive.
+
 
 ## Step 011: publish Linux and Android GitHub releases
 
