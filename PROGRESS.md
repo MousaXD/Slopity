@@ -2,6 +2,105 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 020: public history sanitation, workload reconciliation, and release candidate validation
+
+**Status:** DONE  
+**Declared:** 2026-08-24  
+**Updated:** 2026-08-24
+
+### Scope
+
+1. Workload Foundation & Hardening Integration: Reconcile PR #12 (`integration/workload-foundation`) and PR #13 (`chore/public-release-hardening`) into a unified release candidate branch, integrating authoritative `ServerOrchestrator`, resource accounting, host telemetry, profile store recovery/migrations, strict identifier validation grammar, locked dependencies, PolyForm Noncommercial License 1.0.0, and updated public presentation.
+2. Git History & Email Sanitation: Perform deep history audit and rewrite all reachable commits using `git-filter-repo` to replace the maintainer's previously exposed private email with the GitHub noreply address (`101021011+MousaXD@users.noreply.github.com`), while preserving author names, commit messages, and full merge topology.
+3. Path & Secret Hygiene: Eliminate all developer-local machine paths across all commit diffs and trees. Perform automated history scanning via `gitleaks` and multi-pattern searches.
+4. Offline Local Validation: Thoroughly validate the unified release tree locally without relying on GitHub Actions credits (Rust format, unit/integration tests, Clippy, workspace metadata, Cargo audit, npm audit, Tauri check, Android ARM64 library compilation, Linux `.deb` bundle packaging).
+5. Publication Staging: Prepare clean candidate branch `release/public-clean-history` and map old/new SHA lineage for repository owner promotion to `main`. Keep repository private until explicit owner action.
+
+### Delivered
+
+1. Integrated release candidate on branch `release/public-clean-history`, combining all capabilities from PR #12 and PR #13 without loss of any architectural or security features.
+2. Complete Git history rewrite using `git-filter-repo` across all reachable refs: 0 private maintainer email occurrences remain, 100% of maintainer commits mapped to `MousaXD <101021011+MousaXD@users.noreply.github.com>`.
+3. Sanitized all developer-local paths across all commit trees and history diffs.
+4. Gitleaks scan confirmed 0 leaks across repository history.
+5. All 60 Rust unit and integration tests passed (`slopity-core`, `slopity-runtime-http`, `tauri-plugin-slopity-host`).
+6. Clippy passed with 0 warnings with `-D warnings` on `--all-targets --all-features --locked`.
+7. Workspace license metadata verified across all 5 workspace crates (`PolyForm-Noncommercial-1.0.0`).
+8. Cargo audit and npm audit verified 0 vulnerabilities.
+9. Tauri application debug build completed and verified on Linux.
+10. Android ARM64 native shared library `libslopity_lib.so` compiled cleanly against Android SDK Platform 36 and NDK `27.3.13750724`. Merged AndroidManifest verified with `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE_SPECIAL_USE`, `com.slopity.host.HostForegroundService`, and `foregroundServiceType="specialUse"`.
+11. Linux `.deb` packaging verified with `Slopity_0.1.0_amd64.deb` bundle generation.
+12. Created `CURRENT_STATUS.md` and verified all relative Markdown links across documentation.
+
+### Files changed
+
+- `PROGRESS.md`
+- `CURRENT_STATUS.md`
+- `README.md`
+- `.gitignore`
+- `Cargo.lock`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/validation.rs`
+
+### Verification performed
+
+```bash
+# Toolchains
+rustc 1.89.0 / cargo 1.89.0 / node v22.23.2 / npm 11.18.0
+
+# Rust Formatting
+cargo fmt --all -- --check
+# Result: PASS (0 diffs)
+
+# Test Suite
+cargo test --workspace --all-features --locked
+# Result: PASS (60 passed, 0 failed, 0 ignored)
+#   - slopity-core: 44 unit + 2 integration tests
+#   - slopity-runtime-http: 8 tests
+#   - tauri-plugin-slopity-host: 6 tests
+
+# Strict Linting
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+# Result: PASS (0 warnings)
+
+# License Metadata
+cargo metadata --locked --format-version 1
+# Result: PASS (All 5 crates inherit PolyForm-Noncommercial-1.0.0)
+
+# Dependency Security
+cargo audit
+# Result: PASS (0 vulnerabilities across 434 dependencies)
+
+# Frontend & Tauri Checks
+cd apps/slopity && npm ci && npm audit && npm run tauri:check
+# Result: PASS (0 vulnerabilities, binary compiled at target/debug/slopity)
+
+# Linux Bundle Validation
+npx tauri build --bundles deb --debug
+# Result: PASS (target/debug/bundle/deb/Slopity_0.1.0_amd64.deb generated)
+
+# Android ARM64 Compilation
+npm run android:init -- --ci
+npm run android:build -- --debug --target aarch64
+# Result: PASS (libslopity_lib.so compiled for aarch64-linux-android with NDK 27.3.13750724)
+
+# Secret & Privacy Scans
+gitleaks detect --source . --verbose --log-opts="release/public-clean-history"
+# Result: PASS (0 leaks found across 56 commits)
+
+git log release/public-clean-history --format='%H%x09%an%x09%ae%x09%cn%x09%ce' | sort -u -k2
+# Result: PASS (0 private emails, only 101021011+MousaXD@users.noreply.github.com)
+```
+
+### Verification pending / blocked
+
+- Physical on-device Android runtime durability proof (background reachability, notification stop reconciliation, thermal/battery tracking over a multi-hour real-device session).
+- Windows compilation, packaging, and CI validation remain deferred.
+
+### Known limitations
+
+- Repository remains private until the owner reviews the audit report, enables GitHub account email privacy, and executes public promotion.
+
 ## Step 019: amendment and public release hardening correction
 
 **Status:** DONE  
