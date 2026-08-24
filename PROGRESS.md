@@ -167,7 +167,7 @@ Factual corrections and hardening fixes for Step 019 and PR #13:
 ### Delivered
 
 1. Corrected all public documentation links to repository-relative format (`[LICENSE.md](LICENSE.md)`, `[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)`, `[CONTRIBUTING.md](CONTRIBUTING.md)`, `[AGENTS.md](AGENTS.md)`, `[SECURITY.md](SECURITY.md)`, `[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)`, `[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)`, `[docs/releases.md](docs/releases.md)`). Repository-wide scan confirms 0 developer-local paths remaining.
-2. Overhauled `README.md` with strict distinction between operational capabilities on `main`/PR #13, foundation capabilities in pending PR #12, and unbundled runtimes (Java/Minecraft/Node.js/Python).
+2. Overhauled `README.md` with strict distinction between operational capabilities on `main`/PR #13, foundation capabilities in pending draft PR #12, and unbundled runtimes (Java/Minecraft/Node.js/Python).
 3. Updated `Cargo.toml` workspace metadata to use standard `license = "PolyForm-Noncommercial-1.0.0"`. `cargo metadata --locked` confirms all crates inherit `"license": "PolyForm-Noncommercial-1.0.0"`.
 4. Refined `CONTRIBUTING.md` with conservative contribution licensing terms without inventing CLAs or assuming copyright transfers.
 5. Updated `.github/workflows/audit.yml` to gracefully handle private evaluation vs public execution for `actions/dependency-review-action`.
@@ -241,7 +241,7 @@ Prepare Slopity for a high-quality public source-available release:
 2. Cargo workspace package metadata (`license = "PolyForm-Noncommercial-1.0.0"`, `license-file = "LICENSE.md"`) and frontend `package.json` updated with matching license identifier.
 3. Locked dependency manifests committed (`Cargo.lock` with 434 crates, `apps/slopity/package-lock.json`).
 4. CI (`.github/workflows/ci.yml`) and Release (`.github/workflows/release.yml`) migrated from self-hosted runners to GitHub-hosted `ubuntu-latest` runners with automated Tauri Linux prerequisite installation and locked builds (`--locked`, `npm ci`).
-5. All third-party GitHub Actions pinned to immutable full commit SHAs with version comments across all workflows.
+5. All third-party GitHub Actions pinned to immutable full commit SHAs with version annotations across all workflows.
 6. Dependabot configuration in `.github/dependabot.yml` monitoring Cargo, npm, and GitHub Actions dependencies weekly.
 7. Security audit workflow in `.github/workflows/audit.yml` running `cargo-audit`, `dependency-review-action`, and `npm audit`.
 8. Git history and commit trees audited for credentials/secrets across all 78 commits with 0 secret leaks found.
@@ -605,7 +605,7 @@ Remove `Swatinem/rust-cache` from the Rust-quality job on the persistent self-ho
 ### Evidence
 
 - Step 006 workflow run `31011407485` checked out the branch and installed the Rust toolchain successfully.
-- The run remained inside `Swatinem/rust-cache@v2` for several minutes and never reached Slopity's formatting, tests, or Clippy gates.
+- The run remained inside `Swatinem/rust-cache@v2` for several minutes and never reached the progress ledger or any Cargo command.
 - The self-hosted machine already retains its Cargo registry and toolchains under the runner user's home directory between jobs.
 - The cache action was blocking validation before providing value.
 
