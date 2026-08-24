@@ -34,7 +34,9 @@ jobs:
   dependency-review:
     name: Dependency review
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # Dependency review operates on public repositories or private repositories with GitHub Advanced Security (GHAS).
+    # Skipped on private repositories without GHAS; automatically activates once repository becomes public.
+    if: github.event_name == 'pull_request' && !github.event.repository.private
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

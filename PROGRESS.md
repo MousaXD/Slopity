@@ -2,6 +2,66 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 019: amendment and public release hardening correction
+
+**Status:** DONE  
+**Declared:** 2026-08-24  
+**Updated:** 2026-08-24
+
+### Scope
+
+Factual corrections and hardening fixes for Step 019 and PR #13:
+1. Reconcile PR #12 relationship: Affirm that draft PR #12 (`Step 018: reconcile workload foundation`) is essential substantive architecture (orchestrator, runtime observations, resource accounting, host telemetry, interrupted-write recovery, schema migrations, and Android host lifecycle) and MUST NOT be closed. Establish a clear post-merge integration sequence.
+2. Link and Path Hygiene: Eliminate all developer-local machine paths (`file:///home/developer/...`) across `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `COMMERCIAL-LICENSE.md`, replacing them with repository-relative Markdown links.
+3. Feature Claim Accuracy: Re-align `README.md` to truthfully describe functionality on current `main` / PR #13 versus capabilities implemented in pending PR #12, and clarify local verification versus GitHub Actions billing gates.
+4. Cargo License Metadata: Retain `license = "PolyForm-Noncommercial-1.0.0"` in `Cargo.toml` and eliminate redundant `license-file`, keeping `LICENSE.md` in repository root. Verified inheritance across all 5 workspace crates via `cargo metadata`.
+5. Contribution Policy Clarification: Update `CONTRIBUTING.md` with conservative external contribution guidelines that do not assume or imply copyright assignment.
+6. GitHub Actions Audit: Investigate exact runner failure annotations on PR #13 exact head (jobs blocked at account admission due to private repository Actions minute/spending limits), configure `audit.yml` with private/public repository awareness for `actions/dependency-review-action`.
+
+### Delivered
+
+1. Corrected all public documentation links to repository-relative format (`[LICENSE.md](LICENSE.md)`, `[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)`, `[CONTRIBUTING.md](CONTRIBUTING.md)`, `[AGENTS.md](AGENTS.md)`, `[SECURITY.md](SECURITY.md)`, `[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)`, `[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)`, `[docs/releases.md](docs/releases.md)`). Repository-wide scan confirms 0 developer-local paths remaining.
+2. Overhauled `README.md` with strict distinction between operational capabilities on `main`/PR #13, foundation capabilities in pending draft PR #12, and unbundled runtimes (Java/Minecraft/Node.js/Python).
+3. Updated `Cargo.toml` workspace metadata to use standard `license = "PolyForm-Noncommercial-1.0.0"`. `cargo metadata --locked` confirms all crates inherit `"license": "PolyForm-Noncommercial-1.0.0"`.
+4. Refined `CONTRIBUTING.md` with conservative contribution licensing terms without inventing CLAs or assuming copyright transfers.
+5. Updated `.github/workflows/audit.yml` to gracefully handle private evaluation vs public execution for `actions/dependency-review-action`.
+6. Formulated explicit post-Step-019 integration strategy for PR #12: keep PR #12 open/draft, merge PR #13 into `main` after owner approval, merge resulting `main` into `integration/workload-foundation`, resolve conflicts, and run full CI against PR #12.
+
+### Files changed
+
+- `PROGRESS.md`
+- `README.md`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `COMMERCIAL-LICENSE.md`
+- `Cargo.toml`
+- `.github/workflows/audit.yml`
+
+### Verification performed
+
+```bash
+cargo fmt --all -- --check
+# Pass (0 diffs)
+
+cargo test --workspace --all-features --locked
+# Pass (20 tests passed: 16 core, 4 http runtime, 0 failed, 0 ignored)
+
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+# Pass (0 warnings)
+
+cargo metadata --locked --format-version 1
+# Pass (all crates cleanly resolve PolyForm-Noncommercial-1.0.0)
+
+cargo audit
+# Pass (0 vulnerabilities across 434 dependencies)
+
+cd apps/slopity && npm ci && npm audit && npm run tauri:check
+# Pass (0 vulnerabilities, debug binary built cleanly)
+
+grep -RInE 'file://|/home/|/Users/|C:\\Users\\' --exclude-dir={.git,target,node_modules,gen} .
+# Pass (0 matches found)
+```
+
 ## Step 019: public release hardening and source-available transition
 
 **Status:** DONE  

@@ -14,15 +14,25 @@ Slopity is released as a **source-available** project under the **[PolyForm Nonc
 
 Slopity is pre-production software under active development.
 
-### What is implemented today
+### What is implemented on current main (PR #13 tree)
 
-- **Shared Rust Core (`slopity-core`)**: Platform-neutral domain model, strict identifier grammar `[A-Za-z0-9._-]{1,128}`, port collision detection, and conservative host memory budgeting.
-- **Durable Profile Persistence**: Schema v1 JSON storage with atomic writes, backup preservation, and error recovery/rollback.
-- **Built-in HTTP Server (`slopity-runtime-http`)**: Native Rust HTTP test runtime supporting loopback and LAN binding, request counters, and bounded circular log buffers.
+- **Shared Rust Core (`slopity-core`)**: Platform-neutral domain model, strict identifier grammar `[A-Za-z0-9._-]{1,128}` (`is_valid_profile_id`), reserved port checking, and conservative host memory budgeting.
+- **Profile Persistence**: Schema v1 JSON storage with atomic writes and schema version gating (`slopity-core`).
+- **Built-in HTTP Test Runtime (`slopity-runtime-http`)**: Safe native Rust HTTP test server supporting loopback and LAN binding, request counters, and bounded circular log buffers.
 - **Process Boundary (`slopity-runtime-local`)**: Direct process execution using structured argument vectors—never routed through `sh -c` or `cmd /C`.
-- **Host Service Boundary (`tauri-plugin-slopity-host`)**: Native capability probing and Android foreground service lifecycle bridge.
-- **Tauri 2 Frontend (`apps/slopity`)**: Mobile-first responsive dashboard, server card grid, drawer navigation, add-server bottom sheet, action menu, details modal, and profile editor.
-- **Reproducible CI & Workflows**: Automated GitHub Actions pipelines running on GitHub-hosted `ubuntu-latest` with locked dependencies (`--locked`, `npm ci`) and pinned action commit SHAs.
+- **Host Service Boundary (`tauri-plugin-slopity-host`)**: Native capability probing and Android foreground service boundary.
+- **Tauri 2 Frontend (`apps/slopity`)**: Mobile-first responsive dashboard, server card list, drawer navigation, add-server bottom sheet, action menu, details modal, and profile editor.
+- **Reproducible Dependencies**: Committed and locked `Cargo.lock` (434 crates) and `package-lock.json`, with GitHub Actions workflows configured for hosted Linux runners and SHA-pinned actions.
+
+### Implemented on pending integration PR #12 (Step 018)
+
+The following capabilities are implemented in pending draft [PR #12](https://github.com/MousaXD/Slopity/pull/12) (`integration/workload-foundation`) and will be integrated following public release hardening:
+- `ServerOrchestrator` authoritative lifecycle management
+- Runtime state observation and host telemetry integration
+- Resource accounting state and dashboard capacity gauges
+- Profile interrupted-write recovery and automatic backup restoration
+- Schema migration infrastructure
+- Android foreground service lifecycle status and notification permission handling
 
 ### What is NOT yet bundled or runnable
 
@@ -32,9 +42,9 @@ Slopity does **not** currently bundle Java, Node.js, Python, PHP, Minecraft (Pap
 
 | Platform | Build Status | Runtime Status | Notes |
 | -------- | ------------ | -------------- | ----- |
-| **Linux (x86_64)** | Compiles & CI Tested | Operational (Built-in HTTP & Process) | Tauri desktop app, `.deb`, and AppImage |
-| **Android (ARM64)** | Compiles & CI Tested | In Progress (Foreground Bridge) | Compiles debug APK/AAB; physical-device durability testing pending |
-| **Windows (x64)** | Architectural Target | Deferred | CI and packaging paused until core features mature |
+| **Linux (x86_64)** | Compiles locally & workflow configured | Operational (Built-in HTTP & Process adapter) | Tauri desktop app, `.deb`, and AppImage |
+| **Android (ARM64)** | Compiles locally & workflow configured | In Progress (Foreground bridge) | Compiles debug APK/AAB; physical-device durability testing pending |
+| **Windows (x64)** | Architectural target | Deferred | CI and packaging paused until core features mature |
 
 ## Architecture
 

@@ -13,13 +13,13 @@ Slopity is released as a **source-available** project under the [PolyForm Noncom
 
 ### Code Contributions
 
-Because the repository owner maintains commercial dual-licensing rights, direct code contributions from third parties cannot be merged without an explicit contributor agreement assigning or licensing full commercial rights to the maintainer.
+External code contributions must not be merged until an appropriate contributor agreement or licensing mechanism is established and accepted. Please do not assume or imply that opening a pull request transfers or assigns copyright.
 
 We warmly welcome:
-- Bug reports and reproduction steps
-- Architecture and security feedback
-- Documentation clarifications
-- Feature requests and use case discussions
+- Bug reports and minimal reproduction steps
+- Architecture, performance, and security feedback
+- Documentation clarifications and typos
+- Feature requests and operational use case discussions
 
 ## Development Workflow
 
