@@ -2,6 +2,63 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 023: harden runtime admission and lifecycle semantics
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Scope
+
+1. Add a platform-neutral start-admission decision in `slopity-core` that combines profile validation, enabled state, verified runtime availability, aggregate port reservations, safe memory budget, immediate memory headroom, and existing CPU-headroom warnings before a runtime adapter can start.
+2. Require an admission permit at the `ServerOrchestrator` start boundary so callers cannot accidentally bypass hard safety checks, while keeping runtime adapters responsible for their own last-mile bind/process errors.
+3. Harden lifecycle semantics for startup, stop failures, runtime observations, unexpected terminal exits, event ordering, terminal evidence, and drop-time cleanup without hiding a potentially live runtime behind a false terminal state.
+4. Add bounded structured unexpected-failure evidence suitable for future retry/backoff policy, with no automatic restart behavior in this step.
+5. Define a versioned desired-state persistence contract and recovery design without persisting process IDs or treating stale observed state as authoritative; defer on-disk lifecycle restore until restart policy is explicitly designed.
+6. Strengthen the built-in HTTP reference-runtime tests for disabled profiles, loopback/LAN binding, request counting, immediate port reuse, unexpected thread exit, event order, and admission rejection before adapter start.
+7. Enforce admission at the Tauri start command and return structured rejection data so frontend code renders backend policy instead of recreating it.
+
+### Non-goals
+
+- Implementing or downloading Java/JVM, Minecraft, Jellyfin, Node.js, Python, PHP, native packages, scripts, or any general arbitrary executable runtime.
+- Registering or exposing `slopity-runtime-local` through Tauri or the frontend.
+- Adding shell command strings, `sh -c`, PowerShell command strings, or `cmd /C`.
+- Automatically restarting failed servers or introducing retry/backoff timing policy.
+- Persisting observed runtime state or process IDs as proof that a process survived an application restart.
+- Owning the concurrent CI/release repair work; this branch will consume Agent 1's fixes later if they become available without overwriting them.
+
+### Risks
+
+- Missing mandatory memory telemetry already causes the conservative resource model to fail closed; start-time enforcement will make that existing policy operational rather than advisory.
+- A synchronous adapter that reports an active state after `stop` may still own live resources. The orchestrator must preserve that active observation so later cleanup can retry instead of masking it as terminal failure.
+- Existing GitHub Actions currently fail during Rust toolchain setup before repository checks run. Remote validation must remain truthful until the CI foundation branch repairs that failure.
+- The frontend currently expects string errors from the start command; structured admission rejection is an intentional API change that GUI work must consume.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/admission.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/orchestrator.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `docs/adr/0002-runtime-intent-recovery.md`
+- runtime/core documentation only if factual behavior changes require it
+
+### Acceptance checks
+
+```bash
+cargo fmt --all -- --check
+cargo test --workspace --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo metadata --locked --format-version 1
+cd apps/slopity && npm ci && npm run tauri:check
+cd apps/slopity && npm run android:init -- --ci
+cd apps/slopity && npm run android:build -- --debug --target aarch64
+```
+
+GitHub Actions remains the authoritative remote proof. Exact run/job conclusions and any infrastructure blockage will be recorded before this step is closed.
+
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
 **Status:** DONE  
@@ -356,7 +413,7 @@ Prepare Slopity for a high-quality public source-available release:
 4. Dependency Security: Add `.github/dependabot.yml` covering cargo, npm, and github-actions, add a security/audit workflow with `cargo-audit`, `actions/dependency-review-action`, and `npm audit`.
 5. Secret and History Hygiene: Audit Git history and codebase for secrets and credentials.
 6. Profile-ID Hardening: Implement strict identifier validation grammar `[A-Za-z0-9._-]{1,128}` in `slopity-core` to prevent control-character injection, interior NUL panics in thread naming, directory traversal, and malformed identifiers. Add regression tests covering edge cases.
-7. Security Policy: Expand and harden `SECURITY.md` with supported versions, pre-release boundaries, responsible disclosure instructions, and testing rules.
+7. Security Policy: Expand and harden `SECURITY.md` with supported versions table, pre-release disclaimer, responsible disclosure instructions, and testing rules.
 8. Contributing Guidelines: Update `CONTRIBUTING.md` with clear licensing and external contribution terms, testing commands, and PR guidelines.
 9. Documentation & Hygiene: Refresh `README.md`, `TASK.md`, and `docs/releases.md` to accurately represent current functionality, pre-production status, and source-available licensing.
 
@@ -374,7 +431,7 @@ Prepare Slopity for a high-quality public source-available release:
 2. Cargo workspace package metadata (`license = "PolyForm-Noncommercial-1.0.0"`, `license-file = "LICENSE.md"`) and frontend `package.json` updated with matching license identifier.
 3. Locked dependency manifests committed (`Cargo.lock` with 434 crates, `apps/slopity/package-lock.json`).
 4. CI (`.github/workflows/ci.yml`) and Release (`.github/workflows/release.yml`) migrated from self-hosted runners to GitHub-hosted `ubuntu-latest` runners with automated Tauri Linux prerequisite installation and locked builds (`--locked`, `npm ci`).
-5. All third-party GitHub Actions pinned to immutable full commit SHAs with version annotations across all workflows.
+5. All third-party GitHub Actions pinned to immutable full commit SHAs with version comments across all workflows.
 6. Dependabot configuration in `.github/dependabot.yml` monitoring Cargo, npm, and GitHub Actions dependencies weekly.
 7. Security audit workflow in `.github/workflows/audit.yml` running `cargo-audit`, `dependency-review-action`, and `npm audit`.
 8. Git history and commit trees audited for credentials/secrets across all 78 commits with 0 secret leaks found.
