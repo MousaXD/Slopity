@@ -25,14 +25,18 @@ jobs:
   cargo-audit:
     name: Cargo vulnerability audit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Run cargo audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+      - name: Install Rust 1.89.0
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: 1.89.0
+      - name: Install pinned cargo-audit from its locked dependency graph
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit Cargo.lock
+        run: cargo audit
 
   dependency-review:
     name: Dependency review
