@@ -1,7 +1,8 @@
 use slopity_core::{
-    DesiredServerState, NetworkScope, RuntimeAdapter, RuntimeAvailability, RuntimeError,
-    RuntimeExitReason, RuntimeHandle, RuntimeIdentity, RuntimeKind, RuntimeObservation,
-    RuntimeRequest, ServerId, ServerOrchestrator, ServerProfile, ServerState,
+    authorize_start, CapabilitySnapshot, DesiredServerState, NetworkScope, RuntimeAdapter,
+    RuntimeAvailability, RuntimeError, RuntimeExitReason, RuntimeHandle, RuntimeIdentity,
+    RuntimeKind, RuntimeObservation, RuntimeRequest, ServerId, ServerOrchestrator, ServerProfile,
+    ServerState, StartAdmissionPermit,
 };
 use std::collections::HashSet;
 
@@ -138,6 +139,27 @@ fn profile(id: impl Into<String>, port: u16) -> ServerProfile {
     }
 }
 
+fn permit(profile: &ServerProfile) -> StartAdmissionPermit {
+    authorize_start(
+        &CapabilitySnapshot {
+            platform: "linux".into(),
+            architecture: "x86_64".into(),
+            logical_cpus: 8,
+            total_memory_mib: Some(8_192),
+            available_memory_mib: Some(6_000),
+        },
+        std::slice::from_ref(profile),
+        &[],
+        profile,
+        &RuntimeAvailability {
+            available: true,
+            runtime: RuntimeKind::BuiltInHttp,
+            reason: "test adapter".into(),
+        },
+    )
+    .expect("fixture profile should pass admission")
+}
+
 #[test]
 fn terminal_exit_observation_preserves_desired_state_and_exit_reason() {
     let mut orchestrator = ServerOrchestrator::default();
@@ -146,7 +168,9 @@ fn terminal_exit_observation_preserves_desired_state_and_exit_reason() {
         .expect("adapter should register");
     let server = profile("completed", 31_000);
 
-    let started = orchestrator.start(&server).expect("runtime should start");
+    let started = orchestrator
+        .start(&server, permit(&server))
+        .expect("runtime should start");
     assert_eq!(started.state, ServerState::Running);
 
     let observed = orchestrator
@@ -168,7 +192,9 @@ fn runtime_event_retention_is_bounded_and_sequence_order_is_deterministic() {
 
     for index in 0_u16..70 {
         let server = profile(format!("server-{index:03}"), 32_000 + index);
-        orchestrator.start(&server).expect("runtime should start");
+        orchestrator
+            .start(&server, permit(&server))
+            .expect("runtime should start");
         orchestrator.stop(&server.id).expect("runtime should stop");
     }
 

@@ -2,10 +2,11 @@
 
 use serde::Serialize;
 use slopity_core::{
-    sample_profiles, CapabilitySnapshot, ProfileRecoveryNotice, ProfileStore, ResourceAccounting,
-    ResourceAccountingSnapshot, ResourcePlan, ResourcePlanner, RuntimeAvailability, RuntimeKind,
-    ServerId, ServerOrchestrator, ServerProfile, ServerRuntimeSnapshot, ServerState,
-    ValidationIssue, PROFILE_SCHEMA_VERSION,
+    authorize_start, sample_profiles, CapabilitySnapshot, ProfileRecoveryNotice, ProfileStore,
+    ResourceAccounting, ResourceAccountingSnapshot, ResourcePlan, ResourcePlanner,
+    RuntimeAvailability, RuntimeFailureEvidence, RuntimeKind, ServerId, ServerOrchestrator,
+    ServerProfile, ServerRuntimeSnapshot, ServerState, StartAdmissionRejection, ValidationIssue,
+    PROFILE_SCHEMA_VERSION,
 };
 use slopity_runtime_http::HttpServerManager;
 use std::sync::Mutex;
@@ -31,9 +32,39 @@ struct DashboardSnapshot {
     profiles: Vec<ServerProfile>,
     profile_recovery_notices: Vec<ProfileRecoveryNotice>,
     servers: Vec<ServerRuntimeSnapshot>,
+    runtime_failures: Vec<RuntimeFailureEvidence>,
     profile_schema_version: u32,
     resource_plan: ResourcePlan,
     resource_accounting: ResourceAccountingSnapshot,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum StartServerCommandError {
+    Admission { rejection: StartAdmissionRejection },
+    Runtime { message: String },
+    HostService { message: String },
+    Internal { message: String },
+}
+
+impl StartServerCommandError {
+    fn internal(message: impl Into<String>) -> Self {
+        Self::Internal {
+            message: message.into(),
+        }
+    }
+
+    fn runtime(message: impl Into<String>) -> Self {
+        Self::Runtime {
+            message: message.into(),
+        }
+    }
+
+    fn host_service(message: impl Into<String>) -> Self {
+        Self::HostService {
+            message: message.into(),
+        }
+    }
 }
 
 #[tauri::command]
@@ -42,28 +73,15 @@ fn dashboard_snapshot(
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<DashboardSnapshot, String> {
-    let device_telemetry = app.slopity_host_telemetry().unwrap_or_else(|error| {
-        HostDeviceTelemetry::unavailable(
-            std::env::consts::OS,
-            format!("host telemetry unavailable: {error}"),
-        )
-    });
-    let capability = CapabilitySnapshot {
-        platform: std::env::consts::OS.into(),
-        architecture: std::env::consts::ARCH.into(),
-        logical_cpus: std::thread::available_parallelism()
-            .map(std::num::NonZeroUsize::get)
-            .unwrap_or(0),
-        total_memory_mib: device_telemetry.total_memory_mib,
-        available_memory_mib: device_telemetry.available_memory_mib,
-    };
+    let device_telemetry = read_device_telemetry(&app);
+    let capability = capability_snapshot(&device_telemetry);
     let (profiles, profile_recovery_notices) = {
         let store = store
             .lock()
             .map_err(|_| "profile store lock is poisoned".to_string())?;
         (store.profiles().to_vec(), store.recovery_notices().to_vec())
     };
-    let (server_snapshots, active_count, runtimes) = {
+    let (server_snapshots, runtime_failures, active_count, runtimes) = {
         let mut orchestrator = orchestrator
             .lock()
             .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
@@ -73,7 +91,8 @@ fn dashboard_snapshot(
             .filter(|server| is_active_state(server.state))
             .count();
         let runtimes = runtime_catalog(&orchestrator);
-        (server_snapshots, active_count, runtimes)
+        let runtime_failures = orchestrator.failures();
+        (server_snapshots, runtime_failures, active_count, runtimes)
     };
     let active_server_ids = server_snapshots
         .iter()
@@ -97,6 +116,7 @@ fn dashboard_snapshot(
         profiles,
         profile_recovery_notices,
         servers: server_snapshots,
+        runtime_failures,
         profile_schema_version: PROFILE_SCHEMA_VERSION,
         resource_plan,
         resource_accounting,
@@ -230,48 +250,71 @@ fn start_builtin_http_server(
     id: ServerId,
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
-) -> Result<ServerRuntimeSnapshot, String> {
-    let profile = store
-        .lock()
-        .map_err(|_| "profile store lock is poisoned".to_string())?
-        .profile(&id)
-        .cloned()
-        .ok_or_else(|| format!("profile not found: {}", id.0))?;
+) -> Result<ServerRuntimeSnapshot, StartServerCommandError> {
+    let (profile, profiles) = {
+        let store = store
+            .lock()
+            .map_err(|_| StartServerCommandError::internal("profile store lock is poisoned"))?;
+        let profile = store.profile(&id).cloned().ok_or_else(|| {
+            StartServerCommandError::runtime(format!("profile not found: {}", id.0))
+        })?;
+        (profile, store.profiles().to_vec())
+    };
     if profile.runtime != RuntimeKind::BuiltInHttp {
-        return Err("the built-in HTTP command cannot start another runtime kind".into());
+        return Err(StartServerCommandError::runtime(
+            "the built-in HTTP command cannot start another runtime kind",
+        ));
     }
 
+    let device_telemetry = read_device_telemetry(&app);
+    let capability = capability_snapshot(&device_telemetry);
     let (snapshot, active_count) = {
-        let mut orchestrator = orchestrator
-            .lock()
-            .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
+        let mut orchestrator = orchestrator.lock().map_err(|_| {
+            StartServerCommandError::internal("server orchestrator lock is poisoned")
+        })?;
+        let existing = orchestrator.snapshots();
+        let active_server_ids = existing
+            .iter()
+            .filter(|server| is_active_state(server.state))
+            .map(|server| server.server_id.clone())
+            .collect::<Vec<_>>();
+        let availability = orchestrator.runtime_availability(profile.runtime);
+        let permit = authorize_start(
+            &capability,
+            &profiles,
+            &active_server_ids,
+            &profile,
+            &availability,
+        )
+        .map_err(|rejection| StartServerCommandError::Admission { rejection })?;
         let snapshot = orchestrator
-            .start(&profile)
-            .map_err(|error| error.to_string())?;
+            .start(&profile, permit)
+            .map_err(|error| StartServerCommandError::runtime(error.to_string()))?;
         let active_count = orchestrator.active_count();
         (snapshot, active_count)
     };
 
     if active_count == 0 {
-        app.slopity_host_stop()?;
+        app.slopity_host_stop()
+            .map_err(StartServerCommandError::host_service)?;
         return Ok(snapshot);
     }
 
     let label = hosting_label(Some(&profile.name), active_count);
     if let Err(error) = app.slopity_host_start(label, host_count(active_count)) {
         let remaining_active = {
-            let mut orchestrator = orchestrator
-                .lock()
-                .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
+            let mut orchestrator = orchestrator.lock().map_err(|_| {
+                StartServerCommandError::internal("server orchestrator lock is poisoned")
+            })?;
             let _ = orchestrator.stop(&id);
             orchestrator.active_count()
         };
         if remaining_active == 0 {
             let _ = app.slopity_host_stop();
         }
-        return Err(format!(
+        return Err(StartServerCommandError::host_service(format!(
             "server runtime was rolled back because the host service failed: {error}"
-        ));
+        )));
     }
 
     Ok(snapshot)
@@ -297,6 +340,27 @@ fn stop_builtin_http_server(
         app.slopity_host_start(hosting_label(None, active_count), host_count(active_count))?;
     }
     Ok(snapshot)
+}
+
+fn read_device_telemetry(app: &tauri::AppHandle) -> HostDeviceTelemetry {
+    app.slopity_host_telemetry().unwrap_or_else(|error| {
+        HostDeviceTelemetry::unavailable(
+            std::env::consts::OS,
+            format!("host telemetry unavailable: {error}"),
+        )
+    })
+}
+
+fn capability_snapshot(device_telemetry: &HostDeviceTelemetry) -> CapabilitySnapshot {
+    CapabilitySnapshot {
+        platform: std::env::consts::OS.into(),
+        architecture: std::env::consts::ARCH.into(),
+        logical_cpus: std::thread::available_parallelism()
+            .map(std::num::NonZeroUsize::get)
+            .unwrap_or(0),
+        total_memory_mib: device_telemetry.total_memory_mib,
+        available_memory_mib: device_telemetry.available_memory_mib,
+    }
 }
 
 fn hosting_label(profile_name: Option<&str>, active_count: usize) -> String {
