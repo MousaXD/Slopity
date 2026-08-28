@@ -54,6 +54,30 @@ export function profileLifecycle(profile, snapshot = {}) {
   };
 }
 
+export function commandErrorMessage(error) {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message || String(error);
+  if (!error || typeof error !== 'object') return String(error ?? 'Unknown backend error.');
+
+  if (error.kind === 'admission' && error.rejection) {
+    const reasons = Array.isArray(error.rejection.reasons) ? error.rejection.reasons : [];
+    const messages = reasons
+      .map((reason) => String(reason?.message ?? '').trim())
+      .filter(Boolean);
+    if (messages.length) return `Start blocked: ${messages.join(' ')}`;
+    return 'Start blocked by backend admission policy.';
+  }
+
+  if (typeof error.message === 'string' && error.message.trim()) return error.message.trim();
+
+  try {
+    const serialized = JSON.stringify(error);
+    return serialized && serialized !== '{}' ? serialized : 'Unknown backend error.';
+  } catch {
+    return 'Unknown backend error.';
+  }
+}
+
 export function titleCase(value) {
   return String(value ?? '')
     .replaceAll('-', ' ')

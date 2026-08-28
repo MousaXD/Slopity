@@ -6,7 +6,7 @@ import { createProfileEditor } from './views/profile-editor.js';
 import { renderServerDetails } from './views/server-details.js';
 import { closeDialog, createConfirmController, showDialog } from './views/dialogs.js';
 import { clientValidateProfile, cloneIdentity, emptyDraft, nextAvailablePort, nextProfileId, profileToDraft } from './domain/profile.js';
-import { availabilityFor, isActiveState, profileLifecycle } from './domain/runtime.js';
+import { availabilityFor, commandErrorMessage, isActiveState, profileLifecycle } from './domain/runtime.js';
 
 const api = createSlopityApi();
 const store = createStore();
@@ -117,7 +117,7 @@ async function withMutation(action, successMessage) {
     return true;
   } catch (error) {
     store.set({ busy: false });
-    setNotice(String(error), 'error');
+    setNotice(commandErrorMessage(error), 'error');
     refreshOpenDetails();
     return false;
   }

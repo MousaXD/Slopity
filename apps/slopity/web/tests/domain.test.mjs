@@ -9,7 +9,7 @@ import {
   nextProfileId,
   profileToDraft,
 } from '../domain/profile.js';
-import { profileLifecycle } from '../domain/runtime.js';
+import { commandErrorMessage, profileLifecycle } from '../domain/runtime.js';
 import { collectResourceWarnings, deviceTelemetryRows, recoveryMessages } from '../domain/resources.js';
 
 const readyRuntime = { runtime: 'built-in-http', available: true, reason: 'Registered.' };
@@ -102,6 +102,28 @@ test('active runtime state exposes stop and desired state', () => {
   assert.equal(lifecycle.canStop, true);
   assert.equal(lifecycle.state, 'running');
   assert.equal(lifecycle.server.desiredState, 'running');
+});
+
+test('structured admission errors become actionable UI text', () => {
+  const message = commandErrorMessage({
+    kind: 'admission',
+    rejection: {
+      reasons: [
+        { code: 'port-conflict', message: 'Port 8080 is already reserved by api.' },
+        { code: 'resource-allocation-unsafe', message: 'Immediate memory headroom cannot be proven.' },
+      ],
+    },
+  });
+  assert.equal(
+    message,
+    'Start blocked: Port 8080 is already reserved by api. Immediate memory headroom cannot be proven.',
+  );
+  assert.doesNotMatch(message, /\[object Object\]/);
+});
+
+test('structured runtime and ordinary Error failures preserve their messages', () => {
+  assert.equal(commandErrorMessage({ kind: 'runtime', message: 'bind failed' }), 'bind failed');
+  assert.equal(commandErrorMessage(new Error('bridge failed')), 'bridge failed');
 });
 
 test('resource warnings are deduplicated across plan and accounting', () => {
