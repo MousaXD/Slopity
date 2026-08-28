@@ -251,9 +251,10 @@ mod tests {
             &available(),
         )
         .expect_err("unknown memory budget must fail closed");
-        assert!(rejection.reasons.iter().any(|reason| {
-            reason.code == StartAdmissionReasonCode::ResourceAllocationUnsafe
-        }));
+        assert!(rejection
+            .reasons
+            .iter()
+            .any(|reason| { reason.code == StartAdmissionReasonCode::ResourceAllocationUnsafe }));
         assert!(rejection
             .warnings
             .iter()

@@ -708,7 +708,10 @@ mod tests {
         let mut manager = HttpServerManager::default();
         let started = manager.start(&candidate).expect("LAN server should start");
         assert!(started.bind_address.starts_with("0.0.0.0:"));
-        assert!(started.urls.iter().any(|url| url == &format!("http://127.0.0.1:{port}")));
+        assert!(started
+            .urls
+            .iter()
+            .any(|url| url == &format!("http://127.0.0.1:{port}")));
         manager.stop_all();
     }
 

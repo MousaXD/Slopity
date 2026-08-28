@@ -255,10 +255,9 @@ fn start_builtin_http_server(
         let store = store
             .lock()
             .map_err(|_| StartServerCommandError::internal("profile store lock is poisoned"))?;
-        let profile = store
-            .profile(&id)
-            .cloned()
-            .ok_or_else(|| StartServerCommandError::runtime(format!("profile not found: {}", id.0)))?;
+        let profile = store.profile(&id).cloned().ok_or_else(|| {
+            StartServerCommandError::runtime(format!("profile not found: {}", id.0))
+        })?;
         (profile, store.profiles().to_vec())
     };
     if profile.runtime != RuntimeKind::BuiltInHttp {
@@ -270,9 +269,9 @@ fn start_builtin_http_server(
     let device_telemetry = read_device_telemetry(&app);
     let capability = capability_snapshot(&device_telemetry);
     let (snapshot, active_count) = {
-        let mut orchestrator = orchestrator
-            .lock()
-            .map_err(|_| StartServerCommandError::internal("server orchestrator lock is poisoned"))?;
+        let mut orchestrator = orchestrator.lock().map_err(|_| {
+            StartServerCommandError::internal("server orchestrator lock is poisoned")
+        })?;
         let existing = orchestrator.snapshots();
         let active_server_ids = existing
             .iter()

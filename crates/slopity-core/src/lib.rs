@@ -19,8 +19,8 @@ pub use capability::{
 };
 pub use model::{sample_profiles, NetworkScope, RuntimeKind, ServerId, ServerProfile, ServerState};
 pub use orchestrator::{
-    DesiredServerState, ObservedServerState, RuntimeEvent, RuntimeEventKind, RuntimeFailureEvidence,
-    ServerOrchestrator, ServerRuntimeSnapshot,
+    DesiredServerState, ObservedServerState, RuntimeEvent, RuntimeEventKind,
+    RuntimeFailureEvidence, ServerOrchestrator, ServerRuntimeSnapshot,
 };
 pub use profile_store::{
     ProfileDocument, ProfileRecoveryNotice, ProfileStore, ProfileStoreError, PROFILE_SCHEMA_VERSION,
