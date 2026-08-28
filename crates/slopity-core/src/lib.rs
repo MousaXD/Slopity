@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod admission;
 mod capability;
 mod model;
 mod orchestrator;
@@ -7,6 +8,10 @@ mod profile_store;
 mod runtime;
 mod validation;
 
+pub use admission::{
+    authorize_start, StartAdmissionPermit, StartAdmissionReason, StartAdmissionReasonCode,
+    StartAdmissionRejection,
+};
 pub use capability::{
     AllocationDecision, CapabilitySnapshot, PortReservation, ResourceAccounting,
     ResourceAccountingSnapshot, ResourcePlan, ResourcePlanner, ResourceWarning,
@@ -14,8 +19,8 @@ pub use capability::{
 };
 pub use model::{sample_profiles, NetworkScope, RuntimeKind, ServerId, ServerProfile, ServerState};
 pub use orchestrator::{
-    DesiredServerState, ObservedServerState, RuntimeEvent, RuntimeEventKind, ServerOrchestrator,
-    ServerRuntimeSnapshot,
+    DesiredServerState, ObservedServerState, RuntimeEvent, RuntimeEventKind, RuntimeFailureEvidence,
+    ServerOrchestrator, ServerRuntimeSnapshot,
 };
 pub use profile_store::{
     ProfileDocument, ProfileRecoveryNotice, ProfileStore, ProfileStoreError, PROFILE_SCHEMA_VERSION,

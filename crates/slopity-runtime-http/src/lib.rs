@@ -577,7 +577,10 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use slopity_core::{DesiredServerState, ServerOrchestrator};
+    use slopity_core::{
+        authorize_start, CapabilitySnapshot, DesiredServerState, ServerOrchestrator,
+        StartAdmissionPermit,
+    };
 
     fn free_port() -> u16 {
         TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
@@ -603,6 +606,27 @@ mod tests {
 
     fn profile(port: u16) -> ServerProfile {
         profile_with_id("http-test", port)
+    }
+
+    fn permit(profile: &ServerProfile) -> StartAdmissionPermit {
+        authorize_start(
+            &CapabilitySnapshot {
+                platform: "linux".into(),
+                architecture: "x86_64".into(),
+                logical_cpus: 8,
+                total_memory_mib: Some(8_192),
+                available_memory_mib: Some(6_000),
+            },
+            std::slice::from_ref(profile),
+            &[],
+            profile,
+            &RuntimeAvailability {
+                available: true,
+                runtime: RuntimeKind::BuiltInHttp,
+                reason: "test adapter".into(),
+            },
+        )
+        .expect("test profile should receive admission")
     }
 
     fn orchestrator() -> ServerOrchestrator {
@@ -631,7 +655,7 @@ mod tests {
     }
 
     #[test]
-    fn start_serve_and_stop_release_the_port() {
+    fn start_serve_count_and_stop_release_the_port() {
         let port = free_port();
         let mut manager = HttpServerManager::default();
         let started = manager.start(&profile(port)).expect("server should start");
@@ -640,6 +664,21 @@ mod tests {
         let response = get_with_retry(port);
         assert!(response.contains("200 OK"));
         assert!(response.contains("built-in-http"));
+        for _ in 0..20 {
+            if manager
+                .snapshot(&ServerId("http-test".into()))
+                .is_some_and(|snapshot| snapshot.request_count >= 1)
+            {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            manager
+                .snapshot(&ServerId("http-test".into()))
+                .map(|snapshot| snapshot.request_count),
+            Some(1)
+        );
 
         let stopped = manager
             .stop(&ServerId("http-test".into()))
@@ -650,13 +689,37 @@ mod tests {
     }
 
     #[test]
+    fn disabled_profile_is_rejected() {
+        let port = free_port();
+        let mut candidate = profile(port);
+        candidate.enabled = false;
+        let mut manager = HttpServerManager::default();
+        assert!(matches!(
+            manager.start(&candidate),
+            Err(HttpServerError::Disabled(_))
+        ));
+    }
+
+    #[test]
+    fn lan_binding_listens_on_unspecified_ipv4_and_keeps_loopback_url() {
+        let port = free_port();
+        let mut candidate = profile(port);
+        candidate.network_scope = NetworkScope::Lan;
+        let mut manager = HttpServerManager::default();
+        let started = manager.start(&candidate).expect("LAN server should start");
+        assert!(started.bind_address.starts_with("0.0.0.0:"));
+        assert!(started.urls.iter().any(|url| url == &format!("http://127.0.0.1:{port}")));
+        manager.stop_all();
+    }
+
+    #[test]
     fn duplicate_start_is_rejected() {
         let port = free_port();
         let mut manager = HttpServerManager::default();
-        let profile = profile(port);
-        manager.start(&profile).expect("server should start");
+        let candidate = profile(port);
+        manager.start(&candidate).expect("server should start");
         assert!(matches!(
-            manager.start(&profile),
+            manager.start(&candidate),
             Err(HttpServerError::AlreadyRunning(_))
         ));
         manager.stop_all();
@@ -701,9 +764,10 @@ mod tests {
     fn orchestrator_starts_serves_stops_and_keeps_terminal_snapshot() {
         let port = free_port();
         let server_id = ServerId("orchestrated".into());
+        let candidate = profile_with_id(&server_id.0, port);
         let mut orchestrator = orchestrator();
         let started = orchestrator
-            .start(&profile_with_id(&server_id.0, port))
+            .start(&candidate, permit(&candidate))
             .expect("orchestrated HTTP server should start");
         assert_eq!(started.state, ServerState::Running);
         assert_eq!(started.desired_state, DesiredServerState::Running);
@@ -729,14 +793,14 @@ mod tests {
     #[test]
     fn orchestrator_rejects_duplicate_start_and_non_running_stop() {
         let port = free_port();
-        let profile = profile_with_id("duplicate", port);
-        let server_id = profile.id.clone();
+        let candidate = profile_with_id("duplicate", port);
+        let server_id = candidate.id.clone();
         let mut orchestrator = orchestrator();
         orchestrator
-            .start(&profile)
+            .start(&candidate, permit(&candidate))
             .expect("server should initially start");
         assert!(matches!(
-            orchestrator.start(&profile),
+            orchestrator.start(&candidate, permit(&candidate)),
             Err(RuntimeError::AlreadyRunning(_))
         ));
         orchestrator.stop(&server_id).expect("server should stop");
@@ -757,10 +821,10 @@ mod tests {
         let second = profile_with_id("second", second_port);
         let mut orchestrator = orchestrator();
         orchestrator
-            .start(&first)
+            .start(&first, permit(&first))
             .expect("first HTTP server should start");
         orchestrator
-            .start(&second)
+            .start(&second, permit(&second))
             .expect("second HTTP server should start");
         assert_eq!(orchestrator.active_count(), 2);
         assert!(get_with_retry(first_port).contains("200 OK"));
@@ -778,21 +842,21 @@ mod tests {
     }
 
     #[test]
-    fn orchestrator_records_http_start_failure_as_failed_state() {
+    fn last_mile_os_port_race_remains_a_runtime_error_after_admission() {
         let occupied =
             TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("fixture port should bind");
         let port = occupied
             .local_addr()
             .expect("fixture address should be available")
             .port();
-        let profile = profile_with_id("failed", port);
+        let candidate = profile_with_id("failed", port);
         let mut orchestrator = orchestrator();
         assert!(matches!(
-            orchestrator.start(&profile),
+            orchestrator.start(&candidate, permit(&candidate)),
             Err(RuntimeError::Process(_))
         ));
         let failed = orchestrator
-            .snapshot(&profile.id)
+            .snapshot(&candidate.id)
             .expect("failed state should remain queryable");
         assert_eq!(failed.state, ServerState::Failed);
         assert!(failed.last_error.is_some());

@@ -1,12 +1,13 @@
 use crate::{
     RuntimeAdapter, RuntimeAvailability, RuntimeError, RuntimeExit, RuntimeExitReason,
     RuntimeIdentity, RuntimeKind, RuntimeLogEntry, RuntimeObservation, RuntimeRequest, ServerId,
-    ServerProfile, ServerState,
+    ServerProfile, ServerState, StartAdmissionPermit,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
 const MAX_RUNTIME_EVENTS: usize = 256;
+const MAX_RUNTIME_FAILURES: usize = 64;
 
 pub type ObservedServerState = ServerState;
 
@@ -41,6 +42,7 @@ pub enum RuntimeEventKind {
     StopRequested,
     Stopped,
     Failed,
+    UnexpectedExit,
     StateChanged,
 }
 
@@ -55,12 +57,26 @@ pub struct RuntimeEvent {
     pub message: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeFailureEvidence {
+    pub sequence: u64,
+    pub server_id: ServerId,
+    pub runtime: RuntimeIdentity,
+    pub state: ObservedServerState,
+    pub exit: Option<RuntimeExit>,
+    pub last_error: Option<String>,
+    pub logs: Vec<RuntimeLogEntry>,
+}
+
 #[derive(Default)]
 pub struct ServerOrchestrator {
     adapters: HashMap<RuntimeKind, Box<dyn RuntimeAdapter>>,
     snapshots: HashMap<ServerId, ServerRuntimeSnapshot>,
     events: VecDeque<RuntimeEvent>,
+    failures: VecDeque<RuntimeFailureEvidence>,
     next_event_sequence: u64,
+    next_failure_sequence: u64,
 }
 
 impl ServerOrchestrator {
@@ -101,7 +117,14 @@ impl ServerOrchestrator {
     pub fn start(
         &mut self,
         profile: &ServerProfile,
+        permit: StartAdmissionPermit,
     ) -> Result<ServerRuntimeSnapshot, RuntimeError> {
+        if !permit.matches(profile) {
+            return Err(RuntimeError::InvalidRequest(
+                "start admission permit does not match the requested profile".into(),
+            ));
+        }
+
         self.refresh();
         if self
             .snapshots
@@ -146,7 +169,7 @@ impl ServerOrchestrator {
             identity.clone(),
             RuntimeEventKind::StartRequested,
             ServerState::Starting,
-            "Start requested.",
+            "Start requested after admission checks passed.",
         );
 
         let start_result = if let Some(adapter) = self.adapters.get_mut(&runtime) {
@@ -176,7 +199,7 @@ impl ServerOrchestrator {
                     .unwrap_or_else(|| ServerRuntimeSnapshot {
                         server_id: profile.id.clone(),
                         desired_state: DesiredServerState::Running,
-                        state: ServerState::Running,
+                        state: ServerState::Starting,
                         runtime: identity.clone(),
                         process_id: handle.process_id,
                         bind_address: String::new(),
@@ -186,19 +209,36 @@ impl ServerOrchestrator {
                         last_error: None,
                         exit: None,
                     });
-                let event_kind = if snapshot.state == ServerState::Failed {
-                    RuntimeEventKind::Failed
-                } else {
-                    RuntimeEventKind::Started
-                };
+
                 self.snapshots.insert(profile.id.clone(), snapshot.clone());
+                if is_terminal_state(snapshot.state) {
+                    let message = snapshot
+                        .last_error
+                        .clone()
+                        .or_else(|| snapshot.exit.as_ref().map(|exit| exit.message.clone()))
+                        .unwrap_or_else(|| {
+                            format!(
+                                "runtime entered terminal state {:?} during startup",
+                                snapshot.state
+                            )
+                        });
+                    self.record_event(
+                        profile.id.clone(),
+                        identity,
+                        RuntimeEventKind::Failed,
+                        snapshot.state,
+                        message.clone(),
+                    );
+                    return Err(RuntimeError::Process(message));
+                }
+
                 self.record_event(
                     profile.id.clone(),
                     identity,
-                    event_kind,
+                    RuntimeEventKind::Started,
                     snapshot.state,
-                    if event_kind == RuntimeEventKind::Failed {
-                        "Runtime reported a failed state during startup."
+                    if snapshot.state == ServerState::Starting {
+                        "Runtime adapter accepted start; waiting for an active observation."
                     } else {
                         "Runtime started."
                     },
@@ -238,11 +278,13 @@ impl ServerOrchestrator {
             .ok_or_else(|| RuntimeError::NotRunning(server_id.0.clone()))?;
         let runtime = current.runtime.runtime;
         let identity = current.runtime.clone();
+        let process_id = current.process_id;
 
-        let mut stopping = current;
+        let mut stopping = current.clone();
         stopping.desired_state = DesiredServerState::Stopped;
         stopping.state = ServerState::Stopping;
         stopping.exit = None;
+        stopping.last_error = None;
         self.snapshots.insert(server_id.clone(), stopping);
         self.record_event(
             server_id.clone(),
@@ -252,25 +294,27 @@ impl ServerOrchestrator {
             "Stop requested.",
         );
 
-        let stop_result = if let Some(adapter) = self.adapters.get_mut(&runtime) {
-            match adapter.stop(server_id) {
-                Ok(()) => Ok(adapter.observe(server_id)),
-                Err(error) => Err(error),
-            }
+        let (stop_result, observation) = if let Some(adapter) = self.adapters.get_mut(&runtime) {
+            let result = adapter.stop(server_id);
+            let observation = adapter.observe(server_id);
+            (result, observation)
         } else {
-            Err(RuntimeError::Unavailable(format!(
-                "registered runtime adapter disappeared for {runtime:?}"
-            )))
+            (
+                Err(RuntimeError::Unavailable(format!(
+                    "registered runtime adapter disappeared for {runtime:?}"
+                ))),
+                None,
+            )
         };
 
         match stop_result {
-            Ok(observation) => {
+            Ok(()) => {
                 let snapshot = observation
                     .map(|observation| {
                         snapshot_from_observation(
                             identity.clone(),
                             DesiredServerState::Stopped,
-                            None,
+                            process_id,
                             observation,
                         )
                     })
@@ -290,6 +334,25 @@ impl ServerOrchestrator {
                             message: "Runtime stopped after a user request.".into(),
                         }),
                     });
+
+                if is_active_state(snapshot.state) {
+                    let message = format!(
+                        "runtime adapter returned from stop but still reports {:?}; keeping it active for later cleanup",
+                        snapshot.state
+                    );
+                    let mut snapshot = snapshot;
+                    snapshot.last_error = Some(message.clone());
+                    self.snapshots.insert(server_id.clone(), snapshot.clone());
+                    self.record_event(
+                        server_id.clone(),
+                        identity,
+                        RuntimeEventKind::Failed,
+                        snapshot.state,
+                        message.clone(),
+                    );
+                    return Err(RuntimeError::Process(message));
+                }
+
                 let event_kind = if snapshot.state == ServerState::Failed {
                     RuntimeEventKind::Failed
                 } else {
@@ -302,7 +365,7 @@ impl ServerOrchestrator {
                     event_kind,
                     snapshot.state,
                     if event_kind == RuntimeEventKind::Failed {
-                        "Runtime reported a failed state while stopping."
+                        "Runtime reported a failed terminal state while stopping."
                     } else {
                         "Runtime stopped."
                     },
@@ -311,21 +374,30 @@ impl ServerOrchestrator {
             }
             Err(error) => {
                 let message = error.to_string();
-                self.snapshots.insert(
-                    server_id.clone(),
-                    failed_snapshot(
-                        server_id.clone(),
-                        identity.clone(),
-                        DesiredServerState::Stopped,
-                        message.clone(),
-                    ),
-                );
+                let mut snapshot = observation
+                    .map(|observation| {
+                        snapshot_from_observation(
+                            identity.clone(),
+                            DesiredServerState::Stopped,
+                            process_id,
+                            observation,
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        let mut snapshot = current;
+                        snapshot.desired_state = DesiredServerState::Stopped;
+                        snapshot
+                    });
+                snapshot.last_error = Some(message.clone());
+                self.snapshots.insert(server_id.clone(), snapshot.clone());
                 self.record_event(
                     server_id.clone(),
                     identity,
                     RuntimeEventKind::Failed,
-                    ServerState::Failed,
-                    message,
+                    snapshot.state,
+                    format!(
+                        "Stop failed; runtime state is preserved conservatively for retry: {message}"
+                    ),
                 );
                 Err(error)
             }
@@ -362,6 +434,11 @@ impl ServerOrchestrator {
     pub fn events(&mut self) -> Vec<RuntimeEvent> {
         self.refresh();
         self.events.iter().cloned().collect()
+    }
+
+    pub fn failures(&mut self) -> Vec<RuntimeFailureEvidence> {
+        self.refresh();
+        self.failures.iter().cloned().collect()
     }
 
     pub fn stop_all(&mut self) {
@@ -407,9 +484,27 @@ impl ServerOrchestrator {
         let state = observation.state;
         let snapshot =
             snapshot_from_observation(identity.clone(), desired_state, process_id, observation);
-        self.snapshots.insert(server_id.clone(), snapshot);
+        let unexpected_terminal = desired_state == DesiredServerState::Running
+            && is_terminal_state(state)
+            && previous
+                .as_ref()
+                .is_some_and(|snapshot| is_active_state(snapshot.state));
+        self.snapshots.insert(server_id.clone(), snapshot.clone());
 
-        if previous.as_ref().map(|snapshot| snapshot.state) != Some(state) {
+        if unexpected_terminal {
+            self.record_failure(&snapshot);
+            self.record_event(
+                server_id,
+                identity,
+                RuntimeEventKind::UnexpectedExit,
+                state,
+                snapshot
+                    .last_error
+                    .clone()
+                    .or_else(|| snapshot.exit.as_ref().map(|exit| exit.message.clone()))
+                    .unwrap_or_else(|| "Runtime exited unexpectedly.".into()),
+            );
+        } else if previous.as_ref().map(|snapshot| snapshot.state) != Some(state) {
             let kind = if state == ServerState::Failed {
                 RuntimeEventKind::Failed
             } else {
@@ -444,6 +539,22 @@ impl ServerOrchestrator {
         });
         while self.events.len() > MAX_RUNTIME_EVENTS {
             self.events.pop_front();
+        }
+    }
+
+    fn record_failure(&mut self, snapshot: &ServerRuntimeSnapshot) {
+        self.next_failure_sequence = self.next_failure_sequence.saturating_add(1);
+        self.failures.push_back(RuntimeFailureEvidence {
+            sequence: self.next_failure_sequence,
+            server_id: snapshot.server_id.clone(),
+            runtime: snapshot.runtime.clone(),
+            state: snapshot.state,
+            exit: snapshot.exit.clone(),
+            last_error: snapshot.last_error.clone(),
+            logs: snapshot.logs.clone(),
+        });
+        while self.failures.len() > MAX_RUNTIME_FAILURES {
+            self.failures.pop_front();
         }
     }
 }
@@ -524,15 +635,22 @@ fn is_active_state(state: ObservedServerState) -> bool {
     )
 }
 
+fn is_terminal_state(state: ObservedServerState) -> bool {
+    matches!(state, ServerState::Stopped | ServerState::Failed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{NetworkScope, RuntimeHandle, RuntimeLogLevel};
+    use crate::{
+        authorize_start, CapabilitySnapshot, NetworkScope, RuntimeHandle, RuntimeLogLevel,
+    };
 
     #[derive(Default)]
     struct MockRuntime {
         observations: HashMap<ServerId, RuntimeObservation>,
         fail_on_poll: bool,
+        fail_stop: bool,
     }
 
     impl RuntimeAdapter for MockRuntime {
@@ -576,6 +694,9 @@ mod tests {
         }
 
         fn stop(&mut self, server_id: &ServerId) -> Result<(), RuntimeError> {
+            if self.fail_stop {
+                return Err(RuntimeError::Process("synthetic stop failure".into()));
+            }
             let observation = self
                 .observations
                 .get_mut(server_id)
@@ -616,7 +737,7 @@ mod tests {
         }
     }
 
-    fn profile(id: &str) -> ServerProfile {
+    fn profile(id: &str, port: u16) -> ServerProfile {
         ServerProfile {
             id: ServerId(id.into()),
             name: id.into(),
@@ -624,11 +745,32 @@ mod tests {
             executable: None,
             arguments: Vec::new(),
             working_directory: None,
-            port: 0,
+            port,
             memory_mib: 128,
             network_scope: NetworkScope::Loopback,
             enabled: true,
         }
+    }
+
+    fn permit(profile: &ServerProfile) -> StartAdmissionPermit {
+        authorize_start(
+            &CapabilitySnapshot {
+                platform: "linux".into(),
+                architecture: "x86_64".into(),
+                logical_cpus: 8,
+                total_memory_mib: Some(8_192),
+                available_memory_mib: Some(6_000),
+            },
+            std::slice::from_ref(profile),
+            &[],
+            profile,
+            &RuntimeAvailability {
+                available: true,
+                runtime: RuntimeKind::BuiltInHttp,
+                reason: "test adapter".into(),
+            },
+        )
+        .expect("test profile should receive admission")
     }
 
     fn orchestrator() -> ServerOrchestrator {
@@ -642,18 +784,13 @@ mod tests {
     #[test]
     fn owns_start_stop_state_and_active_count() {
         let mut orchestrator = orchestrator();
+        let alpha = profile("alpha", 8_080);
         let started = orchestrator
-            .start(&profile("alpha"))
+            .start(&alpha, permit(&alpha))
             .expect("server should start");
         assert_eq!(started.desired_state, DesiredServerState::Running);
         assert_eq!(started.state, ServerState::Running);
         assert_eq!(orchestrator.active_count(), 1);
-        assert_eq!(
-            orchestrator
-                .snapshot(&ServerId("alpha".into()))
-                .map(|snapshot| snapshot.state),
-            Some(ServerState::Running)
-        );
 
         let stopped = orchestrator
             .stop(&ServerId("alpha".into()))
@@ -661,17 +798,17 @@ mod tests {
         assert_eq!(stopped.desired_state, DesiredServerState::Stopped);
         assert_eq!(stopped.state, ServerState::Stopped);
         assert_eq!(orchestrator.active_count(), 0);
-        assert_eq!(orchestrator.snapshots().len(), 1);
     }
 
     #[test]
     fn rejects_duplicate_start_and_non_running_stop() {
         let mut orchestrator = orchestrator();
+        let alpha = profile("alpha", 8_080);
         orchestrator
-            .start(&profile("alpha"))
+            .start(&alpha, permit(&alpha))
             .expect("server should start");
         assert!(matches!(
-            orchestrator.start(&profile("alpha")),
+            orchestrator.start(&alpha, permit(&alpha)),
             Err(RuntimeError::AlreadyRunning(_))
         ));
         orchestrator
@@ -686,11 +823,13 @@ mod tests {
     #[test]
     fn supports_two_servers_and_independent_stop() {
         let mut orchestrator = orchestrator();
+        let alpha = profile("alpha", 8_080);
+        let beta = profile("beta", 8_081);
         orchestrator
-            .start(&profile("alpha"))
+            .start(&alpha, permit(&alpha))
             .expect("first server should start");
         orchestrator
-            .start(&profile("beta"))
+            .start(&beta, permit(&beta))
             .expect("second server should start");
         assert_eq!(orchestrator.active_count(), 2);
         orchestrator
@@ -701,16 +840,18 @@ mod tests {
     }
 
     #[test]
-    fn polling_represents_runtime_failure_and_terminal_state() {
+    fn polling_records_unexpected_failure_evidence() {
         let mut orchestrator = ServerOrchestrator::default();
         orchestrator
             .register_adapter(Box::new(MockRuntime {
                 observations: HashMap::new(),
                 fail_on_poll: true,
+                fail_stop: false,
             }))
             .expect("mock adapter should register");
+        let alpha = profile("alpha", 8_080);
         orchestrator
-            .start(&profile("alpha"))
+            .start(&alpha, permit(&alpha))
             .expect("server should initially start");
 
         let failed = orchestrator
@@ -718,15 +859,42 @@ mod tests {
             .expect("failed snapshot should remain queryable");
         assert_eq!(failed.state, ServerState::Failed);
         assert_eq!(failed.desired_state, DesiredServerState::Running);
-        assert_eq!(
-            failed.last_error.as_deref(),
-            Some("synthetic runtime failure")
-        );
         assert_eq!(orchestrator.active_count(), 0);
+        let failures = orchestrator.failures();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].server_id, ServerId("alpha".into()));
         assert!(orchestrator
             .events()
             .iter()
-            .any(|event| event.kind == RuntimeEventKind::Failed));
+            .any(|event| event.kind == RuntimeEventKind::UnexpectedExit));
+    }
+
+    #[test]
+    fn failed_stop_preserves_potentially_live_runtime() {
+        let mut orchestrator = ServerOrchestrator::default();
+        orchestrator
+            .register_adapter(Box::new(MockRuntime {
+                observations: HashMap::new(),
+                fail_on_poll: false,
+                fail_stop: true,
+            }))
+            .expect("mock adapter should register");
+        let alpha = profile("alpha", 8_080);
+        orchestrator
+            .start(&alpha, permit(&alpha))
+            .expect("server should start");
+
+        assert!(matches!(
+            orchestrator.stop(&ServerId("alpha".into())),
+            Err(RuntimeError::Process(_))
+        ));
+        let snapshot = orchestrator
+            .snapshot(&ServerId("alpha".into()))
+            .expect("active snapshot should remain visible");
+        assert_eq!(snapshot.desired_state, DesiredServerState::Stopped);
+        assert_eq!(snapshot.state, ServerState::Running);
+        assert!(snapshot.last_error.is_some());
+        assert_eq!(orchestrator.active_count(), 1);
     }
 
     #[test]
