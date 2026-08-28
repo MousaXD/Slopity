@@ -2,6 +2,53 @@
 
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
+## Step 021: overhaul the shared server control center GUI
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-24  
+**Updated:** 2026-08-24
+
+### Scope
+
+1. Replace the current mobile-card-oriented presentation with a production-quality local server control center that has a true desktop shell and first-class mobile layout while preserving the existing Tauri command surface and backend behavior.
+2. Surface real host capability, resource accounting, recovery notices, runtime availability, server lifecycle state, network configuration, and failures with clearer hierarchy and direct lifecycle controls.
+3. Redesign Add Server, profile editing, server details, destructive confirmation, error/loading states, keyboard/focus behavior, and responsive behavior without adding a frontend framework or remote dependencies.
+4. Keep unsupported runtime templates truthful and unavailable; only the currently registered built-in HTTP provider may expose a runnable lifecycle path.
+5. Perform rendered browser QA across the required viewport matrix and screenshot-review the 390x844, 768x1024, and 1440x900 layouts before closing the step.
+
+### Non-goals
+
+- No Minecraft, Java/JVM, Jellyfin, Node.js, Python, PHP, generic runtime, package/download, plugin/mod, GitHub deployment, or release-pipeline implementation.
+- No changes to `.github/workflows/**`, Cargo/package version metadata, runtime registration, `ServerOrchestrator`, `crates/slopity-core/**`, runtime crates, or plugins.
+- No frontend framework migration and no new UI/icon dependency.
+- No claims of physical Android durability or runtime support beyond existing backend evidence.
+
+### Risks
+
+- Lifecycle and profile actions must remain wired exactly once to the existing Tauri commands.
+- Long names, runtime strings, URLs, IPv6-style values, diagnostics, keyboard opening, and safe areas must not create horizontal overflow or hidden controls.
+- Dialog focus containment/restoration and destructive/unsaved-change confirmation must remain keyboard and screen-reader operable.
+- `PROGRESS.md` may overlap with concurrent CI/runtime work, so this entry stays isolated at the top and application changes stay inside `apps/slopity/web/**`.
+
+### Intended files
+
+- `PROGRESS.md`
+- `apps/slopity/web/index.html`
+- `apps/slopity/web/styles.css`
+- `apps/slopity/web/app.js`
+
+### Acceptance checks
+
+- `node --check apps/slopity/web/app.js`
+- source scan for unsafe DOM injection, inline handlers, remote assets, and disabled zoom
+- rendered local browser QA at 320x568, 360x800, 390x844, 768x1024, 1024x768, 1280x800, 1440x900, and 1920x1080
+- screenshot review at 390x844, 768x1024, and 1440x900
+- keyboard/focus/dialog interaction checks and create/edit/clone/enable/delete/start/stop/refresh mock workflow checks
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- `cd apps/slopity && npm ci && npm audit && npm run tauri:check`
+
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
 **Status:** DONE  
@@ -112,186 +159,6 @@ git log release/public-clean-history --format='%H%x09%an%x09%ae%x09%cn%x09%ce' |
 Factual corrections and hardening fixes for Step 019 and PR #13:
 1. Reconcile PR #12 relationship: Affirm that draft PR #12 (`Step 018: reconcile workload foundation`) is essential substantive architecture (orchestrator, runtime observations, resource accounting, host telemetry, interrupted-write recovery, schema migrations, and Android host lifecycle) and MUST NOT be closed. Establish a clear post-merge integration sequence.
 2. Link and Path Hygiene: Eliminate all developer-local machine paths across `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `COMMERCIAL-LICENSE.md`, replacing them with repository-relative Markdown links.
-3. Feature Claim Accuracy: Re-align `README.md` to truthfully describe functionality on current `main` / PR #13 versus capabilities implemented in pending PR #12, and clarify local verification versus GitHub Actions billing gates.
-4. Cargo License Metadata: Retain `license = "PolyForm-Noncommercial-1.0.0"` in `Cargo.toml` and eliminate redundant `license-file`, keeping `LICENSE.md` in repository root. Verified inheritance across all 5 workspace crates via `cargo metadata`.
-5. Contribution Policy Clarification: Update `CONTRIBUTING.md` with conservative external contribution guidelines that do not assume or imply copyright assignment.
-6. GitHub Actions Audit: Investigate exact runner failure annotations on PR #13 exact head (jobs blocked at account admission due to private repository Actions minute/spending limits), configure `audit.yml` with private/public repository awareness for `actions/dependency-review-action`.
-
-### Delivered
-
-1. Corrected all public documentation links to repository-relative format (`[LICENSE.md](LICENSE.md)`, `[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)`, `[CONTRIBUTING.md](CONTRIBUTING.md)`, `[AGENTS.md](AGENTS.md)`, `[SECURITY.md](SECURITY.md)`, `[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)`, `[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)`, `[docs/releases.md](docs/releases.md)`). Repository-wide scan confirms 0 developer-local paths remaining.
-2. Overhauled `README.md` with strict distinction between operational capabilities on `main`/PR #13, foundation capabilities in pending draft PR #12, and unbundled runtimes (Java/Minecraft/Node.js/Python).
-3. Updated `Cargo.toml` workspace metadata to use standard `license = "PolyForm-Noncommercial-1.0.0"`. `cargo metadata --locked` confirms all crates inherit `"license": "PolyForm-Noncommercial-1.0.0"`.
-4. Refined `CONTRIBUTING.md` with conservative contribution licensing terms without inventing CLAs or assuming copyright transfers.
-5. Updated `.github/workflows/audit.yml` to gracefully handle private evaluation vs public execution for `actions/dependency-review-action`.
-6. Formulated explicit post-Step-019 integration strategy for PR #12: keep PR #12 open/draft, merge PR #13 into `main` after owner approval, merge resulting `main` into `integration/workload-foundation`, resolve conflicts, and run full CI against PR #12.
-
-### Files changed
-
-- `PROGRESS.md`
-- `README.md`
-- `CONTRIBUTING.md`
-- `SECURITY.md`
-- `COMMERCIAL-LICENSE.md`
-- `Cargo.toml`
-- `.github/workflows/audit.yml`
-
-### Verification performed
-
-```bash
-cargo fmt --all -- --check
-# Pass (0 diffs)
-
-cargo test --workspace --all-features --locked
-# Pass (20 tests passed: 16 core, 4 http runtime, 0 failed, 0 ignored)
-
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-# Pass (0 warnings)
-
-cargo metadata --locked --format-version 1
-# Pass (all crates cleanly resolve PolyForm-Noncommercial-1.0.0)
-
-cargo audit
-# Pass (0 vulnerabilities across 434 dependencies)
-
-cd apps/slopity && npm ci && npm audit && npm run tauri:check
-# Pass (0 vulnerabilities, debug binary built cleanly)
-
-grep -RInE 'file://|/home/|/Users/|C:\\Users\\' --exclude-dir={.git,target,node_modules,gen} .
-# Pass (0 matches found)
-```
-
-## Step 019: public release hardening and source-available transition
-
-**Status:** DONE  
-**Declared:** 2026-08-24  
-**Updated:** 2026-08-24
-
-### Scope
-
-Prepare Slopity for a high-quality public source-available release:
-1. Licensing: Adopt the standard, official, unmodified PolyForm Noncommercial License 1.0.0 (`PolyForm-Noncommercial-1.0.0`), update Cargo package license metadata, add `LICENSE.md`, add `COMMERCIAL-LICENSE.md`, update all documentation to describe Slopity as source-available rather than open-source, and document external contribution policy.
-2. Dependency Reproducibility: Commit root `Cargo.lock` and `apps/slopity/package-lock.json`, update CI/build workflows and scripts to use `--locked` and `npm ci`.
-3. GitHub Actions Hardening: Migrate CI and release workflows from self-hosted runners to standard GitHub-hosted `ubuntu-latest` runners, pin third-party actions to immutable commit SHAs with version comments, enforce strict top-level read-only permissions with minimal write scopes.
-4. Dependency Security: Add `.github/dependabot.yml` covering cargo, npm, and github-actions, add a security/audit workflow with `cargo-audit`, `actions/dependency-review-action`, and `npm audit`.
-5. Secret and History Hygiene: Audit Git history and codebase for secrets and credentials.
-6. Profile-ID Hardening: Implement strict identifier validation grammar `[A-Za-z0-9._-]{1,128}` in `slopity-core` to prevent control-character injection, interior NUL panics in thread naming, directory traversal, and malformed identifiers. Add regression tests covering edge cases.
-7. Security Policy: Expand and harden `SECURITY.md` with supported versions, pre-release boundaries, responsible disclosure instructions, and testing rules.
-8. Contributing Guidelines: Update `CONTRIBUTING.md` with clear licensing and external contribution terms, testing commands, and PR guidelines.
-9. Documentation & Hygiene: Refresh `README.md`, `TASK.md`, and `docs/releases.md` to accurately represent current functionality, pre-production status, and source-available licensing.
-
-### Non-goals
-
-- Claiming external runtimes (Java/Minecraft, Node.js, Python, PHP, etc.) are implemented or operational.
-- Weakening existing security boundaries or introducing shell execution.
-- Modifying production signing infrastructure before keys/procedures are formally established.
-- Merging PR #12 or any other open PR branches.
-- Committing signing keys, credentials, APKs, or binaries.
-
-### Delivered
-
-1. Official unmodified PolyForm Noncommercial License 1.0.0 in `LICENSE.md` (`PolyForm-Noncommercial-1.0.0`) and dual-licensing commercial terms in `COMMERCIAL-LICENSE.md`.
-2. Cargo workspace package metadata (`license = "PolyForm-Noncommercial-1.0.0"`, `license-file = "LICENSE.md"`) and frontend `package.json` updated with matching license identifier.
-3. Locked dependency manifests committed (`Cargo.lock` with 434 crates, `apps/slopity/package-lock.json`).
-4. CI (`.github/workflows/ci.yml`) and Release (`.github/workflows/release.yml`) migrated from self-hosted runners to GitHub-hosted `ubuntu-latest` runners with automated Tauri Linux prerequisite installation and locked builds (`--locked`, `npm ci`).
-5. All third-party GitHub Actions pinned to immutable full commit SHAs with version annotations across all workflows.
-6. Dependabot configuration in `.github/dependabot.yml` monitoring Cargo, npm, and GitHub Actions dependencies weekly.
-7. Security audit workflow in `.github/workflows/audit.yml` running `cargo-audit`, `dependency-review-action`, and `npm audit`.
-8. Git history and commit trees audited for credentials/secrets across all 78 commits with 0 secret leaks found.
-9. Server profile identifier validation hardened in `crates/slopity-core/src/validation.rs`: strict `[A-Za-z0-9._-]{1,128}` validation via `is_valid_profile_id` and `MAX_PROFILE_ID_LENGTH`, preventing interior NUL bytes (`\0`) which trigger thread spawn panics in `slopity-runtime-http`, control character escape injections, and path traversal. Re-exported in `crates/slopity-core/src/lib.rs`.
-10. Added 6 comprehensive validation tests in `validation.rs` covering valid ID forms, empty/whitespace IDs, oversized IDs (129 chars), NUL byte rejection, control characters (`\n`, `\r`, `\t`, ANSI escapes), and path traversal (`../`, `/`, `\`).
-11. Public security policy overhauled in `SECURITY.md` with supported versions table, pre-release disclaimer, responsible disclosure via GitHub Private Vulnerability Reporting and maintainer contact, report requirements, and ethical testing boundaries.
-12. Contributing guidelines updated in `CONTRIBUTING.md` with source-available inbound contribution terms, mandatory two-commit protocol, and reproducible setup instructions.
-13. Public presentation updated in `README.md`, `TASK.md`, and `docs/releases.md` accurately detailing operational status (built-in HTTP server and child-process boundary operational; Java/Minecraft/Node.js/Python unbundled/unavailable), source-available license, and hosted release pipeline.
-
-### Files changed
-
-- `PROGRESS.md`
-- `LICENSE.md`
-- `COMMERCIAL-LICENSE.md`
-- `Cargo.toml`
-- `Cargo.lock`
-- `apps/slopity/package.json`
-- `apps/slopity/package-lock.json`
-- `.github/workflows/ci.yml`
-- `.github/workflows/release.yml`
-- `.github/dependabot.yml`
-- `.github/workflows/audit.yml`
-- `crates/slopity-core/src/validation.rs`
-- `crates/slopity-core/src/lib.rs`
-- `SECURITY.md`
-- `CONTRIBUTING.md`
-- `README.md`
-- `TASK.md`
-- `docs/releases.md`
-
-### Verification performed
-
-```bash
-cargo fmt --all -- --check
-# Pass (0 diffs)
-
-cargo test --workspace --all-features --locked
-# Pass (20 tests passed: 16 core, 4 http runtime, 0 failed, 0 ignored)
-
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-# Pass (0 warnings)
-
-cargo metadata --locked --format-version 1
-# Pass (all crates cleanly resolve PolyForm-Noncommercial-1.0.0)
-
-cargo audit
-# Pass (0 vulnerabilities across 434 dependencies)
-
-cd apps/slopity && npm ci && npm audit && npm run tauri:check
-# Pass (0 vulnerabilities, debug binary built cleanly)
-
-grep -RInE 'file://|/home/|/Users/|C:\\Users\\' --exclude-dir={.git,target,node_modules,gen} .
-# Pass (0 matches found)
-```
-
-## Step 018: reconcile workload foundation
-
-**Status:** DONE  
-**Declared:** 2026-08-18  
-**Updated:** 2026-08-24
-
-### Scope
-
-Reconcile the compatible, still-desired foundation work from draft pull requests #5, #6, #9, and #10 into one coherent branch based on the current `main`. Make the platform-neutral `ServerOrchestrator` the authoritative lifecycle owner, retain structured desired/observed runtime state and bounded observations, integrate aggregate resource accounting and proven host telemetry, harden profile recovery/migrations/backend validation, and combine the Android foreground-host status/permission improvements behind the existing native plugin boundary.
-
-### Non-goals
-
-- Enabling Minecraft, Java/JVM workloads, Jellyfin, GitHub deployment, Node.js, Python, PHP, native-package workloads, custom commands, or arbitrary external runtimes.
-- Registering the desktop local-process adapter as a supported runtime or reusing desktop `std::process` execution on Android.
-- Adding shell command strings, package downloads, runtime installers, remote management, or trusted-package implementation.
-- Claiming Android background durability, OEM survival, notification behavior, process-death recovery, or real-device hosting proof from compilation.
-- Merging any source pull request or this integration branch, rebasing shared branches, force-pushing, or rewriting completed progress history.
-
-### Delivered
-
-- Added the platform-neutral `ServerOrchestrator` as the single authoritative lifecycle owner for the Tauri shell, with explicit desired and observed state, structured runtime identity, logs, terminal exits, failure observations, bounded deterministic events, adapter availability, and duplicate-adapter rejection.
-- Kept the existing built-in Rust HTTP provider behind the generic runtime adapter contract and registered only that adapter. External runtime kinds remain unavailable configuration values and the desktop local-process adapter is not registered or exposed.
-- Removed the parallel direct-`HttpServerManager` lifecycle ownership from the Tauri shell. Existing built-in HTTP commands now delegate through the orchestrator and explicitly reject profiles whose runtime kind is not `BuiltInHttp`.
-- Added aggregate resource accounting with host reserve policy, safe memory budgets, active-or-reserved server accounting, deterministic port reservations/conflicts, CPU headroom warnings, and conservative unknown-telemetry behavior.
-- Added proven host telemetry surfaces: Linux `/proc/meminfo` memory telemetry and Android system-service memory, battery, charging, battery-temperature, thermal-state, and free-storage telemetry. Missing values remain `None` instead of being guessed.
-- Integrated profile-store interrupted-write recovery, primary/temporary/backup candidate inspection, backup recovery, parent-directory synchronization, schema-v0 to schema-v1 migration infrastructure, migration/recovery notices, and hard failure for unsupported future schemas.
-- Integrated backend profile validation limits for IDs, names, argument counts and payload sizes, executable paths, working directories, duplicate IDs, and duplicate ports while keeping structural profile validity separate from runtime availability.
-- Integrated Android foreground-host lifecycle/status improvements: POST_NOTIFICATIONS permission handling, native service status, active-server counts, start/update behavior, conservative notification visibility, a pending notification stop request, and `START_NOT_STICKY` process-lifecycle honesty.
-- Added a dashboard resource-status surface and exposed capability, telemetry, resource accounting, profile recovery notices, generic server snapshots, and host-service status through the existing Tauri boundary.
-- Added integration tests for clean terminal runtime-exit observation and the 256-entry deterministic runtime-event retention contract, on top of the retained source-branch tests for adapter behavior, runtime failure, HTTP lifecycle/ports, profile migration/recovery/validation, resource accounting, unknown telemetry, and host-service serialization.
-
-## Step 019: amendment and public release hardening correction
-
-**Status:** DONE  
-**Declared:** 2026-08-24  
-**Updated:** 2026-08-24
-
-### Scope
-
-Factual corrections and hardening fixes for Step 019 and PR #13:
-1. Reconcile PR #12 relationship: Affirm that draft PR #12 (`Step 018: reconcile workload foundation`) is essential substantive architecture (orchestrator, runtime observations, resource accounting, host telemetry, interrupted-write recovery, schema migrations, and Android host lifecycle) and MUST NOT be closed. Establish a clear post-merge integration sequence.
-2. Link and Path Hygiene: Eliminate all developer-local machine paths (`file:///home/developer/...`) across `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `COMMERCIAL-LICENSE.md`, replacing them with repository-relative Markdown links.
 3. Feature Claim Accuracy: Re-align `README.md` to truthfully describe functionality on current `main` / PR #13 versus capabilities implemented in pending PR #12, and clarify local verification versus GitHub Actions billing gates.
 4. Cargo License Metadata: Retain `license = "PolyForm-Noncommercial-1.0.0"` in `Cargo.toml` and eliminate redundant `license-file`, keeping `LICENSE.md` in repository root. Verified inheritance across all 5 workspace crates via `cargo metadata`.
 5. Contribution Policy Clarification: Update `CONTRIBUTING.md` with conservative external contribution guidelines that do not assume or imply copyright assignment.
