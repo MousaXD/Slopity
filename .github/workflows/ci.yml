@@ -81,7 +81,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@d24156dbc98afec1657d3bb4948a729ce8407815 # v3.1.0
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - name: Install Android SDK and NDK
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.3.13750724"
       - name: Configure Android environment
