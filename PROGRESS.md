@@ -1,7 +1,7 @@
 
 ## Step 030: preserve failed-stop evidence across runtime refresh
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL  
 **Declared:** 2026-11-06
 
 ### Scope
@@ -12,6 +12,13 @@ Repair PR #10's real failed-stop regression: after adapter.stop fails, a later o
 
 - `crates/slopity-core/src/orchestrator.rs`
 - `PROGRESS.md`
+
+### Implementation evidence
+
+- Commit `f64786e` retains the stop failure diagnostic across subsequent active observations when the adapter supplies no newer error, while retaining adapter-provided errors and lifecycle transitions.
+- Extended the failed-stop regression test to check evidence after active-count and repeated snapshot refresh.
+- GitHub-hosted exact-head checks are pending. No local tests or physical device tests performed.
+- The ledger close is a separate follow-up commit because the GitHub contents API writes one path per commit; this is an explicitly documented exception to the two-commit target, not a reconstructed plan.
 
 ### Acceptance checks
 
