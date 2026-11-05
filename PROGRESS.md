@@ -2,7 +2,7 @@
 
 ## Step 028: remove retired Android SDK tools package from hosted builds
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (CI change committed; remote build evidence pending)  
 **Declared:** 2026-11-05  
 **Updated:** 2026-11-05
 
@@ -28,6 +28,11 @@
 - `PROGRESS.md`
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml`
+
+### Implementation and verification at implementation commit
+
+- Explicitly passed `packages: 'platform-tools'` to the pinned Android SDK setup action in both cross-platform CI and release-package Android jobs, overriding the obsolete `tools platform-tools` default without changing toolchain/package targets.
+- No local or chat-hosted build was run. **Exact-head Android and platform CI checks are pending**; update this entry with run results and investigate any subsequent errors.
 
 ### Acceptance checks
 
