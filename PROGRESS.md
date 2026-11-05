@@ -1,5 +1,38 @@
 # Progress ledger
 
+## Step 030: reduce admission error footprint without weakening checks
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Confirmed CI finding
+
+- Focused runtime fix PR #36 exact-head [Cross-platform CI 42081473190](https://github.com/MousaXD/Slopity/actions/runs/42081473190) passed Rust format and tests, but strict Clippy failed at `crates/slopity-core/src/admission.rs:59`: `clippy::result_large_err`. The `StartAdmissionRejection` `Err` variant is at least 184 bytes.
+- The same admission interface has been copied onto integrated runtime PR #38. Fix the in-memory payload layout rather than silencing the lint or suppressing admission errors.
+
+### Scope
+
+1. Box the large `allocation` field inside `StartAdmissionRejection`; keep the existing `serde` JSON shape, all reasons/issues/warnings, and every safety rejection.
+2. Retain `authorize_start`'s return type and all test assertions; no warning suppression or admission-policy weakening.
+3. Verify in exact-head CI that strict Clippy, Rust tests, platform builds and audit gates pass.
+
+### Non-goals
+
+- No change to runtime features, executable boundaries, UI/API JSON keys, OS platform targets, or release signing.
+- No direct `main`/`dev` modification or premature merge.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/admission.rs`
+
+### Acceptance checks
+
+- GitHub-hosted Rust fmt, locked tests, strict Clippy `-D warnings` on exact head.
+- Existing admission rejection tests and Tauri serialization/compile continue to pass; no loss of error diagnostics.
+- Linux/Android/Windows and package/audit checks remain enabled, with authentic results recorded.
+
 ## Step 029: reconcile Rust runtime safety with the current CI foundation
 
 **Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
