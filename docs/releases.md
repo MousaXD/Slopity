@@ -1,68 +1,69 @@
 # Slopity release packaging
 
-Slopity publishes installable preview packages through `.github/workflows/release.yml`.
+Slopity packages installable previews through `.github/workflows/release.yml`.
 
 ## Current release status
 
-The release pipeline is intentionally a **preview** pipeline, not the final signed-production pipeline from Phase 6.
+The release workflow is a **preview** pipeline, not a final production-signing pipeline.
 
-Current assets:
+Current published assets are:
 
 - Linux x86_64 `.deb`, built by Tauri in release mode.
 - Linux x86_64 AppImage, built by Tauri in release mode.
-- Android ARM64 debug APK.
-- Android ARM64 debug AAB.
-- `SHA256SUMS.txt` covering all four packages.
+- Android ARM64 **debug** APK.
+- Android ARM64 **debug** AAB.
+- `SHA256SUMS.txt` covering all four package files.
 
-The Android files are debug builds and are not production-signed or Play-ready. GitHub Releases created by this workflow are therefore marked as prereleases.
+The Android artifacts are intentionally named `*-debug.*`. They are not production-signed, Play-ready, or evidence of physical-device durability. GitHub Releases created by this workflow are therefore prereleases.
 
 ## Version source
 
-Three version declarations must match before any release build can proceed:
+All three version declarations must match before packaging starts:
 
 - `apps/slopity/src-tauri/tauri.conf.json`
 - `apps/slopity/package.json`
 - `[workspace.package].version` in the root `Cargo.toml`
 
-The release tag must be exactly `v<version>`. For version `0.1.0`, the only accepted release tag is `v0.1.0`.
+The release tag must be exactly `v<version>`. For application version `0.1.0`, the only accepted tag is `v0.1.0`.
 
 ## Workflow behavior
 
 ### Pull requests
 
-When release-related source or workflow files change, the release workflow builds the Linux and Android packages and uploads them as temporary workflow artifacts. It does **not** create a GitHub Release from a pull request.
+Release-related pull requests build Linux and Android packages and upload temporary workflow artifacts. `publish` is resolved to false in the metadata job, so the GitHub Release job cannot run from a pull-request context.
 
-This makes `.deb`, AppImage, APK, and AAB creation part of review-time validation instead of discovering bundle failures after merge.
+This validates `.deb`, AppImage, APK, and AAB creation before merge without granting the validation jobs write permission.
 
 ### Pushes to `main`
 
-When a commit reaches `main`, the workflow reads the application version and checks for the matching tag.
+A `main` push validates the synchronized application version and checks for `v<version>`.
 
-If the tag does not yet exist, the workflow builds all packages and creates the matching GitHub prerelease. GitHub creates the version tag at that commit as part of release creation.
+- If the tag does not exist, packages are built and the workflow publishes a new GitHub prerelease for that version.
+- If the tag already exists, the workflow intentionally skips duplicate packaging and publication. Existing tags/releases are not mutated by ordinary `main` pushes.
 
-If the matching tag already exists, the main-branch release workflow skips the duplicate package build and publication.
+### Version-tag pushes
 
-### Version tag pushes
-
-Pushing a `v*` tag runs the same packaging workflow. The tag must exactly match the version declared by the application files or the workflow fails before packaging.
+A `v*` tag must match the synchronized application version and its commit must be reachable from `main`. If a GitHub Release with the tag already exists, the workflow fails before packaging instead of overwriting it.
 
 ### Manual dispatch
 
-The workflow can also be started manually with a `tag` input such as `v0.1.0`. The supplied tag must match the application version. If that tag already exists, it must point at the selected workflow commit.
+Manual publication is allowed only when the workflow is dispatched from `main` with a new `v<version>` tag that matches application metadata. If that tag already exists, the workflow fails clearly and requires a version bump rather than reusing or moving the tag.
+
+This is the deliberate duplicate policy: release tags and published releases are immutable to this workflow. A failed release should be diagnosed before creating a replacement version; the workflow does not silently rewrite an existing release.
 
 ## Creating the next release
 
-1. Change the version in all three version declarations listed above.
-2. Open a pull request and let both the normal CI and release-package validation finish.
+1. Change the version in all three declarations above.
+2. Open a pull request and require normal CI plus release-package validation to pass.
 3. Review the generated Linux and Android workflow artifacts if desired.
-4. Merge the validated change into `main`.
-5. The first `main` commit carrying a version whose `v<version>` tag does not exist publishes that version as a GitHub prerelease automatically.
+4. Merge the validated version change into `main`.
+5. The first `main` commit carrying a version whose `v<version>` tag does not yet exist publishes that version as a prerelease.
 
-A manual or explicit tag flow remains available when an automatic `main` release is not desired.
+An explicit new tag push or a manual dispatch from `main` is also supported, subject to the immutable-tag rules above.
 
 ## Asset naming
 
-Published release files are normalized to:
+Published files are normalized deterministically to:
 
 ```text
 Slopity_<version>_linux-amd64.deb
@@ -72,10 +73,14 @@ Slopity_<version>_android-arm64-debug.aab
 SHA256SUMS.txt
 ```
 
-The workflow discovers Linux bundles from the clean Cargo workspace after Tauri finishes instead of assuming a package-local `target` directory. Android files use the exact generated paths already proven by the existing Android CI.
+The publication job discovers exactly one package of each expected type, renames it, and generates SHA-256 checksums immediately before publication. Missing or duplicate package outputs fail the job.
+
+## Permissions and secrets
+
+The workflow defaults to `contents: read`. Only the final publication job receives `contents: write`. Build jobs do not receive write permission, signing secrets are not required or invented, and the workflow never prints secret values.
 
 ## What is still missing for production releases
 
-Before the roadmap item for a reproducible signed release pipeline can be marked complete, Slopity still needs production signing and release validation. At minimum this includes Android signing-key handling, signed Android release builds, physical-device installation testing, a decision on Linux signing/distribution policy, and documented key rotation/recovery procedures.
+Before Slopity can call the release pipeline production-signed, it still needs Android signing-key handling, signed Android release builds, physical-device installation testing, a Linux signing/distribution policy decision, and documented key rotation/recovery procedures.
 
 Signing keys must never be committed to the repository.
