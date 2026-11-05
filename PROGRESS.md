@@ -1,5 +1,39 @@
 # Progress ledger
 
+## Step 028: remove retired Android SDK tools package from hosted builds
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Finding
+
+- On [PR #35 release validation run 42080026430](https://github.com/MousaXD/Slopity/actions/runs/42080026430), the Android packaging job failed in `android-actions/setup-android` before application build.
+- Exact [failing job 127430419954](https://github.com/MousaXD/Slopity/actions/runs/42080026430/job/127430419954) executed `sdkmanager tools` and exited with `Warning: Failed to find package 'tools'`.
+- The pinned `android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699` (v4.0.1) defines default `packages: 'tools platform-tools'`. The legacy `tools` package has been removed from the remote SDK repository.
+- The same action is used by cross-platform `ci.yml` and release `release.yml`; both should provide the explicitly supported `packages: 'platform-tools'` input. Existing explicit `sdkmanager` installation of API 36, build-tools 36 and NDK 27.3 must remain unchanged.
+
+### Scope
+
+1. Override the pinned action's obsolete default `packages` in both CI and PR release-package workflows, without changing action pinning, signing policy, Android platform/NDK versions or required artifact assertions.
+2. Preserve `PROGRESS.md` evidence and rerun GitHub-hosted jobs on the exact new PR head.
+
+### Non-goals
+
+- Removing Android builds, weakening manifest checks, pretending device durability was tested, adding SDK credentials, or changing runtime behavior.
+- Unreviewed Dependabot version upgrades or changes to `main`/`dev`.
+
+### Intended files
+
+- `PROGRESS.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+
+### Acceptance checks
+
+- Exact-head Android CI and package jobs advance past `Set up Android SDK` to SDK/NDK installation and ultimately pass build, manifest and artifact assertions.
+- Existing Rust/Linux/Windows/release gates remain intact; actual results linked when available.
+
 ## Step 025: restore reproducible security checks and establish November engineering triage
 
 **Status:** PARTIAL (implementation committed; exact-head GitHub Actions results pending)  
