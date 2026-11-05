@@ -1,5 +1,48 @@
 # Progress ledger
 
+## Step 029: reconcile Rust runtime safety with the current CI foundation
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Scope and sources
+
+1. Integrate the seven actual backend/source/ADR changed paths from [original runtime hardening draft #10](https://github.com/MousaXD/Slopity/pull/10) into the repaired CI foundation, without overwriting new workflow fixes from #35.
+2. Import the corrected orchestrator implementation (including stop-failure evidence retention and regression tests) from [draft fix #36](https://github.com/MousaXD/Slopity/pull/36), not PR #10's known-failing version.
+3. Preserve original Step 023 runtime admission/lifecycle planning in `PROGRESS.md`, alongside current Step 025/028 CI updates and this new Step 029.
+4. Keep launch authority behind opaque `StartAdmissionPermit`, port/memory validation, and fail-closed stop/observed-state behavior. Keep the built-in HTTP runtime the only registered provider.
+5. Validate on GitHub-hosted CI using Rust 1.89, Linux Tauri, Android ARM64, Windows NSIS, security review and release package validation. Do not manufacture results.
+
+### Non-goals
+
+- No new external runtime support, code-download capabilities, automatic restart behavior, shell command execution, release publication, or direct updates to `main`/`dev`.
+- No replacement or closure of original PR #10 or focused fix PR #36 without proof.
+- No physical-device Android durability claim.
+
+### Risks and acceptance criteria
+
+- The new Tauri admission error API may require GUI V2 integration; review cross-branch behavior on the next combined GUI integration.
+- The failure evidence regression must remain covered by the **unchanged existing assertion** plus the new repeated-refresh/terminal test.
+- Preserve PR #35 audit toolchain and Android SDK setup fixes, and do not replace its CI workflow with stale PR #10 workflow files.
+- Do not claim full validation until exact-head GitHub Actions pass and their run/job links appear here.
+
+### Intended files
+
+- `PROGRESS.md`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `crates/slopity-core/src/{admission.rs,lib.rs,orchestrator.rs}`
+- `crates/slopity-core/tests/orchestrator_foundation.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `docs/adr/0002-runtime-intent-recovery.md`
+
+### Checks
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- Linux/Android/Windows CI, security audit, PR release-package builds, unchanged safeguards and honest platform claims.
+
 ## Step 028: remove retired Android SDK tools package from hosted builds
 
 **Status:** PARTIAL (CI change committed; remote build evidence pending)  
