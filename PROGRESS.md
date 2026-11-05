@@ -1,5 +1,54 @@
 # Progress ledger
 
+## Step 025: restore reproducible security checks and establish November engineering triage
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Baseline and reason
+
+- Integration base: `fix/ci-release-foundation` at `8825f1e0e997c93730cab11caaa638fe4205a598` (draft PR #11 targeting `dev`); it previously passed cross-platform CI, release-packaging and security-audit workflows on 2026-08-24.
+- Default `main` / `dev`: `f57b7cee18dbf73b06eb64aa0c12212c4ca9333d`. Its scheduled security run 41467880911 on 2026-11-02 failed *before an audit* because an un-locked cargo-audit install resolved `kstring 2.0.5` (MSRV Rust 1.96), while the runner used Rust 1.89. Do not report this as a vulnerability finding or a clean security result.
+- Open draft GUI PR #9, runtime-safety PR #10, Android durability PR #12 and CI PR #11 must be reconciled without silently losing features. PR #10's run 33215426044 failed in `orchestrator::tests::failed_stop_preserves_potentially_live_runtime`, with `snapshot.last_error.is_some()` false.
+- As of 2026-11-05 there are 15 open Dependabot PRs (and four draft human engineering PRs). Do not bulk merge unvalidated updates.
+
+### Scope
+
+1. Preserve PR #11's proven Linux, Android, Windows, Rust, audit and package CI foundation; repair the audit-toolchain MSRV failure without weakening vulnerability detection or changing the application's pinned Rust compiler.
+2. Add a durable, source-linked engineering-status and workstream document under `docs/` with known build/feature/physical-device evidence boundaries, integration order, five proposed specialist roles, and acceptance gates.
+3. Validate *this exact head* through GitHub-hosted Actions. Investigate failures in job logs and iteratively fix true blockers. Do not equate mocked tests with runtime support.
+4. Keep all pre-existing GUI, Android and runtime hardening PRs intact and unmerged pending their own exact-head green validation. Publish this slice as a draft PR targeting `dev`.
+
+### Non-goals
+
+- No direct writes to `main` or `dev`, no releases, no privileged signing or secrets, no force pushes.
+- No claim that Java/Minecraft/Node/Python/PHP or arbitrary-executable providers are operational.
+- No claim of physical-device Android hosting durability or production-ready Windows runtime from CI compilation alone.
+- No global loosening of Rust warnings, vulnerability fail gates, test assertions, or release permissions.
+- No implicit license changes; PolyForm Noncommercial remains source-available rather than OSI-approved open source.
+
+### Risks
+
+- Using a newer toolchain for the *audit utility* must not mask application MSRV/build issues: Rust workspace checks remain on pinned 1.89.
+- `cargo-audit` may reveal actual vulnerabilities after installing successfully; fail closed and remediate separately.
+- GitHub Actions behavior can change since the 2026-08-24 passing runs; exact commit evidence is required.
+- Cross-branch feature integration could overwrite shared `PROGRESS.md` or silently discard work. Integration must be diff-reviewed and retested.
+
+### Intended files
+
+- `PROGRESS.md` (plan, then exact CI evidence and status)
+- `.github/workflows/audit.yml` (tool installation/runtime isolation only)
+- `docs/ENGINEERING_STATUS_2026-11-05.md` (five workstreams, CI evidence and phased integration plan)
+
+### Acceptance checks (GitHub Actions only)
+
+- Audit job actually installs `cargo-audit`, downloads advisory data, analyzes `Cargo.lock`, and fails for genuine vulnerabilities.
+- `npm audit` and dependency review remain enabled, with honest outcomes.
+- `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, and strict all-targets Clippy run using the project-pinned compiler.
+- Linux Tauri compile, Android ARM64 debug/manifest/artifact, Windows x64 NSIS build and release packaging validate this exact head, or are documented as blocked with logs.
+- Keep the branch/PR in draft if checks are pending or failing; no unverified merge.
+
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
 ## Step 022: repair and harden CI and release foundation
