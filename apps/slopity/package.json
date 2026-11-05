@@ -5,10 +5,14 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "scripts": {
+    "test": "node --test web/tests/*.test.mjs",
+    "lint": "node scripts/frontend-lint.mjs",
+    "format:check": "node scripts/format-check.mjs",
+    "frontend:check": "npm run format:check && npm run lint && npm test",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:check": "tauri build --debug --no-bundle",
+    "tauri:check": "npm run frontend:check && tauri build --debug --no-bundle",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "android:build": "tauri android build"

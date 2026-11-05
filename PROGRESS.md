@@ -2,7 +2,7 @@
 
 ## Step 027: reconcile GUI V2 with the repaired cross-platform CI foundation
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (frontend V2 integrated; exact-head GitHub Actions and rendered QA pending)  
 **Declared:** 2026-11-05  
 **Updated:** 2026-11-05
 
@@ -32,6 +32,13 @@
 - `apps/slopity/package.json`
 - `apps/slopity/scripts/{format-check.mjs,frontend-lint.mjs}`
 - `apps/slopity/web/**` (exact changed files in PR #9)
+
+### Implementation evidence (not a test result)
+
+- Copied the exact 23 frontend/app changed-file blobs from GUI PR #9 onto the repaired CI foundation; no GUI feature was intentionally removed or reimplemented from memory.
+- Preserved the original Step 021 GUI intent and incomplete viewport/focus verification in this ledger. The older PR #9 remains intact.
+- CI tests were **not** run in ChatGPT. Exact-head GitHub Actions results and manual rendered QA remain pending and must be recorded before closure.
+- This is a new stacked draft integration branch, not a merge to `dev` or `main`.
 
 ### GitHub Actions acceptance
 
@@ -198,6 +205,53 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 - Release pull-request package validation green for Linux `.deb`/AppImage and Android ARM64 debug APK/AAB, with publication skipped by construction.
 - Security/audit jobs green where applicable, with dependency review active for this public repository.
 - Every third-party `uses:` reference remains pinned to a full immutable commit SHA.
+
+## Step 021: overhaul the shared server control center GUI
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-24  
+**Updated:** 2026-08-24
+
+### Scope
+
+1. Replace the current mobile-card-oriented presentation with a production-quality local server control center that has a true desktop shell and first-class mobile layout while preserving the existing Tauri command surface and backend behavior.
+2. Surface real host capability, resource accounting, recovery notices, runtime availability, server lifecycle state, network configuration, and failures with clearer hierarchy and direct lifecycle controls.
+3. Redesign Add Server, profile editing, server details, destructive confirmation, error/loading states, keyboard/focus behavior, and responsive behavior without adding a frontend framework or remote dependencies.
+4. Keep unsupported runtime templates truthful and unavailable; only the currently registered built-in HTTP provider may expose a runnable lifecycle path.
+5. Perform rendered browser QA across the required viewport matrix and screenshot-review the 390x844, 768x1024, and 1440x900 layouts before closing the step.
+
+### Non-goals
+
+- No Minecraft, Java/JVM, Jellyfin, Node.js, Python, PHP, generic runtime, package/download, plugin/mod, GitHub deployment, or release-pipeline implementation.
+- No changes to `.github/workflows/**`, Cargo/package version metadata, runtime registration, `ServerOrchestrator`, `crates/slopity-core/**`, runtime crates, or plugins.
+- No frontend framework migration and no new UI/icon dependency.
+- No claims of physical Android durability or runtime support beyond existing backend evidence.
+
+### Risks
+
+- Lifecycle and profile actions must remain wired exactly once to the existing Tauri commands.
+- Long names, runtime strings, URLs, IPv6-style values, diagnostics, keyboard opening, and safe areas must not create horizontal overflow or hidden controls.
+- Dialog focus containment/restoration and destructive/unsaved-change confirmation must remain keyboard and screen-reader operable.
+- `PROGRESS.md` may overlap with concurrent CI/runtime work, so this entry stays isolated at the top and application changes stay inside `apps/slopity/web/**`.
+
+### Intended files
+
+- `PROGRESS.md`
+- `apps/slopity/web/index.html`
+- `apps/slopity/web/styles.css`
+- `apps/slopity/web/app.js`
+
+### Acceptance checks
+
+- `node --check apps/slopity/web/app.js`
+- source scan for unsafe DOM injection, inline handlers, remote assets, and disabled zoom
+- rendered local browser QA at 320x568, 360x800, 390x844, 768x1024, 1024x768, 1280x800, 1440x900, and 1920x1080
+- screenshot review at 390x844, 768x1024, and 1440x900
+- keyboard/focus/dialog interaction checks and create/edit/clone/enable/delete/start/stop/refresh mock workflow checks
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- `cd apps/slopity && npm ci && npm audit && npm run tauri:check`
 
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
