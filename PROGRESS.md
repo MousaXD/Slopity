@@ -2,7 +2,7 @@
 
 ## Step 026: preserve runtime stop-failure evidence across refresh
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (fix and regressions committed; exact-head GitHub Actions pending)  
 **Declared:** 2026-11-05  
 **Updated:** 2026-11-05
 
@@ -30,6 +30,14 @@
 
 - `PROGRESS.md`
 - `crates/slopity-core/src/orchestrator.rs`
+
+### Implementation and validation at code commit
+
+- `apply_observation` retains the last failed-stop error when a previously active runtime is still observed active after a stop request, unless the adapter supplies fresher error evidence.
+- An observed terminal state deliberately clears stale stop-failure diagnostics when no terminal error is reported; it remains authoritative for observed state.
+- Added a regression test for repeated polls, diagnostic precedence and terminal observation. Kept the pre-existing failing test and assertion unchanged.
+- **CI status at code commit:** Not yet executed on this commit. The chat environment was not used to run tests; exact GitHub Actions checks are required before marking this DONE.
+- Changes are limited to `PROGRESS.md` and `crates/slopity-core/src/orchestrator.rs`. No runtime provider, UI, release or CI policy changes.
 
 ### Acceptance checks (GitHub Actions on exact head)
 
