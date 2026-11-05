@@ -958,7 +958,12 @@ mod tests {
         new_observation.last_error = Some("fresh adapter error".into());
         orchestrator.apply_observation(initial.runtime.clone(), new_observation);
         assert_eq!(
-            orchestrator.snapshots.get(&server_id).unwrap().last_error.as_deref(),
+            orchestrator
+                .snapshots
+                .get(&server_id)
+                .unwrap()
+                .last_error
+                .as_deref(),
             Some("fresh adapter error")
         );
 

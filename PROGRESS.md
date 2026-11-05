@@ -39,6 +39,12 @@
 - **CI status at code commit:** Not yet executed on this commit. The chat environment was not used to run tests; exact GitHub Actions checks are required before marking this DONE.
 - Changes are limited to `PROGRESS.md` and `crates/slopity-core/src/orchestrator.rs`. No runtime provider, UI, release or CI policy changes.
 
+### CI remediation after implementation
+
+- [GitHub Actions run 42080696315](https://github.com/MousaXD/Slopity/actions/runs/42080696315) reached `cargo fmt --all -- --check` and rejected only multiline formatting of the new `last_error` assertion at `orchestrator.rs:958`.
+- Applied the exact rustfmt-reported layout without changing behavior. The test, lint, and platform jobs were blocked by formatting and are **not yet claimed passed**.
+- Android hosted packaging also has a separately identified obsolete SDK `tools` setup problem tracked and fixed on CI recovery PR #35; that workflow fix must be reconciled before full PR #10 platform validation.
+
 ### Acceptance checks (GitHub Actions on exact head)
 
 - Existing `failed_stop_preserves_potentially_live_runtime` test passes unchanged.
