@@ -1,5 +1,35 @@
 # Progress ledger
 
+## Step 029: reconcile recovered CI evidence and integration gates
+
+**Status:** DONE (documentation evidence reconciliation only)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Exact-head GitHub-hosted verification (2026-11-05)
+
+PR #35 head `0a5309ac49f3bd5e01dbb1fdb0014fa67bb01a7c` was independently queried using GitHub Actions commit-associated runs:
+- [Cross-platform CI #42081297534](https://github.com/MousaXD/Slopity/actions/runs/42081297534): completed, success.
+- [Security and dependency audit #42081297435](https://github.com/MousaXD/Slopity/actions/runs/42081297435): completed, success.
+- [Package and publish releases #42081297671](https://github.com/MousaXD/Slopity/actions/runs/42081297671): completed, success. PR release publication is not authorized; this is package validation, not a signed release.
+
+No local or physical Android device tests were performed. These runs validate only the named commit, not feature PRs #9, #10, #12 or their integration. PR #10's failed-stop evidence assertion remains a release blocker. GUI accessibility and Android one-hour durability proof remain outstanding.
+
+
+### Scope and intended files
+- Update `PROGRESS.md` and `docs/ENGINEERING_STATUS_2026-11-05.md` with independently fetched exact-head Actions results for PR #35.
+- Preserve historical findings, distinguish CI compilation from physical-device validation, and identify next integration blockers.
+
+### Non-goals and risks
+- No application/workflow edits, merges, releases, security relaxation or unsupported runtime claims.
+- Risk: later PR-head changes invalidate evidence; record the exact SHA and workflow run IDs.
+
+### Acceptance
+- Confirm all three PR #35 workflow conclusions from GitHub at exact head.
+- Record remaining PR #10 failed-stop regression, GUI and Android review gates.
+- No local tests; documentation-only change.
+
+
 ## Step 028: remove retired Android SDK tools package from hosted builds
 
 **Status:** PARTIAL (CI change committed; remote build evidence pending)  

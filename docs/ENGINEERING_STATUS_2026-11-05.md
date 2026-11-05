@@ -59,3 +59,16 @@ One integration owner coordinates sequence, branch boundaries, acceptance eviden
 ## Scope of Step 025
 
 The audit-tool-only Rust update repairs installation incompatibility, not a previously identified application vulnerability. Current security disposition stays **unknown until the new audit job completes**. No runtime providers, GUI components, signing, or product features are added in this CI recovery slice.
+
+## 2026-11-05 exact-head CI recovery addendum
+
+### Exact-head GitHub-hosted verification (2026-11-05)
+
+PR #35 head `0a5309ac49f3bd5e01dbb1fdb0014fa67bb01a7c` was independently queried using GitHub Actions commit-associated runs:
+- [Cross-platform CI #42081297534](https://github.com/MousaXD/Slopity/actions/runs/42081297534): completed, success.
+- [Security and dependency audit #42081297435](https://github.com/MousaXD/Slopity/actions/runs/42081297435): completed, success.
+- [Package and publish releases #42081297671](https://github.com/MousaXD/Slopity/actions/runs/42081297671): completed, success. PR release publication is not authorized; this is package validation, not a signed release.
+
+No local or physical Android device tests were performed. These runs validate only the named commit, not feature PRs #9, #10, #12 or their integration. PR #10's failed-stop evidence assertion remains a release blocker. GUI accessibility and Android one-hour durability proof remain outstanding.
+
+Historical pending language above refers to the earlier observation, before these runs completed. Step 025 and Step 028 now have successful exact-head workflow evidence; their ledger entries retain their historical pending wording pending a separate factual reconciliation, without retroactively altering their implementation commits.
