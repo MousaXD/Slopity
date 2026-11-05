@@ -2,7 +2,7 @@
 
 ## Step 030: reduce admission error footprint without weakening checks
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (layout change and JSON regression assertion committed; exact-head CI pending)  
 **Declared:** 2026-11-05  
 **Updated:** 2026-11-05
 
@@ -26,6 +26,12 @@
 
 - `PROGRESS.md`
 - `crates/slopity-core/src/admission.rs`
+
+### Implementation and evidence
+
+- Updated `StartAdmissionRejection.allocation` to `Box<AllocationDecision>`; constructing rejections now boxes the full unchanged allocation report.
+- Added assertions on the serialized rejection to protect JSON keys `allocation`, `warnings`, `validationIssues`, and `reasons`; no fields or decision rules removed.
+- Did not run any local tests; exact-head CI must confirm the error footprint passes Clippy and app/serialization tests pass. Pending result.
 
 ### Acceptance checks
 

@@ -29,7 +29,7 @@ pub struct StartAdmissionRejection {
     pub runtime: RuntimeKind,
     pub reasons: Vec<StartAdmissionReason>,
     pub validation_issues: Vec<ValidationIssue>,
-    pub allocation: AllocationDecision,
+    pub allocation: Box<AllocationDecision>,
     pub warnings: Vec<ResourceWarning>,
 }
 
@@ -140,7 +140,7 @@ pub fn authorize_start(
             runtime: profile.runtime,
             reasons,
             validation_issues,
-            allocation,
+            allocation: Box::new(allocation),
             warnings,
         })
     }
@@ -259,6 +259,14 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.code == ResourceWarningCode::DeviceTelemetryUnavailable));
+        // Boxing large diagnostics must not alter the Tauri/JS rejection
+        // payload or remove the full resource-allocation evidence.
+        let json = serde_json::to_value(&rejection)
+            .expect("admission rejection must remain serializable");
+        assert_eq!(json["allocation"]["fits"], false);
+        assert!(json["allocation"]["warnings"].is_array());
+        assert!(json["validationIssues"].is_array());
+        assert!(json["reasons"].is_array());
     }
 
     #[test]
