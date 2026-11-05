@@ -2,7 +2,7 @@
 
 ## Step 025: restore reproducible security checks and establish November engineering triage
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions results pending)  
 **Declared:** 2026-11-05  
 **Updated:** 2026-11-05
 
@@ -40,6 +40,14 @@
 - `PROGRESS.md` (plan, then exact CI evidence and status)
 - `.github/workflows/audit.yml` (tool installation/runtime isolation only)
 - `docs/ENGINEERING_STATUS_2026-11-05.md` (five workstreams, CI evidence and phased integration plan)
+
+### Implementation and verification recorded at implementation commit
+
+- Isolated the `cargo-audit` installer from the application's Rust 1.89 toolchain: the audit job now installs a current stable toolchain solely for audit tooling, retains the pinned `cargo-audit 0.22.2 --locked` install, and keeps the actual vulnerability scan mandatory.
+- Preserved the existing Rust workspace CI compiler at 1.89.0 and all build/Clippy/test requirements.
+- Added `docs/ENGINEERING_STATUS_2026-11-05.md` with exact baseline evidence, prioritized integration and five non-running proposed ownership lanes.
+- Execution: **GitHub-hosted validation is pending for this implementation commit**. No tests were run locally or in this chat. Read exact-head workflow results before changing status to DONE; fix any real findings instead of suppressing gates.
+- Follow-up: reconcile PRs #9/#10/#11/#12 after this baseline, address PR #10's actual failed-stop evidence regression and validate GUI V2 through real CI.
 
 ### Acceptance checks (GitHub Actions only)
 
