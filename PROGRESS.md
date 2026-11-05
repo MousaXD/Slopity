@@ -1,5 +1,24 @@
 # Progress ledger
 
+## Step 029: reconcile recovered CI evidence and integration gates
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-05
+
+### Scope and intended files
+- Update `PROGRESS.md` and `docs/ENGINEERING_STATUS_2026-11-05.md` with independently fetched exact-head Actions results for PR #35.
+- Preserve historical findings, distinguish CI compilation from physical-device validation, and identify next integration blockers.
+
+### Non-goals and risks
+- No application/workflow edits, merges, releases, security relaxation or unsupported runtime claims.
+- Risk: later PR-head changes invalidate evidence; record the exact SHA and workflow run IDs.
+
+### Acceptance
+- Confirm all three PR #35 workflow conclusions from GitHub at exact head.
+- Record remaining PR #10 failed-stop regression, GUI and Android review gates.
+- No local tests; documentation-only change.
+
+
 ## Step 028: remove retired Android SDK tools package from hosted builds
 
 **Status:** PARTIAL (CI change committed; remote build evidence pending)  
