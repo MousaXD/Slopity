@@ -2,7 +2,7 @@
 
 ## Step 029: reconcile Rust runtime safety with the current CI foundation
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
 **Declared:** 2026-11-05  
 **Updated:** 2026-11-05
 
@@ -35,6 +35,13 @@
 - `crates/slopity-core/tests/orchestrator_foundation.rs`
 - `crates/slopity-runtime-http/src/lib.rs`
 - `docs/adr/0002-runtime-intent-recovery.md`
+
+### Implementation (validation pending)
+
+- Copied the seven precise runtime-source and ADR blobs from the known PR #10 source tree, using the independently corrected `orchestrator.rs` blob from PR #36 head `4dd75293ad4c8669cb7e35bb4e66ff389ed2045f`.
+- Preserved the repaired workflow and audit files from PR #35 instead of importing stale workflow copies.
+- Inserted original Step 023 historical plan without replacing Steps 025 or 028.
+- No application tests were run in this chat. GitHub-hosted exact-head CI is the only acceptance evidence and is still **pending**.
 
 ### Checks
 
@@ -202,6 +209,63 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 - Release pull-request package validation green for Linux `.deb`/AppImage and Android ARM64 debug APK/AAB, with publication skipped by construction.
 - Security/audit jobs green where applicable, with dependency review active for this public repository.
 - Every third-party `uses:` reference remains pinned to a full immutable commit SHA.
+
+## Step 023: harden runtime admission and lifecycle semantics
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Scope
+
+1. Add a platform-neutral start-admission decision in `slopity-core` that combines profile validation, enabled state, verified runtime availability, aggregate port reservations, safe memory budget, immediate memory headroom, and existing CPU-headroom warnings before a runtime adapter can start.
+2. Require an admission permit at the `ServerOrchestrator` start boundary so callers cannot accidentally bypass hard safety checks, while keeping runtime adapters responsible for their own last-mile bind/process errors.
+3. Harden lifecycle semantics for startup, stop failures, runtime observations, unexpected terminal exits, event ordering, terminal evidence, and drop-time cleanup without hiding a potentially live runtime behind a false terminal state.
+4. Add bounded structured unexpected-failure evidence suitable for future retry/backoff policy, with no automatic restart behavior in this step.
+5. Define a versioned desired-state persistence contract and recovery design without persisting process IDs or treating stale observed state as authoritative; defer on-disk lifecycle restore until restart policy is explicitly designed.
+6. Strengthen the built-in HTTP reference-runtime tests for disabled profiles, loopback/LAN binding, request counting, immediate port reuse, unexpected thread exit, event order, and admission rejection before adapter start.
+7. Enforce admission at the Tauri start command and return structured rejection data so frontend code renders backend policy instead of recreating it.
+
+### Non-goals
+
+- Implementing or downloading Java/JVM, Minecraft, Jellyfin, Node.js, Python, PHP, native packages, scripts, or any general arbitrary executable runtime.
+- Registering or exposing `slopity-runtime-local` through Tauri or the frontend.
+- Adding shell command strings, `sh -c`, PowerShell command strings, or `cmd /C`.
+- Automatically restarting failed servers or introducing retry/backoff timing policy.
+- Persisting observed runtime state or process IDs as proof that a process survived an application restart.
+- Owning the concurrent CI/release repair work; this branch will consume Agent 1's fixes later if they become available without overwriting them.
+
+### Risks
+
+- Missing mandatory memory telemetry already causes the conservative resource model to fail closed; start-time enforcement will make that existing policy operational rather than advisory.
+- A synchronous adapter that reports an active state after `stop` may still own live resources. The orchestrator must preserve that active observation so later cleanup can retry instead of masking it as terminal failure.
+- Existing GitHub Actions currently fail during Rust toolchain setup before repository checks run. Remote validation must remain truthful until the CI foundation branch repairs that failure.
+- The frontend currently expects string errors from the start command; structured admission rejection is an intentional API change that GUI work must consume.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/admission.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/orchestrator.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `docs/adr/0002-runtime-intent-recovery.md`
+- runtime/core documentation only if factual behavior changes require it
+
+### Acceptance checks
+
+```bash
+cargo fmt --all -- --check
+cargo test --workspace --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo metadata --locked --format-version 1
+cd apps/slopity && npm ci && npm run tauri:check
+cd apps/slopity && npm run android:init -- --ci
+cd apps/slopity && npm run android:build -- --debug --target aarch64
+```
+
+GitHub Actions remains the authoritative remote proof. Exact run/job conclusions and any infrastructure blockage will be recorded before this step is closed.
 
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
