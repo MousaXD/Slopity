@@ -489,9 +489,9 @@ impl ServerOrchestrator {
         if desired_state == DesiredServerState::Stopped
             && is_active_state(state)
             && snapshot.last_error.is_none()
-            && previous.as_ref().is_some_and(|prior| {
-                prior.state == state && prior.last_error.is_some()
-            })
+            && previous
+                .as_ref()
+                .is_some_and(|prior| prior.state == state && prior.last_error.is_some())
         {
             snapshot.last_error = previous.as_ref().and_then(|prior| prior.last_error.clone());
         }
@@ -908,7 +908,10 @@ mod tests {
         let failure = snapshot.last_error.clone();
         assert_eq!(orchestrator.active_count(), 1);
         assert_eq!(
-            orchestrator.snapshot(&ServerId("alpha".into())).unwrap().last_error,
+            orchestrator
+                .snapshot(&ServerId("alpha".into()))
+                .unwrap()
+                .last_error,
             failure,
             "healthy refresh must not erase failed-stop evidence"
         );
