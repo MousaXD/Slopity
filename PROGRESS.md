@@ -1,5 +1,94 @@
 # Progress ledger
 
+## Step 030: reduce admission error footprint without weakening checks
+
+**Status:** PARTIAL (layout change and JSON regression assertion committed; exact-head CI pending)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Confirmed CI finding
+
+- Focused runtime fix PR #36 exact-head [Cross-platform CI 42081473190](https://github.com/MousaXD/Slopity/actions/runs/42081473190) passed Rust format and tests, but strict Clippy failed at `crates/slopity-core/src/admission.rs:59`: `clippy::result_large_err`. The `StartAdmissionRejection` `Err` variant is at least 184 bytes.
+- The same admission interface has been copied onto integrated runtime PR #38. Fix the in-memory payload layout rather than silencing the lint or suppressing admission errors.
+
+### Scope
+
+1. Box the large `allocation` field inside `StartAdmissionRejection`; keep the existing `serde` JSON shape, all reasons/issues/warnings, and every safety rejection.
+2. Retain `authorize_start`'s return type and all test assertions; no warning suppression or admission-policy weakening.
+3. Verify in exact-head CI that strict Clippy, Rust tests, platform builds and audit gates pass.
+
+### Non-goals
+
+- No change to runtime features, executable boundaries, UI/API JSON keys, OS platform targets, or release signing.
+- No direct `main`/`dev` modification or premature merge.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/admission.rs`
+
+### Implementation and evidence
+
+- Updated `StartAdmissionRejection.allocation` to `Box<AllocationDecision>`; constructing rejections now boxes the full unchanged allocation report.
+- Added assertions on the serialized rejection to protect JSON keys `allocation`, `warnings`, `validationIssues`, and `reasons`; no fields or decision rules removed.
+- Did not run any local tests; exact-head CI must confirm the error footprint passes Clippy and app/serialization tests pass. Pending result.
+
+### Acceptance checks
+
+- GitHub-hosted Rust fmt, locked tests, strict Clippy `-D warnings` on exact head.
+- Existing admission rejection tests and Tauri serialization/compile continue to pass; no loss of error diagnostics.
+- Linux/Android/Windows and package/audit checks remain enabled, with authentic results recorded.
+
+## Step 029: reconcile Rust runtime safety with the current CI foundation
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Scope and sources
+
+1. Integrate the seven actual backend/source/ADR changed paths from [original runtime hardening draft #10](https://github.com/MousaXD/Slopity/pull/10) into the repaired CI foundation, without overwriting new workflow fixes from #35.
+2. Import the corrected orchestrator implementation (including stop-failure evidence retention and regression tests) from [draft fix #36](https://github.com/MousaXD/Slopity/pull/36), not PR #10's known-failing version.
+3. Preserve original Step 023 runtime admission/lifecycle planning in `PROGRESS.md`, alongside current Step 025/028 CI updates and this new Step 029.
+4. Keep launch authority behind opaque `StartAdmissionPermit`, port/memory validation, and fail-closed stop/observed-state behavior. Keep the built-in HTTP runtime the only registered provider.
+5. Validate on GitHub-hosted CI using Rust 1.89, Linux Tauri, Android ARM64, Windows NSIS, security review and release package validation. Do not manufacture results.
+
+### Non-goals
+
+- No new external runtime support, code-download capabilities, automatic restart behavior, shell command execution, release publication, or direct updates to `main`/`dev`.
+- No replacement or closure of original PR #10 or focused fix PR #36 without proof.
+- No physical-device Android durability claim.
+
+### Risks and acceptance criteria
+
+- The new Tauri admission error API may require GUI V2 integration; review cross-branch behavior on the next combined GUI integration.
+- The failure evidence regression must remain covered by the **unchanged existing assertion** plus the new repeated-refresh/terminal test.
+- Preserve PR #35 audit toolchain and Android SDK setup fixes, and do not replace its CI workflow with stale PR #10 workflow files.
+- Do not claim full validation until exact-head GitHub Actions pass and their run/job links appear here.
+
+### Intended files
+
+- `PROGRESS.md`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `crates/slopity-core/src/{admission.rs,lib.rs,orchestrator.rs}`
+- `crates/slopity-core/tests/orchestrator_foundation.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `docs/adr/0002-runtime-intent-recovery.md`
+
+### Implementation (validation pending)
+
+- Copied the seven precise runtime-source and ADR blobs from the known PR #10 source tree, using the independently corrected `orchestrator.rs` blob from PR #36 head `4dd75293ad4c8669cb7e35bb4e66ff389ed2045f`.
+- Preserved the repaired workflow and audit files from PR #35 instead of importing stale workflow copies.
+- Inserted original Step 023 historical plan without replacing Steps 025 or 028.
+- No application tests were run in this chat. GitHub-hosted exact-head CI is the only acceptance evidence and is still **pending**.
+
+### Checks
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- Linux/Android/Windows CI, security audit, PR release-package builds, unchanged safeguards and honest platform claims.
+
 ## Step 028: remove retired Android SDK tools package from hosted builds
 
 **Status:** PARTIAL (CI change committed; remote build evidence pending)  
@@ -159,6 +248,63 @@ Append new steps at the top. Do not rewrite completed history except to correct 
 - Release pull-request package validation green for Linux `.deb`/AppImage and Android ARM64 debug APK/AAB, with publication skipped by construction.
 - Security/audit jobs green where applicable, with dependency review active for this public repository.
 - Every third-party `uses:` reference remains pinned to a full immutable commit SHA.
+
+## Step 023: harden runtime admission and lifecycle semantics
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Scope
+
+1. Add a platform-neutral start-admission decision in `slopity-core` that combines profile validation, enabled state, verified runtime availability, aggregate port reservations, safe memory budget, immediate memory headroom, and existing CPU-headroom warnings before a runtime adapter can start.
+2. Require an admission permit at the `ServerOrchestrator` start boundary so callers cannot accidentally bypass hard safety checks, while keeping runtime adapters responsible for their own last-mile bind/process errors.
+3. Harden lifecycle semantics for startup, stop failures, runtime observations, unexpected terminal exits, event ordering, terminal evidence, and drop-time cleanup without hiding a potentially live runtime behind a false terminal state.
+4. Add bounded structured unexpected-failure evidence suitable for future retry/backoff policy, with no automatic restart behavior in this step.
+5. Define a versioned desired-state persistence contract and recovery design without persisting process IDs or treating stale observed state as authoritative; defer on-disk lifecycle restore until restart policy is explicitly designed.
+6. Strengthen the built-in HTTP reference-runtime tests for disabled profiles, loopback/LAN binding, request counting, immediate port reuse, unexpected thread exit, event order, and admission rejection before adapter start.
+7. Enforce admission at the Tauri start command and return structured rejection data so frontend code renders backend policy instead of recreating it.
+
+### Non-goals
+
+- Implementing or downloading Java/JVM, Minecraft, Jellyfin, Node.js, Python, PHP, native packages, scripts, or any general arbitrary executable runtime.
+- Registering or exposing `slopity-runtime-local` through Tauri or the frontend.
+- Adding shell command strings, `sh -c`, PowerShell command strings, or `cmd /C`.
+- Automatically restarting failed servers or introducing retry/backoff timing policy.
+- Persisting observed runtime state or process IDs as proof that a process survived an application restart.
+- Owning the concurrent CI/release repair work; this branch will consume Agent 1's fixes later if they become available without overwriting them.
+
+### Risks
+
+- Missing mandatory memory telemetry already causes the conservative resource model to fail closed; start-time enforcement will make that existing policy operational rather than advisory.
+- A synchronous adapter that reports an active state after `stop` may still own live resources. The orchestrator must preserve that active observation so later cleanup can retry instead of masking it as terminal failure.
+- Existing GitHub Actions currently fail during Rust toolchain setup before repository checks run. Remote validation must remain truthful until the CI foundation branch repairs that failure.
+- The frontend currently expects string errors from the start command; structured admission rejection is an intentional API change that GUI work must consume.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/admission.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/orchestrator.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `docs/adr/0002-runtime-intent-recovery.md`
+- runtime/core documentation only if factual behavior changes require it
+
+### Acceptance checks
+
+```bash
+cargo fmt --all -- --check
+cargo test --workspace --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo metadata --locked --format-version 1
+cd apps/slopity && npm ci && npm run tauri:check
+cd apps/slopity && npm run android:init -- --ci
+cd apps/slopity && npm run android:build -- --debug --target aarch64
+```
+
+GitHub Actions remains the authoritative remote proof. Exact run/job conclusions and any infrastructure blockage will be recorded before this step is closed.
 
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
