@@ -482,8 +482,19 @@ impl ServerOrchestrator {
         let process_id = previous.as_ref().and_then(|snapshot| snapshot.process_id);
         let server_id = observation.server_id.clone();
         let state = observation.state;
-        let snapshot =
+        let mut snapshot =
             snapshot_from_observation(identity.clone(), desired_state, process_id, observation);
+        // Preserve a failed stop's diagnostic while the same runtime remains live.
+        // New adapter errors and actual state transitions remain authoritative.
+        if desired_state == DesiredServerState::Stopped
+            && is_active_state(state)
+            && snapshot.last_error.is_none()
+            && previous.as_ref().is_some_and(|prior| {
+                prior.state == state && prior.last_error.is_some()
+            })
+        {
+            snapshot.last_error = previous.as_ref().and_then(|prior| prior.last_error.clone());
+        }
         let unexpected_terminal = desired_state == DesiredServerState::Running
             && is_terminal_state(state)
             && previous
@@ -894,7 +905,13 @@ mod tests {
         assert_eq!(snapshot.desired_state, DesiredServerState::Stopped);
         assert_eq!(snapshot.state, ServerState::Running);
         assert!(snapshot.last_error.is_some());
+        let failure = snapshot.last_error.clone();
         assert_eq!(orchestrator.active_count(), 1);
+        assert_eq!(
+            orchestrator.snapshot(&ServerId("alpha".into())).unwrap().last_error,
+            failure,
+            "healthy refresh must not erase failed-stop evidence"
+        );
     }
 
     #[test]
