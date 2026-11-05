@@ -1,5 +1,57 @@
 # Progress ledger
 
+## Step 026: preserve runtime stop-failure evidence across refresh
+
+**Status:** PARTIAL (fix and regressions committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Finding and scope
+
+- On PR #10's exact head `284c9d514a3bd680140464aa07b8b7b1d03f0857`, GitHub-hosted CI [run 33215426044](https://github.com/MousaXD/Slopity/actions/runs/33215426044) recorded `failed_stop_preserves_potentially_live_runtime` failure: `snapshot.last_error.is_some()` was false (50 core tests passed, one failed).
+- Root cause found in review: `ServerOrchestrator::stop` retains the error and active state, but `snapshot()` invokes `refresh()`, then `apply_observation` recreates the snapshot from a still-running adapter observation lacking `last_error`. Thus an innocent status poll silently drops safety-relevant failed-stop diagnostics.
+- Preserve a prior failed-stop diagnostic if desired state is `Stopped`, the runtime remains active, and the latest observation has no replacement diagnostic.
+- When later observed terminal, use terminal observation as authoritative and do not copy stale stop errors forward. Keep observed running state active and retriable, never forge `Stopped`.
+- Add regression coverage for repeated polling, error preservation and terminal observation; do not weaken the existing failing assertion.
+
+### Non-goals
+
+- Changing runtime start admission, introducing retries/auto-restarters, changing process execution boundaries, modifying `main`/`dev`, or merging PR #10.
+- Treating mock results as proof of Android device durability.
+- Modifying existing CI/release logic; PR #35 independently owns audit/CI reconciliation.
+
+### Risks
+
+- Polling must not mask new adapter-provided errors or overwrite terminal exit evidence.
+- Failure evidence should not survive a genuine successful terminal observation as a current error.
+- Other clients call `snapshot()`, `events()`, `active_count()`; these must retain truthful active states and error history.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/orchestrator.rs`
+
+### Implementation and validation at code commit
+
+- `apply_observation` retains the last failed-stop error when a previously active runtime is still observed active after a stop request, unless the adapter supplies fresher error evidence.
+- An observed terminal state deliberately clears stale stop-failure diagnostics when no terminal error is reported; it remains authoritative for observed state.
+- Added a regression test for repeated polls, diagnostic precedence and terminal observation. Kept the pre-existing failing test and assertion unchanged.
+- **CI status at code commit:** Not yet executed on this commit. The chat environment was not used to run tests; exact GitHub Actions checks are required before marking this DONE.
+- Changes are limited to `PROGRESS.md` and `crates/slopity-core/src/orchestrator.rs`. No runtime provider, UI, release or CI policy changes.
+
+### CI remediation after implementation
+
+- [GitHub Actions run 42080696315](https://github.com/MousaXD/Slopity/actions/runs/42080696315) reached `cargo fmt --all -- --check` and rejected only multiline formatting of the new `last_error` assertion at `orchestrator.rs:958`.
+- Applied the exact rustfmt-reported layout without changing behavior. The test, lint, and platform jobs were blocked by formatting and are **not yet claimed passed**.
+- Android hosted packaging also has a separately identified obsolete SDK `tools` setup problem tracked and fixed on CI recovery PR #35; that workflow fix must be reconciled before full PR #10 platform validation.
+
+### Acceptance checks (GitHub Actions on exact head)
+
+- Existing `failed_stop_preserves_potentially_live_runtime` test passes unchanged.
+- New repeated-refresh/terminal-recovery test passes.
+- `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, and strict Clippy pass on hosted CI.
+- Linux/Android/Windows/build validation remains enabled; failures must be diagnosed, not skipped.
+
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
 
 ## Step 023: harden runtime admission and lifecycle semantics

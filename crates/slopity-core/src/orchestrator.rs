@@ -482,8 +482,23 @@ impl ServerOrchestrator {
         let process_id = previous.as_ref().and_then(|snapshot| snapshot.process_id);
         let server_id = observation.server_id.clone();
         let state = observation.state;
-        let snapshot =
+        let mut snapshot =
             snapshot_from_observation(identity.clone(), desired_state, process_id, observation);
+
+        // A failed stop may leave a real process alive. Retain its diagnostic
+        // through subsequent successful status polls when the adapter reports
+        // an active state without a new error. The observed state still wins:
+        // a later terminal observation must not inherit an obsolete stop error.
+        if desired_state == DesiredServerState::Stopped
+            && is_active_state(snapshot.state)
+            && snapshot.last_error.is_none()
+        {
+            snapshot.last_error = previous
+                .as_ref()
+                .filter(|prior| is_active_state(prior.state))
+                .and_then(|prior| prior.last_error.clone());
+        }
+
         let unexpected_terminal = desired_state == DesiredServerState::Running
             && is_terminal_state(state)
             && previous
@@ -895,6 +910,79 @@ mod tests {
         assert_eq!(snapshot.state, ServerState::Running);
         assert!(snapshot.last_error.is_some());
         assert_eq!(orchestrator.active_count(), 1);
+    }
+
+    #[test]
+    fn failed_stop_error_survives_polling_but_not_terminal_recovery() {
+        let mut orchestrator = ServerOrchestrator::default();
+        orchestrator
+            .register_adapter(Box::new(MockRuntime {
+                observations: HashMap::new(),
+                fail_on_poll: false,
+                fail_stop: true,
+            }))
+            .expect("mock adapter should register");
+        let alpha = profile("alpha", 8_080);
+        let server_id = alpha.id.clone();
+        orchestrator
+            .start(&alpha, permit(&alpha))
+            .expect("server should start");
+
+        assert!(matches!(
+            orchestrator.stop(&server_id),
+            Err(RuntimeError::Process(_))
+        ));
+        let initial = orchestrator
+            .snapshots
+            .get(&server_id)
+            .cloned()
+            .expect("failed stop should retain a snapshot");
+        let stop_error = initial
+            .last_error
+            .clone()
+            .expect("failed stop should retain the error");
+
+        for _ in 0..3 {
+            let snapshot = orchestrator
+                .snapshot(&server_id)
+                .expect("poll should retain a live runtime");
+            assert_eq!(snapshot.state, ServerState::Running);
+            assert_eq!(snapshot.desired_state, DesiredServerState::Stopped);
+            assert_eq!(snapshot.last_error.as_deref(), Some(stop_error.as_str()));
+            assert!(orchestrator.is_active(&server_id));
+        }
+
+        // Adapter-provided diagnostic evidence takes precedence over the
+        // previous error instead of being masked by the carry-forward logic.
+        let mut new_observation = RuntimeObservation::running(server_id.clone());
+        new_observation.last_error = Some("fresh adapter error".into());
+        orchestrator.apply_observation(initial.runtime.clone(), new_observation);
+        assert_eq!(
+            orchestrator
+                .snapshots
+                .get(&server_id)
+                .unwrap()
+                .last_error
+                .as_deref(),
+            Some("fresh adapter error")
+        );
+
+        // An eventual stopped observation clears the *current* stop-error
+        // field. The previously emitted failure event remains in the log.
+        let mut terminal = RuntimeObservation::running(server_id.clone());
+        terminal.state = ServerState::Stopped;
+        terminal.exit = Some(RuntimeExit {
+            reason: RuntimeExitReason::UserRequested,
+            message: "late stop confirmed".into(),
+        });
+        orchestrator.apply_observation(initial.runtime, terminal);
+        let stopped = orchestrator.snapshots.get(&server_id).unwrap();
+        assert_eq!(stopped.state, ServerState::Stopped);
+        assert_eq!(stopped.desired_state, DesiredServerState::Stopped);
+        assert!(stopped.last_error.is_none());
+        assert!(orchestrator.events.iter().any(|event| {
+            event.kind == RuntimeEventKind::Failed && event.message.contains("Stop failed")
+        }));
     }
 
     #[test]
