@@ -1,5 +1,44 @@
 # Progress ledger
 
+## Step 027: reconcile GUI V2 with the repaired cross-platform CI foundation
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Baseline, intent and scope
+
+- Existing [draft GUI PR #9](https://github.com/MousaXD/Slopity/pull/9) contains GUI V2 (23 application/frontend files changed) but was blocked before tests by an old Rust setup workflow in [run 33214870336](https://github.com/MousaXD/Slopity/actions/runs/33214870336). Its code is neither proven broken nor proven passing.
+- Base this new stacked GUI integration slice on [draft CI recovery PR #35](https://github.com/MousaXD/Slopity/pull/35), which incorporates the historically successful PR #11 cross-platform workflow and the November audit/Android SDK setup repairs.
+- Carry all 23 changed frontend paths (including the modular shell, profile flows, status views, safer DOM helpers, client validators, Node frontend tests and lint/format gates) from exact GUI V2 head `5e45e51872a3960dd6d148047c4aa12c23b301ec` unchanged. Preserve existing backend/runtime/security boundaries.
+- Preserve the original Step 021 GUI plan entry in `PROGRESS.md` instead of overwriting it during branch reconciliation.
+
+### Non-goals
+
+- No invented runtime support, package downloads, generic execution, or new Tauri permissions.
+- No direct `main`/`dev` edits, merges of human draft PRs, or loss of existing controls.
+- No claim of manual screenshot/keyboard testing when not conducted; CI Node tests are a minimum, not a substitute for viewport or accessibility QA.
+- No changes to Rust admission code (handled separately by PR #10 and its fix PR #36).
+
+### Risks
+
+- Modular frontend DOM wiring and backend command shapes may differ from base app; remote Node/Tauri CI should detect contract regressions but rendered-device QA still remains.
+- `PROGRESS.md` is edited in other draft branches; preserve original Step 021 and current Step 025/028 records independently.
+- The frontend must label unregistered runtimes unavailable and avoid misleading start controls.
+
+### Intended files
+
+- `PROGRESS.md`
+- `apps/slopity/package.json`
+- `apps/slopity/scripts/{format-check.mjs,frontend-lint.mjs}`
+- `apps/slopity/web/**` (exact changed files in PR #9)
+
+### GitHub Actions acceptance
+
+- Frontend format/lint/Node tests via `npm run frontend:check` inside `npm run tauri:check`.
+- Rust fmt, locked workspace tests, strict Clippy; Linux Tauri build; Android ARM64 debug/manifest/artifact; Windows NSIS build; dependency/security audit; PR-only release package validation.
+- Evidence must come from exact new head. Until validated, status is PARTIAL and PR stays draft. Manual viewport/screenshot and keyboard/focus QA remain separately required.
+
 ## Step 028: remove retired Android SDK tools package from hosted builds
 
 **Status:** PARTIAL (CI change committed; remote build evidence pending)  
