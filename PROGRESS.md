@@ -33,8 +33,9 @@
 - The status reconciliation preserves live-state failure diagnostics until a fresh adapter error or terminal observation replaces them.
 - Desktop local-process termination keeps the child handle until kill/wait is confirmed; an already exited child may be reaped without treating it as a live stop failure.
 - Rust regressions cover changed-profile permit reuse, partial startup with live observations and subsequent stop, plus already reaped child cleanup.
+- Additional in-scope execution-path hardening: resolve the profile executable and working directory to concrete absolute filesystem paths before calling `Command::new` and `current_dir`. This closes the mismatch between `is_file()` checking a relative file and OS PATH lookup executing a different binary; added a non-file execution rejection test. Local-process registration is still intentionally disabled in the app.
 - Changed source: `crates/slopity-core/src/admission.rs`, `crates/slopity-core/src/orchestrator.rs`, `crates/slopity-runtime-local/src/lib.rs`; this progress entry is included in the implementation commit.
-- Acceptance is pending **this exact implementation SHA** in GitHub Actions. The integration PR #43 baseline at `31d524f` had [Cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [Security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) successful; these historical results do not certify Agent 02 changes. No local checks are claimed.
+- Acceptance is pending **this branch's final implementation SHA** in GitHub Actions; validation on an earlier commit does not certify subsequent source changes. The integration PR #43 baseline at `31d524f` had [Cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [Security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) successful; these historical results do not certify Agent 02 changes. No local checks are claimed.
 
 
 ## Step 033: owner-controlled cross-workstream integration candidate

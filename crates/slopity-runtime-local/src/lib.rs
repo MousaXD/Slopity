@@ -59,6 +59,15 @@ impl RuntimeAdapter for LocalProcessRuntime {
             let executable = profile.executable.ok_or_else(|| {
                 RuntimeError::InvalidRequest("profile has no executable path".into())
             })?;
+            // Resolve the checked file to an absolute path before spawning.
+            // Command::new("name") can search PATH even if a different
+            // relative file named "name" passed an earlier is_file() check.
+            let executable = executable.canonicalize().map_err(|error| {
+                RuntimeError::InvalidRequest(format!(
+                    "executable path cannot be resolved ({}): {error}",
+                    executable.display()
+                ))
+            })?;
             if !executable.is_file() {
                 return Err(RuntimeError::InvalidRequest(format!(
                     "executable does not exist or is not a file: {}",
@@ -72,6 +81,12 @@ impl RuntimeAdapter for LocalProcessRuntime {
             command.stdout(Stdio::piped());
             command.stderr(Stdio::piped());
             if let Some(directory) = &profile.working_directory {
+                let directory = directory.canonicalize().map_err(|error| {
+                    RuntimeError::InvalidRequest(format!(
+                        "working directory cannot be resolved ({}): {error}",
+                        directory.display()
+                    ))
+                })?;
                 if !directory.is_dir() {
                     return Err(RuntimeError::InvalidRequest(format!(
                         "working directory does not exist: {}",
@@ -129,6 +144,35 @@ impl RuntimeAdapter for LocalProcessRuntime {
 mod tests {
     use super::*;
     use std::process::{Command, Stdio};
+
+    #[test]
+    fn rejects_non_file_executable_without_using_a_shell_or_path_lookup() {
+        let profile = slopity_core::ServerProfile {
+            id: ServerId("bad-executable".into()),
+            name: "Not an executable file".into(),
+            runtime: RuntimeKind::Native,
+            executable: Some(std::env::current_dir().expect("test working directory")),
+            arguments: vec!["--do-not-run".into()],
+            working_directory: None,
+            port: 8_080,
+            memory_mib: 128,
+            network_scope: slopity_core::NetworkScope::Loopback,
+            enabled: true,
+        };
+        let mut adapter = LocalProcessRuntime::new(RuntimeKind::Native);
+        // Android intentionally refuses all local process launches.
+        if cfg!(target_os = "android") {
+            assert!(matches!(
+                adapter.start(RuntimeRequest { profile }),
+                Err(RuntimeError::Unavailable(_))
+            ));
+        } else {
+            assert!(matches!(
+                adapter.start(RuntimeRequest { profile }),
+                Err(RuntimeError::InvalidRequest(_))
+            ));
+        }
+    }
 
     #[test]
     fn already_reaped_child_can_be_stopped_and_removed() {
