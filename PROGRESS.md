@@ -2,8 +2,9 @@
 
 ## Step 045: preserve Rust-compatible profile metadata through JSON transfer
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation committed; exact-head CI pending)  
 **Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
 **Owner:** Agent 03 — GUI/UX
 
 ### Scope, non-goals, risks and acceptance
@@ -14,6 +15,13 @@
 - Intended files: `apps/slopity/web/domain/profile-transfer.js`, `apps/slopity/web/app.js`, `apps/slopity/web/tests/discovery-transfer.test.mjs`, and this `PROGRESS.md` only.
 - No shared manifests, Rust/Android/workflows, filesystem execution, runtime enablement, merges or release operations.
 - Acceptance: exact-head GitHub Actions frontend tests, format/lint and platform builds; manual WebView download behavior remains unverified.
+
+### Implementation and evidence
+- Aligned JSON profile validation with Rust's 4,096-byte path fields, 256 arguments / 8,192 UTF-8 bytes each / 65,536-byte combined argument payload and u32 memory value. The backend continues to apply its runtime/memory policy independently.
+- Preserved inert executable/working-directory/argument metadata even on built-in HTTP profiles, matching the persisted model (the backend warns but never executes these fields).
+- Bounded JSON document import **and export** to 8 MiB with at most 100 profiles; oversized/unsupported content fails before backend mutation.
+- Expanded regression tests for compatible metadata round trips, malformed payload rejection, UTF-8/argument limits, and memory overflow.
+- No local checks or Android WebView download tests claimed; GitHub-hosted exact-head runs are required after committing this implementation.
 
 
 ## Step 044: retain keyboard focus through live card updates

@@ -1,7 +1,7 @@
 // JSON configuration only: no archives, executable file contents, commands or automatic starts.
 export const TRANSFER_FORMAT = 'slopity-profiles';
 export const TRANSFER_VERSION = 1;
-export const MAX_IMPORT_BYTES = 256 * 1024;
+export const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
 export const MAX_IMPORT_PROFILES = 100;
 
 const RUNTIMES = new Set(['built-in-http', 'java', 'node-js', 'python', 'php', 'native', 'custom']);
@@ -27,26 +27,25 @@ function validateProfileData(value, index, strict = true) {
   if (!RUNTIMES.has(value.runtime)) reject(`${label} uses an unknown runtime.`);
   if (value.networkScope !== 'loopback' && value.networkScope !== 'lan') reject(`${label} has an invalid network scope.`);
   if (!Number.isInteger(value.port) || value.port < 1 || value.port > 65535) reject(`${label} has an invalid port.`);
-  if (!Number.isInteger(value.memoryMib) || value.memoryMib < 128 || value.memoryMib > 32768) {
-    reject(`${label} has an invalid memory budget (128-32768 MiB).`);
+  if (!Number.isInteger(value.memoryMib) || value.memoryMib < 128 || value.memoryMib > 0xffffffff) {
+    reject(`${label} has an invalid memory budget (128 MiB to the backend u32 limit).`);
   }
   if (typeof value.enabled !== 'boolean') reject(`${label} needs an enabled boolean.`);
   const strings = ['executable', 'workingDirectory'];
   for (const key of strings) {
     if (value[key] !== undefined && value[key] !== null &&
-      (typeof value[key] !== 'string' || value[key].length > 2048)) {
+      (typeof value[key] !== 'string' || new TextEncoder().encode(value[key]).length > 4096)) {
       reject(`${label} has invalid ${key} metadata.`);
     }
   }
   const args = value.arguments ?? [];
-  if (!Array.isArray(args) || args.length > 64 ||
-    args.some((arg) => typeof arg !== 'string' || arg.length > 2048)) {
+  if (!Array.isArray(args) || args.length > 256 ||
+    args.some((arg) => typeof arg !== 'string' || new TextEncoder().encode(arg).length > 8192) ||
+    args.reduce((bytes, arg) => bytes + (typeof arg === 'string' ? new TextEncoder().encode(arg).length : 0), 0) > 65536) {
     reject(`${label} has invalid structured argument metadata.`);
   }
-  if (value.runtime === 'built-in-http' &&
-    (value.executable || value.workingDirectory || args.length)) {
-    reject(`${label} cannot attach external executables to the built-in HTTP runtime.`);
-  }
+  // Even for built-in HTTP, persisted path/argument fields are inert metadata.
+  // The backend warns about them; importing does not run a binary or script.
 
   return {
     id: value.id,
@@ -56,9 +55,9 @@ function validateProfileData(value, index, strict = true) {
     port: value.port,
     memoryMib: value.memoryMib,
     enabled: value.enabled,
-    executable: value.runtime === 'built-in-http' ? null : value.executable ?? null,
-    workingDirectory: value.runtime === 'built-in-http' ? null : value.workingDirectory ?? null,
-    arguments: value.runtime === 'built-in-http' ? [] : [...args],
+    executable: value.executable ?? null,
+    workingDirectory: value.workingDirectory ?? null,
+    arguments: [...args],
   };
 }
 
@@ -67,12 +66,16 @@ export function serializeProfiles(profiles = []) {
     reject(`Export supports at most ${MAX_IMPORT_PROFILES} profiles at a time.`);
   }
   const config = profiles.map((profile, index) => validateProfileData(profile, index, false));
-  return JSON.stringify({ format: TRANSFER_FORMAT, version: TRANSFER_VERSION, profiles: config }, null, 2) + '\n';
+  const json = JSON.stringify({ format: TRANSFER_FORMAT, version: TRANSFER_VERSION, profiles: config }, null, 2) + '\n';
+  if (new TextEncoder().encode(json).length > MAX_IMPORT_BYTES) {
+    reject('The exported profiles exceed the 8 MiB JSON transfer limit.');
+  }
+  return json;
 }
 
 export function parseProfileImport(text, existingProfiles = []) {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
-    reject('The selected JSON file exceeds the 256 KiB import limit.');
+    reject('The selected JSON file exceeds the 8 MiB import limit.');
   }
   let parsed;
   try {

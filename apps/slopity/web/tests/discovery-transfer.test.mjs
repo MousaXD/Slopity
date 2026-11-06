@@ -54,13 +54,26 @@ test('import previews collisions and duplicate file IDs without replacing existi
   assert.match(parsed.entries[2].reason, /Duplicate ID/);
 });
 
-test('import rejects untrusted fields, invalid schema, oversized input and executable attachments to HTTP', () => {
+test('import rejects untrusted fields, invalid schema, oversized input and malformed metadata', () => {
   const base = JSON.parse(serializeProfiles([http]));
   assert.throws(() => parseProfileImport(JSON.stringify({ ...base, version: 999 })), /Unsupported profile file/);
   assert.throws(() => parseProfileImport(JSON.stringify({ ...base, profiles: [{ ...http, code: 'run()' }] })), /unsupported fields/);
-  assert.throws(() => parseProfileImport(JSON.stringify({ ...base, profiles: [{ ...http, executable: '/bin/sh' }] })), /cannot attach external executables/);
-  assert.throws(() => parseProfileImport('x'.repeat(MAX_IMPORT_BYTES + 1)), /256 KiB/);
+  assert.throws(() => parseProfileImport(JSON.stringify({ ...base, profiles: [{ ...http, executable: { script: 'run' } }] })), /invalid executable/);
+  assert.throws(() => parseProfileImport(JSON.stringify({ ...base, profiles: [{ ...http, arguments: ['a'.repeat(8193)] }] })), /invalid structured argument/);
+  assert.throws(() => parseProfileImport('x'.repeat(MAX_IMPORT_BYTES + 1)), /8 MiB/);
   assert.throws(() => parseProfileImport('{'), /not valid JSON/);
+});
+
+test('transfer preserves inert built-in metadata and backend-compatible UTF-8/argument boundaries', () => {
+  const metadata = { ...http, executable: '/usr/local/share/description',
+    workingDirectory: '/storage/config', arguments: ['--inert', 'example'], memoryMib: 65536 };
+  const preview = parseProfileImport(serializeProfiles([metadata]));
+  assert.equal(preview.entries[0].profile.enabled, false);
+  assert.equal(preview.entries[0].profile.executable, metadata.executable);
+  assert.deepEqual(preview.entries[0].profile.arguments, metadata.arguments);
+  assert.equal(preview.entries[0].profile.memoryMib, 65536);
+  assert.throws(() => serializeProfiles([{ ...http, memoryMib: 0x100000000 }]), /invalid memory budget/);
+  assert.throws(() => serializeProfiles([{ ...http, workingDirectory: 'x'.repeat(4097) }]), /invalid workingDirectory/);
 });
 
 test('preview renders untrusted profile text safely without HTML injection', () => {

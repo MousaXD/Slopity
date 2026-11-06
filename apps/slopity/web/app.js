@@ -427,7 +427,7 @@ async function previewProfileFile(event) {
   if (!file) return;
   if (store.get().busy || !currentSnapshot()) return;
   try {
-    if (file.size > MAX_IMPORT_BYTES) throw new Error('JSON imports must be 256 KiB or smaller.');
+    if (file.size > MAX_IMPORT_BYTES) throw new Error('JSON imports must be 8 MiB or smaller.');
     const text = await file.text();
     const preview = parseProfileImport(text, currentSnapshot().profiles ?? []);
     pendingImport = preview;
