@@ -1,5 +1,28 @@
 # Progress ledger
 
+## Step 046: isolated combined-branch proof of Android foreground host JVM lifecycle tests
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-07  
+**Owner:** Agent 04 — Android hosting validation  
+**Branch:** `test/android-native-junit-combined-proof-agent04` (throwaway CI evidence, not a merge candidate)  
+**Base:** Agent 01 CI `aba76b52c8a8f306c029800f6019fe669dff9e7e`
+
+### Objective and strictly limited changes
+
+- Validate Agent 01's native Android Gradle JUnit CI runner together with Agent 04's *actual* lifecycle test source and foreground host changes, rather than inferring tests passed from isolated green branches.
+- Copy only the eight non-ledger Android-agent changed file contents from PR #51 `1340ecb5a09dbd0ffaaafbf91fe84c738b5b4805` on top of the *exact* CI agent tip. Retain Agent 01's workflow and `scripts/check-android-host-junit.sh` unchanged.
+- This branch is an independent test combination, **not** a proposal to merge Agent 01's workflow ownership into Agent 04's PR or to replace the integration coordinator's controlled branch.
+- No modifications to main, dev, the integration branch, any CI workflow, signing/release scripts, or other agent PR branches.
+
+### Mandatory evidence before acceptance
+
+- Push combined source and inspect exact-HEAD GitHub-hosted Cross-platform CI Android ARM64 `Run native Android host JUnit tests` output and nonempty test XML specifically for `com.slopity.host.HostForegroundServiceTest`; fix actual failures in Agent 04-owned source without reducing checks.
+- Record independent Rust quality, Android ARM64 debug, Windows NSIS, Linux Tauri and release package outcomes as they become available.
+- Physical-device survival, notification visibility and stop propagation remain **BLOCKED** by issue #44; an emulator or CI JVM is not physical-device proof.
+- Leave PR #51 draft and provide evidence to Agent 00 to validate the eventual combined integration. No merge or automatic production release.
+
+
 ## Step 036: gate Android native plugin JUnit tests in hosted CI
 
 **Status:** PARTIAL (native test gate implemented; exact-head hosted CI pending and PR #51 tests not present on this branch)  
