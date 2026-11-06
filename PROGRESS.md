@@ -2,8 +2,9 @@
 
 ## Step 105: retain independent QA admission regressions in Rust test suite
 
-**Status:** IN PROGRESS
+**Status:** PARTIAL (QA regressions committed; new exact-head CI pending)
 **Declared:** 2026-11-07
+**Updated:** 2026-11-07
 **Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
 **Baseline:** Step 104 exact SHA `11356868918b146be98bc5989bee78504544ee8f` and [successful cross-platform CI 42285264906](https://github.com/MousaXD/Slopity/actions/runs/42285264906).
 
@@ -16,6 +17,13 @@
 - No changes to Tauri/Android/GUI/CI workflows, package graph, other agents' branches, `main`, `dev` or integration branch. Do not merge the intentionally red QA branch.
 - Mandatory planning commit first; implementation/tests and status ledger in the second commit.
 - Verify exact implementation SHA on GitHub-hosted Rust fmt, locked tests, strict Clippy, Linux/Android/Windows and package validation. Record incomplete jobs honestly; no local/device tests claimed.
+
+### Implementation and evidence
+- Copied QA's two named test cases `permit_rejects_profile_disabled_after_admission` and `permit_rejects_network_scope_expanded_after_admission` without modifying their assertion logic.
+- Retained existing full-profile equality permit implementation, structured admission rejection, and all other tests unchanged.
+- Changes: `crates/slopity-core/src/admission.rs` and same-commit `PROGRESS.md` only.
+- Parent SHA `11356868918b146be98bc5989bee78504544ee8f` passed [cross-platform run 42285264906](https://github.com/MousaXD/Slopity/actions/runs/42285264906), including 86 Rust tests, formatting, strict Clippy, Linux Tauri, Android ARM64, and Windows NSIS. This does **not** certify this newly tested head.
+- This head needs new exact-head Actions. No local tests or physical device checks performed.
 
 
 ## Step 104: apply GitHub-hosted Rust formatting gate for Step 103
