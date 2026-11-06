@@ -1,5 +1,24 @@
 # Progress ledger
 
+## Step 104: apply GitHub-hosted Rust formatting gate for Step 103
+
+**Status:** IN PROGRESS
+**Declared:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Observed failure:** [Cross-platform CI 42284944250](https://github.com/MousaXD/Slopity/actions/runs/42284944250), Rust quality job `128123228627` at `3169e211436d3273cd767baeaeb23272c1ac0c26`.
+
+### Scope and non-goals
+- Apply only the three exact `rustfmt` layout diffs reported by Rust 1.89.0 in `crates/slopity-runtime-local/src/lib.rs`: nested std import, multiline start request, multiline chained observation assertion.
+- Preserve all Step 102/103 semantics, security checks, tests, process-handling behavior and existing assertions unchanged.
+- Intended files: `crates/slopity-runtime-local/src/lib.rs`, `PROGRESS.md`.
+- No workflows, GUI, shared Tauri, Android Kotlin, `main`, `dev`, integration edits, or merges.
+
+### Acceptance
+- Planning commit precedes code change. Implementation commit carries only formatting and closure of this entry.
+- Exact-head GitHub-hosted formatting, locked workspace tests, strict Clippy and Linux/Android/Windows/build-package jobs. The failed Step 103 run did not execute tests or Clippy.
+- Maintain draft PR #46 until the last implementation SHA passes; no local tests or device proof claimed.
+
+
 ## Step 103: observe and reap desktop child-process exits
 
 **Status:** PARTIAL (source and tests committed; exact-head CI pending)
