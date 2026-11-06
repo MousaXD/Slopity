@@ -1,5 +1,25 @@
 # Progress ledger
 
+## Step 032: repair runtime admission formatting gate
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Evidence and scope
+
+- [PR #38 CI run 42083372641](https://github.com/MousaXD/Slopity/actions/runs/42083372641) failed the Rust quality job at `cargo fmt --all -- --check` before tests and Clippy.
+- The exact diff in `crates/slopity-core/src/admission.rs` is a rustfmt-only line wrap of `serde_json::to_value(&rejection).expect(...)`.
+- Correct only that formatting; retain admission rejection diagnostics, assertions, serialization shape, and fail-closed policy.
+- Intended files: `crates/slopity-core/src/admission.rs`, `PROGRESS.md`.
+- Non-goals: runtime policy changes, warning suppression, skipped tests, Android device claims, workflow changes, merges or releases.
+- Acceptance: exact-head GitHub-hosted Rust format, locked tests, strict Clippy, Linux/Android/Windows and release checks; record any failures honestly. No local tests will be claimed.
+
+### Implementation and evidence
+
+Pending implementation commit and exact-head GitHub Actions.
+
+
 ## Step 030: reduce admission error footprint without weakening checks
 
 **Status:** PARTIAL (layout change and JSON regression assertion committed; exact-head CI pending)  
