@@ -1,5 +1,34 @@
 # Progress ledger
 
+## Step 035: remove premature apt wall-clock cutoff from hosted Linux builds
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Confirmed failure and rationale
+
+- [PR #47 release run 42279623891](https://github.com/MousaXD/Slopity/actions/runs/42279623891) failed its [Linux .deb/AppImage job 128104932881](https://github.com/MousaXD/Slopity/actions/runs/42279623891/job/128104932881) during `Install Linux Tauri system dependencies`, with **exit 124** after the 900-second GNU `timeout` set in Step 034. The logs show apt still successfully fetching necessary packages until the forced cutoff.
+- The unmodified parent PR #43's [release run 42275322783](https://github.com/MousaXD/Slopity/actions/runs/42275322783) subsequently **passed** Linux packaging and published no release. Its Linux job spent approximately **32 minutes 37 seconds** fetching 33.6 MB from a severely slow Ubuntu mirror; the explicit 900-second limit introduced a regression relative to that working base.
+- [PR #47 cross-platform CI 42279623935](https://github.com/MousaXD/Slopity/actions/runs/42279623935) and [security audit 42279623942](https://github.com/MousaXD/Slopity/actions/runs/42279623942) passed; the Linux package failure is infrastructure download time, not evidence that application build or tests failed.
+
+### Scope and intended files
+
+- Remove both GNU `timeout` wrappers in the apt bootstrap steps from `.github/workflows/ci.yml` and `.github/workflows/release.yml`. Keep `Acquire::Retries=3` and per-request HTTP/HTTPS timeouts (30 seconds) to bound stalled acquisition attempts without prematurely rejecting a long but progressing package set.
+- Preserve the original `timeout-minutes` limits on the GitHub jobs as the overarching wall-clock bound, all existing Ubuntu package names and flags, and all downstream Rust/frontend/package gates.
+- Update `PROGRESS.md` in the implementation commit with exact-head CI evidence.
+
+### Non-goals
+
+- No changes to application code, platform targets, dependencies, audit policy, release signing, publication behavior, action pinning, user functionality, `main` or `dev`.
+- No suppression of security advisories, disabling tests, skipping Linux artifacts, bypassing permission controls, or speculative mirror changes.
+
+### Risks and acceptance
+
+- Hosted Ubuntu mirrors can still be slow. Per-request timeout/retries can fail genuine network outages while GitHub job time limits prevent unbounded hangs; a fast download is not guaranteed.
+- Require fresh GitHub Actions runs on exact implementation head: Rust fmt/locked workspace tests/strict Clippy, frontend tests/lint/format, Linux Tauri compile, Android ARM64 manifest and artifacts, Windows NSIS, Cargo/npm audits, dependency review, Linux .deb/AppImage and Android preview packages, with PR publication skipped.
+- Keep draft PR until every required check passes; do not claim local verification.
+
 ## Step 034: bound Linux hosted dependency bootstrap without weakening checks
 
 **Status:** PARTIAL (bounded bootstrap implemented; exact-head GitHub Actions pending)  
