@@ -1,5 +1,28 @@
 # Progress ledger
 
+## Step 046: truthful mutation outcomes and functional UI refresh settings
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope and intended files
+- Fix a real UX/data-integrity risk: a profile/server operation may succeed, then the dashboard refresh may fail. Do not report the committed operation as failed or encourage accidental retry; retain the existing snapshot, communicate stale state, and require refresh before further non-emergency mutation.
+- Continue allowing Stop for an observed active server during stale-state recovery, subject to backend policy; never falsely claim that a failure is success.
+- Add a real Settings screen for UI-only auto-refresh on/off and interval (2/5/10/30 seconds), with safe optional local persistence and explicit messaging that these options do not affect native server hosting.
+- Improve busy/offline controls on server cards and details so users cannot launch duplicate mutations while the backend state is stale; retain read-only details/export and retry controls.
+- Add Node tests proving mutation/action vs refresh outcomes, preference validation/storage failure, and rendering behavior. Preserve all existing functionality.
+- Intended files: `apps/slopity/web/app.js`, `index.html`, `styles.css`, `components/server-card.js`, `views/dashboard.js`, new `domain/ui-preferences.js`, new `domain/mutation-outcome.js`, new frontend tests, `PROGRESS.md`.
+- No Rust, Android, native settings, package manifests, GitHub workflows, or shared integration changes.
+
+### Risks, non-goals and acceptance
+- An action's failure must never be converted to success; distinguish only the separately failing follow-up snapshot request.
+- Cached/stale dashboards are never evidence of live backend status. Blocking profile starts during unknown state must not remove the user's ability to attempt Stop on an already-observed active server.
+- Local storage can be unavailable in WebViews; settings must still work for the current session. Do not claim local preferences change hosting durability.
+- No mocked backend success, unsupported runtimes, executable imports, or scheduled tasks.
+- Acceptance: exact-head GitHub-hosted frontend format/lint/Node tests, Linux Tauri, Rust, Android and Windows where applicable, release package validation, manual app-shell keyboard/visual/WebView verification documented truthfully.
+
+
 ## Step 045: preserve Rust-compatible profile metadata through JSON transfer
 
 **Status:** PARTIAL (implementation committed; exact-head CI pending)  
