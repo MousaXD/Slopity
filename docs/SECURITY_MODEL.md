@@ -10,7 +10,7 @@
 ## Initial trust boundaries
 
 - The web frontend is untrusted presentation code relative to process execution.
-- Tauri commands expose only typed profile inspection and validation in this foundation.
+- Tauri commands expose typed profile management and a built-in HTTP server lifecycle. Admission checks and stopped-profile guards belong in Rust; frontend data cannot authorize an arbitrary runtime.
 - Runtime adapters accept an explicit executable and argument vector, never a generic shell string.
 - New profiles bind to loopback by default.
 - Runtime availability is separate from profile validity.
@@ -31,4 +31,6 @@ Long-running hosting must be user-initiated, visible through a foreground-servic
 
 ## Deliberate exclusions
 
-The current UI cannot download runtimes, launch arbitrary user commands, expose a remote API, or claim Android background hosting support.
+The current UI cannot download runtime packages, execute arbitrary user commands, or expose an authenticated remote administration API. Only the built-in HTTP server is currently registered as runnable. Android host/foreground-service integration compiles in CI, but durable physical-device hosting remains unverified.
+
+No downloadable package, plugin, archive-extraction, or third-party executable integration is approved until the source/version/license/integrity and path-traversal controls in [the dependency and supply-chain review](DEPENDENCY_SECURITY_REVIEW_2026-11-06.md) are implemented and tested.
