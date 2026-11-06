@@ -1,5 +1,29 @@
 # Progress ledger
 
+## Step 103: observe and reap desktop child-process exits
+
+**Status:** IN PROGRESS
+**Declared:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Parent implementation SHA:** `d6714fe21665e10fda6180fdca91f4635870db96`
+
+### Scope
+- The currently unregistered `LocalProcessRuntime` stores process handles, but implements no `observe` or `observations`. A natural child exit remains a stale Running state in `ServerOrchestrator` and a stale process handle prevents restart.
+- Implement nonblocking, trustworthy child `try_wait` observations and record terminal states. A zero exit is a completed stop, a nonzero exit a failure with diagnostic evidence; an inconclusive wait error must not discard a potentially live child.
+- Reap completed processes before new start attempts and retain known terminal observations so the orchestrator can detect unexpected exits; cleanly reset a restarted server's terminal snapshot.
+- Add tests for nonzero exit, clean exit, and restart eligibility after a terminated child.
+- Intended implementation files: `crates/slopity-runtime-local/src/lib.rs` and this same-commit `PROGRESS.md`.
+
+### Non-goals and safety
+- No registration of external runtime providers, actual Java/Node/Python/PHP support claims, shell commands, new OS process-kill permissions, or Android process execution.
+- No edits to shared Tauri, Kotlin, GUI, workflows, `main`, `dev` or integration branch.
+- Do not erase errors or report a possibly live process terminal merely because `try_wait` fails; keep structured executable arguments, path validation and the Step 102 stop-failure protections.
+
+### Acceptance
+- GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, strict Clippy, Linux/Android/Windows and package validation, with exact run links recorded truthfully. No local or physical-device tests claimed.
+- Commit A is this plan only. Commit B must combine source/tests and closure of this ledger entry. Keep PR #46 draft while CI is not certified.
+
+
 ## Step 102: Agent 02 Rust admission and lifecycle fail-closed hardening
 
 **Status:** PARTIAL (implementation submitted; exact-head GitHub-hosted validation pending)
