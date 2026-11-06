@@ -304,4 +304,44 @@ mod tests {
         );
         assert!(permit.is_ok());
     }
+
+    #[test]
+    fn permit_rejects_profile_disabled_after_admission() {
+        let approved = profile("alpha", 8_080, 512, true);
+        let permit = authorize_start(
+            &capability(Some(8_192), Some(6_000)),
+            std::slice::from_ref(&approved),
+            &[],
+            &approved,
+            &available(),
+        )
+        .expect("enabled baseline profile should pass admission");
+
+        let mut changed = approved;
+        changed.enabled = false;
+        assert!(
+            !permit.matches(&changed),
+            "a permit must not authorize a profile that was disabled after admission"
+        );
+    }
+
+    #[test]
+    fn permit_rejects_network_scope_expanded_after_admission() {
+        let approved = profile("alpha", 8_080, 512, true);
+        let permit = authorize_start(
+            &capability(Some(8_192), Some(6_000)),
+            std::slice::from_ref(&approved),
+            &[],
+            &approved,
+            &available(),
+        )
+        .expect("loopback baseline profile should pass admission");
+
+        let mut changed = approved;
+        changed.network_scope = NetworkScope::Lan;
+        assert!(
+            !permit.matches(&changed),
+            "a permit for loopback must not authorize subsequent LAN exposure"
+        );
+    }
 }
