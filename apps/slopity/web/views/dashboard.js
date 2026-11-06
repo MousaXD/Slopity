@@ -2,14 +2,15 @@ import { el, issueList, replace, statusPill } from '../components/dom.js';
 import { renderServerCard } from '../components/server-card.js';
 import { collectResourceWarnings, dashboardMetrics, recoveryMessages } from '../domain/resources.js';
 import { availabilityFor, runtimeLabel } from '../domain/runtime.js';
+import { selectProfiles } from '../domain/profile-query.js';
 
-export function renderDashboard(document, elements, snapshot, actions = {}) {
+export function renderDashboard(document, elements, snapshot, actions = {}, filters = {}) {
   if (!snapshot) return;
   renderMetrics(document, elements.metrics, snapshot);
   renderRuntimeAvailability(document, elements.runtimeGrid, snapshot);
   renderWarnings(document, elements.resourceWarnings, snapshot);
   renderRecovery(document, elements.recoveryNotices, snapshot);
-  renderServers(document, elements.serverGrid, snapshot, actions);
+  renderServers(document, elements.serverGrid, snapshot, actions, filters, elements.resultCount);
   renderHostStatus(document, elements.hostStatus, snapshot);
 }
 
@@ -49,12 +50,17 @@ function renderRecovery(document, target, snapshot) {
   replace(target, ...messages.map((message) => el(document, 'div', { className: 'recovery-notice', text: message })));
 }
 
-function renderServers(document, target, snapshot, actions) {
-  const profiles = snapshot.profiles ?? [];
+function renderServers(document, target, snapshot, actions, filters = {}, resultCount = null) {
+  const allProfiles = snapshot.profiles ?? [];
+  const profiles = selectProfiles(snapshot, filters);
+  if (resultCount) resultCount.textContent = `Showing ${profiles.length} of ${allProfiles.length} saved profiles`;
   if (!profiles.length) {
+    const empty = !allProfiles.length;
     replace(target, el(document, 'div', { className: 'empty-state' },
-      el(document, 'strong', { text: 'No saved servers' }),
-      el(document, 'p', { text: 'Create a profile. Built-in HTTP can run now; other runtimes remain configuration-only until a verified adapter exists.' }),
+      el(document, 'strong', { text: empty ? 'No saved servers' : 'No matching profiles' }),
+      el(document, 'p', { text: empty
+        ? 'Create a profile. Built-in HTTP can run now; other runtimes remain configuration-only until a verified adapter exists.'
+        : 'Try another search, runtime, or status filter. No profiles were changed.' }),
     ));
     return;
   }

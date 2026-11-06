@@ -2,8 +2,9 @@
 
 ## Step 043: Agent 03 GUI V2 discoverability, accessibility and safe profile transfer
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implemented; exact-head GitHub Actions and manual app-shell UX verification pending)  
 **Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
 **Owner:** Agent 03 — GUI/UX (branch `feat/slopity-gui-agent03`; base `feat/owner-integration-20261106`)
 
 ### Scope and acceptance
@@ -14,6 +15,19 @@
 - Add tests for selectors, import parsing/preview/conflicts, error handling, and accessibility-facing rendering.
 - Intended files: `apps/slopity/web/index.html`, `app.js`, `styles.css`, `views/dashboard.js`, `views/dialogs.js`, `views/profile-editor.js`, new focused `domain/` and `views/` modules, frontend `tests/`, and this `PROGRESS.md`. No shared package manifest, Rust, Android, or workflow edits.
 - Acceptance checks: GitHub-hosted exact-head frontend format, lint, Node tests; Linux/Android/Windows CI and security/release workflows as applicable. Record exact results and manual accessibility/device verification gaps.
+
+### Implementation submitted
+- Added pure server selectors with name/ID/runtime/port search, actual observed-state filtering, runtime filtering, port/status/name sort and match counts. Empty/no-match screens distinguish zero saved data from filtered results.
+- Added versioned, strict JSON-only profile transfer with 256 KiB and 100-profile limits, allowlisted fields and runtimes, type/range validation, disabled-on-import policy, safe DOM preview, existing/duplicate ID skip behavior, per-profile backend validation and partial-failure reporting. Existing profiles are never overwritten or auto-started.
+- Added responsive search/filter controls, JSON import/export controls, backend connection/retry state, informative failure notices, protected polling, editor double-submit guard, backend error formatting and native-dialog focus restoration. The UI still uses the real Tauri API, not simulated commands or resources.
+- Added `web/tests/discovery-transfer.test.mjs` for selectors, filtering, sorting, import/export and malicious payload rejection, plus existing frontend tests retained.
+- Changed only `apps/slopity/web/**` and this ledger. No Rust, Android, workflows or shared manifests changed.
+
+### Verification status and limitations
+- No local test execution is claimed; the required frontend format/lint/Node tests and Rust/platform checks must run on the exact implementation SHA in GitHub Actions after the draft PR is opened.
+- Manual keyboard/assistive-technology testing, narrow mobile layouts, Tauri Android/desktop WebView JSON download behavior, browser-native Escape focus and physical device telemetry remain unverified.
+- Bulk import intentionally reports partial success when backend validation or creation rejects an individual profile; rerunning skips IDs already persisted. External runtime fields remain configuration metadata, never executed by import.
+- Follow-up: inspect exact-head jobs, resolve real failures with a newly planned two-commit correction step if needed, then request coordinator review; do not merge this draft PR.
 
 ### Non-goals and risks
 - No external runtime activation, shell execution, import of runnable files, arbitrary filesystem paths, silent profile replacement, pretend telemetry, backend admission policy edits, or merges.
