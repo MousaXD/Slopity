@@ -96,16 +96,57 @@ impl RuntimeAdapter for LocalProcessRuntime {
     }
 
     fn stop(&mut self, server_id: &ServerId) -> Result<(), RuntimeError> {
-        let mut child = self
+        let child = self
             .children
-            .remove(server_id)
+            .get_mut(server_id)
             .ok_or_else(|| RuntimeError::NotRunning(server_id.0.clone()))?;
-        child
-            .kill()
-            .map_err(|error| RuntimeError::Process(error.to_string()))?;
+        if let Err(kill_error) = child.kill() {
+            // A child that exited before kill() is already safely stopped.
+            // Otherwise retain ownership so the user can retry termination.
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    self.children.remove(server_id);
+                    return Ok(());
+                }
+                Ok(None) => return Err(RuntimeError::Process(kill_error.to_string())),
+                Err(wait_error) => {
+                    return Err(RuntimeError::Process(format!(
+                        "kill failed: {kill_error}; status check failed: {wait_error}"
+                    )));
+                }
+            }
+        }
+        // A wait error must not discard a potentially live child handle.
         child
             .wait()
             .map_err(|error| RuntimeError::Process(error.to_string()))?;
+        self.children.remove(server_id);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::{Command, Stdio};
+
+    #[test]
+    fn already_reaped_child_can_be_stopped_and_removed() {
+        // Execute the test binary with an impossible filter, not a shell command.
+        let mut child = Command::new(std::env::current_exe().expect("test executable"))
+            .args(["--exact", "__slopity_no_matching_test__"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("test child should launch");
+        child.wait().expect("test child should exit");
+
+        let id = ServerId("finished-child".into());
+        let mut runtime = LocalProcessRuntime::new(RuntimeKind::Native);
+        runtime.children.insert(id.clone(), child);
+        runtime
+            .stop(&id)
+            .expect("already exited child should count as stopped");
+        assert!(!runtime.children.contains_key(&id));
     }
 }

@@ -35,18 +35,15 @@ pub struct StartAdmissionRejection {
 
 #[derive(Debug)]
 pub struct StartAdmissionPermit {
-    server_id: ServerId,
-    runtime: RuntimeKind,
-    port: u16,
-    memory_mib: u32,
+    // Bind the permit to all validated fields, including enabled status,
+    // network exposure and executable configuration. It must not authorize
+    // a different profile with coincidentally matching ID/port/memory.
+    profile: ServerProfile,
 }
 
 impl StartAdmissionPermit {
     pub(crate) fn matches(&self, profile: &ServerProfile) -> bool {
-        self.server_id == profile.id
-            && self.runtime == profile.runtime
-            && self.port == profile.port
-            && self.memory_mib == profile.memory_mib
+        self.profile == *profile
     }
 }
 
@@ -129,10 +126,7 @@ pub fn authorize_start(
 
     if reasons.is_empty() {
         Ok(StartAdmissionPermit {
-            server_id: profile.id.clone(),
-            runtime: profile.runtime,
-            port: profile.port,
-            memory_mib: profile.memory_mib,
+            profile: profile.clone(),
         })
     } else {
         Err(StartAdmissionRejection {

@@ -2,8 +2,9 @@
 
 ## Step 102: Agent 02 Rust admission and lifecycle fail-closed hardening
 
-**Status:** IN PROGRESS
+**Status:** PARTIAL (implementation submitted; exact-head GitHub-hosted validation pending)
 **Declared:** 2026-11-06
+**Updated:** 2026-11-06
 **Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
 **Baseline:** integration PR #43 head `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
 
@@ -25,6 +26,15 @@
 - Local-process kill/wait errors must never orphan Slopity's in-memory process handle.
 - Verify via GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and relevant Linux/Android/Windows build jobs; report any incomplete gate accurately.
 - No local build or device test is claimed. This step requires a second commit combining implementation, regression tests, and the completed ledger entry.
+
+### Implementation and regression coverage
+- Admission permit captures the entire validated `ServerProfile`, including enabled status, network exposure and executable arguments rather than only ID/runtime/port/memory.
+- Orchestrator checks the adapter's observation after failed startup and conservatively keeps a still-active workload in snapshots (with a persistent startup error), so it remains visible and stoppable after partial launch.
+- The status reconciliation preserves live-state failure diagnostics until a fresh adapter error or terminal observation replaces them.
+- Desktop local-process termination keeps the child handle until kill/wait is confirmed; an already exited child may be reaped without treating it as a live stop failure.
+- Rust regressions cover changed-profile permit reuse, partial startup with live observations and subsequent stop, plus already reaped child cleanup.
+- Changed source: `crates/slopity-core/src/admission.rs`, `crates/slopity-core/src/orchestrator.rs`, `crates/slopity-runtime-local/src/lib.rs`; this progress entry is included in the implementation commit.
+- Acceptance is pending **this exact implementation SHA** in GitHub Actions. The integration PR #43 baseline at `31d524f` had [Cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [Security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) successful; these historical results do not certify Agent 02 changes. No local checks are claimed.
 
 
 ## Step 033: owner-controlled cross-workstream integration candidate

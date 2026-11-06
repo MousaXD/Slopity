@@ -177,12 +177,17 @@ impl ServerOrchestrator {
                 profile: profile.clone(),
             }) {
                 Ok(handle) => Ok((handle, adapter.observe(&profile.id))),
-                Err(error) => Err(error),
+                // A provider may launch the workload and then fail to acknowledge
+                // startup. Observe it before declaring the process dead.
+                Err(error) => Err((error, adapter.observe(&profile.id))),
             }
         } else {
-            Err(RuntimeError::Unavailable(format!(
-                "registered runtime adapter disappeared for {runtime:?}"
-            )))
+            Err((
+                RuntimeError::Unavailable(format!(
+                    "registered runtime adapter disappeared for {runtime:?}"
+                )),
+                None,
+            ))
         };
 
         match start_result {
@@ -245,22 +250,35 @@ impl ServerOrchestrator {
                 );
                 Ok(snapshot)
             }
-            Err(error) => {
+            Err((error, observation)) => {
                 let message = error.to_string();
-                self.snapshots.insert(
-                    profile.id.clone(),
-                    failed_snapshot(
-                        profile.id.clone(),
-                        identity.clone(),
-                        DesiredServerState::Running,
-                        message.clone(),
-                    ),
-                );
+                let mut snapshot = observation
+                    .filter(|observation| observation.server_id == profile.id)
+                    .map(|observation| {
+                        snapshot_from_observation(
+                            identity.clone(),
+                            DesiredServerState::Running,
+                            None,
+                            observation,
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        failed_snapshot(
+                            profile.id.clone(),
+                            identity.clone(),
+                            DesiredServerState::Running,
+                            message.clone(),
+                        )
+                    });
+                // Preserve an active workload for stop/recovery even though
+                // start() returned Err. Keep the error visible across polls.
+                snapshot.last_error = Some(message.clone());
+                self.snapshots.insert(profile.id.clone(), snapshot.clone());
                 self.record_event(
                     profile.id.clone(),
                     identity,
                     RuntimeEventKind::Failed,
-                    ServerState::Failed,
+                    snapshot.state,
                     message,
                 );
                 Err(error)
@@ -485,14 +503,10 @@ impl ServerOrchestrator {
         let mut snapshot =
             snapshot_from_observation(identity.clone(), desired_state, process_id, observation);
 
-        // A failed stop may leave a real process alive. Retain its diagnostic
-        // through subsequent successful status polls when the adapter reports
-        // an active state without a new error. The observed state still wins:
-        // a later terminal observation must not inherit an obsolete stop error.
-        if desired_state == DesiredServerState::Stopped
-            && is_active_state(snapshot.state)
-            && snapshot.last_error.is_none()
-        {
+        // Failed stop or partial startup can leave a live runtime.
+        // Preserve its error through active polls without diagnostic content.
+        // New adapter errors override it and terminal observations clear it.
+        if is_active_state(snapshot.state) && snapshot.last_error.is_none() {
             snapshot.last_error = previous
                 .as_ref()
                 .filter(|prior| is_active_state(prior.state))
@@ -666,6 +680,7 @@ mod tests {
         observations: HashMap<ServerId, RuntimeObservation>,
         fail_on_poll: bool,
         fail_stop: bool,
+        fail_start_after_launch: bool,
     }
 
     impl RuntimeAdapter for MockRuntime {
@@ -702,6 +717,11 @@ mod tests {
                 server_id.clone(),
                 RuntimeObservation::running(server_id.clone()),
             );
+            if self.fail_start_after_launch {
+                return Err(RuntimeError::Process(
+                    "synthetic start acknowledgement failure".into(),
+                ));
+            }
             Ok(RuntimeHandle {
                 server_id,
                 process_id: Some(42),
@@ -862,6 +882,7 @@ mod tests {
                 observations: HashMap::new(),
                 fail_on_poll: true,
                 fail_stop: false,
+                fail_start_after_launch: false,
             }))
             .expect("mock adapter should register");
         let alpha = profile("alpha", 8_080);
@@ -892,6 +913,7 @@ mod tests {
                 observations: HashMap::new(),
                 fail_on_poll: false,
                 fail_stop: true,
+                fail_start_after_launch: false,
             }))
             .expect("mock adapter should register");
         let alpha = profile("alpha", 8_080);
@@ -920,6 +942,7 @@ mod tests {
                 observations: HashMap::new(),
                 fail_on_poll: false,
                 fail_stop: true,
+                fail_start_after_launch: false,
             }))
             .expect("mock adapter should register");
         let alpha = profile("alpha", 8_080);
@@ -983,6 +1006,69 @@ mod tests {
         assert!(orchestrator.events.iter().any(|event| {
             event.kind == RuntimeEventKind::Failed && event.message.contains("Stop failed")
         }));
+    }
+
+    #[test]
+    fn rejects_reusing_permit_after_security_relevant_profile_mutation() {
+        let mut orchestrator = orchestrator();
+        let original = profile("alpha", 8_080);
+        let approved = permit(&original);
+        let mut altered = original.clone();
+        altered.network_scope = NetworkScope::Lan;
+        assert!(matches!(
+            orchestrator.start(&altered, approved),
+            Err(RuntimeError::InvalidRequest(_))
+        ));
+        assert_eq!(orchestrator.active_count(), 0);
+
+        let approved = permit(&original);
+        let mut disabled = original.clone();
+        disabled.enabled = false;
+        assert!(matches!(
+            orchestrator.start(&disabled, approved),
+            Err(RuntimeError::InvalidRequest(_))
+        ));
+        assert_eq!(orchestrator.active_count(), 0);
+    }
+
+    #[test]
+    fn failed_start_with_live_observation_remains_visible_for_cleanup() {
+        let mut orchestrator = ServerOrchestrator::default();
+        orchestrator
+            .register_adapter(Box::new(MockRuntime {
+                observations: HashMap::new(),
+                fail_on_poll: false,
+                fail_stop: false,
+                fail_start_after_launch: true,
+            }))
+            .expect("mock adapter should register");
+        let alpha = profile("alpha", 8_080);
+        let server_id = alpha.id.clone();
+        assert!(matches!(
+            orchestrator.start(&alpha, permit(&alpha)),
+            Err(RuntimeError::Process(_))
+        ));
+
+        for _ in 0..3 {
+            let snapshot = orchestrator
+                .snapshot(&server_id)
+                .expect("partially started workload must remain visible");
+            assert_eq!(snapshot.state, ServerState::Running);
+            assert_eq!(snapshot.desired_state, DesiredServerState::Running);
+            assert!(snapshot
+                .last_error
+                .as_deref()
+                .is_some_and(|error| error.contains("synthetic start acknowledgement failure")));
+            assert_eq!(orchestrator.active_count(), 1);
+        }
+        assert!(orchestrator.events().iter().any(|event| {
+            event.kind == RuntimeEventKind::Failed && event.state == ServerState::Running
+        }));
+        let stopped = orchestrator
+            .stop(&server_id)
+            .expect("partially started workload must remain stoppable");
+        assert_eq!(stopped.state, ServerState::Stopped);
+        assert_eq!(orchestrator.active_count(), 0);
     }
 
     #[test]
