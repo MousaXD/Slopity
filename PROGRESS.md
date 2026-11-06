@@ -1,5 +1,32 @@
 # Progress ledger
 
+## Step 102: Agent 02 Rust admission and lifecycle fail-closed hardening
+
+**Status:** IN PROGRESS
+**Declared:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Baseline:** integration PR #43 head `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
+
+### Scope and acceptance
+- Review Rust core, admission/resource reservations, lifecycle observations, profile recovery, built-in HTTP and dormant local-process adapter for actual correctness and security defects.
+- Bind start permits to the *entire* validated profile, preventing post-authorization mutations (enabled, networking and process configuration) from reusing admission.
+- On adapter start failures, retain authoritative active observations and failure diagnostics instead of incorrectly marking a potentially live workload terminal.
+- Preserve local-process child handles when kill or wait fails so stop can be retried and ownership is not silently lost.
+- Add focused Rust regression tests for modified authorization and startup failure behavior; preserve existing failed-stop and telemetry tests.
+- Intended implementation files: `crates/slopity-core/src/admission.rs`, `crates/slopity-core/src/orchestrator.rs`, `crates/slopity-runtime-local/src/lib.rs`, and this `PROGRESS.md`.
+
+### Non-goals and safety
+- No changes to `main`, `dev`, integration branch, Tauri bridge, Android Kotlin, GUI, workflows, package dependencies, or release signing.
+- No new runtime-provider registration or support claims, shell command strings, downgraded admission rules, skipped assertions, or weakened Clippy.
+- Agent 00 owns Tauri `lib.rs` and will receive any cross-file findings separately.
+
+### Risks and checks
+- Changing startup failure handling must avoid false terminal evidence, stale diagnostics and loss of retry/cleanup visibility.
+- Local-process kill/wait errors must never orphan Slopity's in-memory process handle.
+- Verify via GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and relevant Linux/Android/Windows build jobs; report any incomplete gate accurately.
+- No local build or device test is claimed. This step requires a second commit combining implementation, regression tests, and the completed ledger entry.
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
