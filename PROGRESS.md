@@ -1,6 +1,529 @@
 # Progress ledger
 
+## Step 033: owner-controlled cross-workstream integration candidate
+
+**Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Mission and baseline
+
+- Owner-authorized convergence of the existing Slopity Rust/Tauri, GUI, CI, and Android work into one branch for eventual promotion to `main` **only after exact-head CI and independent review**.
+- Start from `fix/runtime-admission-rustfmt-ledger-20261106` at `9c061c6d4a3dc9a2a43fb15c43d988ee846cbeb7`: it contains the recovered CI #35 and the runtime safety/Clippy remediation #38/#42. Cross-platform CI [42140594899](https://github.com/MousaXD/Slopity/actions/runs/42140594899) and release-package validation [42140594848](https://github.com/MousaXD/Slopity/actions/runs/42140594848) passed on that exact SHA.
+- GUI V2 [PR #37](https://github.com/MousaXD/Slopity/pull/37) on SHA `b6a5b30ad8682a54abf476b33f8f59f0852d1995` passed [cross-platform CI](https://github.com/MousaXD/Slopity/actions/runs/42082159333), [security audit](https://github.com/MousaXD/Slopity/actions/runs/42082159369), and [release package validation](https://github.com/MousaXD/Slopity/actions/runs/42082159284). These are historical separate-branch passes, **not** combined verification.
+- Android durability PR #12 is only partially supported by hosted CI; physical Android survival remains an explicit release limitation.
+- Earlier draft PRs #9/#10/#11/#12/#35-#42 remain intact until an audited integration decision. Do not bulk merge conflicting PRs or Dependabot updates.
+
+### Workstream ownership (six roles + coordinator, not independently launched agents)
+
+1. CI/release: preserve locked Rust, Linux, Android, Windows, security and no-publish release gates.
+2. Rust/lifecycle: preserve fail-closed admission and stop-failure diagnostics, evaluate original #40/#41 diffs against corrected #38/#42.
+3. GUI/UX: integrate all modular GUI V2 frontend functionality and tests, check keyboard, responsive behavior, truthful unsupported runtimes.
+4. Android: integrate foreground service, durable status reconciliation and documentation from #12, but require real-device proof separately.
+5. Security/dependencies: review 15 Dependabot PRs as independent locked batches after a green baseline, preserve license and pinned actions.
+6. Independent QA: compare source inventories, exact-head tests, regression gates and release claims; block merges on real failures.
+
+Coordinator controls the only integration branch, workstream conflicts and final promotion.
+
+### Scope
+
+- Incorporate all existing GUI V2 changed frontend files from PR #37, preserving its frontend format/lint/test gates.
+- Reconcile Android durability source changes without overwriting modern Rust admission behavior. If conflict resolution cannot be verified, leave it isolated and document it as blocked; do not fake readiness.
+- Preserve the original historical Step 021 and other workstream ledger entries, and reconcile CI evidence from PR #39.
+- Create a single draft integration PR to `main`, initially no merge, so GitHub Actions can validate the actual combined tree.
+- Only after all required exact-head CI passes, security review, and known platform limitations are truthfully documented may the owner consider a merge. No signing secrets, forced pushes, or premature release.
+
+### Non-goals and security boundaries
+
+- No external runtime presented as operational without real platform proof; only built-in HTTP is registered.
+- No arbitrary profile shell execution, relaxed resource admission, fake device telemetry, disabled tests, global lint exemptions, license changes, package downloads, or direct `main` edits.
+- No assertion that GitHub cross-compilation proves background Android durability or signed production releases.
+
+### Risks
+
+- Android PR #12 and Rust runtime PR #38 both touch Tauri `src/lib.rs`; manual semantic reconciliation and tests are mandatory.
+- GUI V2 assumes Tauri command shape and admission rejection JSON; combined build is necessary but insufficient for manual interaction proof.
+- CI jobs may need fresh reruns for each implementation SHA. A previously green parent is not approval of this integration.
+
+### Intended files
+
+- `PROGRESS.md`, `docs/ENGINEERING_STATUS_2026-11-05.md` and integration QA references.
+- `apps/slopity/package.json`, `apps/slopity/scripts/**` and `apps/slopity/web/**` from PR #37.
+- Reviewed Android `plugins/**`, `apps/slopity/src-tauri/src/lib.rs`, `docs/android-device-durability.md`, `scripts/android-durability-probe.sh`.
+
+### Implementation submitted for exact-head CI
+
+- Integrated **all 23 GUI V2 frontend paths** as exact blobs from PR #37 on its verified SHA, including HTML/CSS, modular views, frontend tests, lint and format scripts.
+- Integrated **all 6 non-conflicting Android plugin/probe/documentation paths** from PR #12 as exact blobs, and semantically reconciled its Tauri host lifecycle and test functions with Rust admission/error handling and failure-evidence UI snapshots from PR #42. The `StartAdmissionRejection` checks and JSON error kinds are retained.
+- Included the original Step 021 GUI and Step 024 Android planning entries, and the CI verification notes from PR #39. No claims of physical-device QA or signed production readiness.
+- GitHub-hosted exact-head CI is **pending**. No tests were run in this chat. No merge to `main`, no release, no dependency bulk-update.
+
+### Acceptance checks — GitHub-hosted only
+
+- `cargo fmt --all -- --check`; `cargo metadata --locked --format-version 1`; `cargo test --workspace --all-features --locked`; strict all-targets/all-features Clippy.
+- Frontend format, lint and Node tests, Tauri Linux compile, Android ARM64 debug manifest/artifacts, Windows NSIS, Linux and Android release-package validation with PR publication skipped.
+- Cargo vulnerability audit, npm audit, GitHub dependency review and any new platform/contract regressions.
+- Independent source diff audit of all included slices, documentation accuracy and honest Android real-device caveat.
+- Use exact SHA/run URLs in this ledger. Until complete, mark PARTIAL and keep the integration PR in draft.
+
+## Step 032: repair runtime admission formatting gate
+
+**Status:** PARTIAL (minimal formatting fix committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Evidence and scope
+
+- [PR #38 CI run 42083372641](https://github.com/MousaXD/Slopity/actions/runs/42083372641) failed the Rust quality job at `cargo fmt --all -- --check` before tests and Clippy.
+- The exact diff in `crates/slopity-core/src/admission.rs` is a rustfmt-only line wrap of `serde_json::to_value(&rejection).expect(...)`.
+- Correct only that formatting; retain admission rejection diagnostics, assertions, serialization shape, and fail-closed policy.
+- Intended files: `crates/slopity-core/src/admission.rs`, `PROGRESS.md`.
+- Non-goals: runtime policy changes, warning suppression, skipped tests, Android device claims, workflow changes, merges or releases.
+- Acceptance: exact-head GitHub-hosted Rust format, locked tests, strict Clippy, Linux/Android/Windows and release checks; record any failures honestly. No local tests will be claimed.
+
+### Implementation and evidence
+
+- Applied only the rustfmt-required line wrap in `crates/slopity-core/src/admission.rs`; no admission semantics, JSON assertions, or policy changes.
+- No local tests or physical-device tests were run. GitHub Actions exact-head results are pending; the original PR #38 Rust gate failure is not evidence of downstream test results.
+- Follow-up: inspect exact-head Rust, platform and release results; reconcile this patch with PR #38 only after review.
+
+
+## Step 030: reduce admission error footprint without weakening checks
+
+**Status:** PARTIAL (layout change and JSON regression assertion committed; exact-head CI pending)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Confirmed CI finding
+
+- Focused runtime fix PR #36 exact-head [Cross-platform CI 42081473190](https://github.com/MousaXD/Slopity/actions/runs/42081473190) passed Rust format and tests, but strict Clippy failed at `crates/slopity-core/src/admission.rs:59`: `clippy::result_large_err`. The `StartAdmissionRejection` `Err` variant is at least 184 bytes.
+- The same admission interface has been copied onto integrated runtime PR #38. Fix the in-memory payload layout rather than silencing the lint or suppressing admission errors.
+
+### Scope
+
+1. Box the large `allocation` field inside `StartAdmissionRejection`; keep the existing `serde` JSON shape, all reasons/issues/warnings, and every safety rejection.
+2. Retain `authorize_start`'s return type and all test assertions; no warning suppression or admission-policy weakening.
+3. Verify in exact-head CI that strict Clippy, Rust tests, platform builds and audit gates pass.
+
+### Non-goals
+
+- No change to runtime features, executable boundaries, UI/API JSON keys, OS platform targets, or release signing.
+- No direct `main`/`dev` modification or premature merge.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/admission.rs`
+
+### Implementation and evidence
+
+- Updated `StartAdmissionRejection.allocation` to `Box<AllocationDecision>`; constructing rejections now boxes the full unchanged allocation report.
+- Added assertions on the serialized rejection to protect JSON keys `allocation`, `warnings`, `validationIssues`, and `reasons`; no fields or decision rules removed.
+- Did not run any local tests; exact-head CI must confirm the error footprint passes Clippy and app/serialization tests pass. Pending result.
+
+### Acceptance checks
+
+- GitHub-hosted Rust fmt, locked tests, strict Clippy `-D warnings` on exact head.
+- Existing admission rejection tests and Tauri serialization/compile continue to pass; no loss of error diagnostics.
+- Linux/Android/Windows and package/audit checks remain enabled, with authentic results recorded.
+
+## Step 029: reconcile Rust runtime safety with the current CI foundation
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Scope and sources
+
+1. Integrate the seven actual backend/source/ADR changed paths from [original runtime hardening draft #10](https://github.com/MousaXD/Slopity/pull/10) into the repaired CI foundation, without overwriting new workflow fixes from #35.
+2. Import the corrected orchestrator implementation (including stop-failure evidence retention and regression tests) from [draft fix #36](https://github.com/MousaXD/Slopity/pull/36), not PR #10's known-failing version.
+3. Preserve original Step 023 runtime admission/lifecycle planning in `PROGRESS.md`, alongside current Step 025/028 CI updates and this new Step 029.
+4. Keep launch authority behind opaque `StartAdmissionPermit`, port/memory validation, and fail-closed stop/observed-state behavior. Keep the built-in HTTP runtime the only registered provider.
+5. Validate on GitHub-hosted CI using Rust 1.89, Linux Tauri, Android ARM64, Windows NSIS, security review and release package validation. Do not manufacture results.
+
+### Non-goals
+
+- No new external runtime support, code-download capabilities, automatic restart behavior, shell command execution, release publication, or direct updates to `main`/`dev`.
+- No replacement or closure of original PR #10 or focused fix PR #36 without proof.
+- No physical-device Android durability claim.
+
+### Risks and acceptance criteria
+
+- The new Tauri admission error API may require GUI V2 integration; review cross-branch behavior on the next combined GUI integration.
+- The failure evidence regression must remain covered by the **unchanged existing assertion** plus the new repeated-refresh/terminal test.
+- Preserve PR #35 audit toolchain and Android SDK setup fixes, and do not replace its CI workflow with stale PR #10 workflow files.
+- Do not claim full validation until exact-head GitHub Actions pass and their run/job links appear here.
+
+### Intended files
+
+- `PROGRESS.md`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `crates/slopity-core/src/{admission.rs,lib.rs,orchestrator.rs}`
+- `crates/slopity-core/tests/orchestrator_foundation.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `docs/adr/0002-runtime-intent-recovery.md`
+
+### Implementation (validation pending)
+
+- Copied the seven precise runtime-source and ADR blobs from the known PR #10 source tree, using the independently corrected `orchestrator.rs` blob from PR #36 head `4dd75293ad4c8669cb7e35bb4e66ff389ed2045f`.
+- Preserved the repaired workflow and audit files from PR #35 instead of importing stale workflow copies.
+- Inserted original Step 023 historical plan without replacing Steps 025 or 028.
+- No application tests were run in this chat. GitHub-hosted exact-head CI is the only acceptance evidence and is still **pending**.
+
+### Checks
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- Linux/Android/Windows CI, security audit, PR release-package builds, unchanged safeguards and honest platform claims.
+
+## Step 028: remove retired Android SDK tools package from hosted builds
+
+**Status:** PARTIAL (CI change committed; remote build evidence pending)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Finding
+
+- On [PR #35 release validation run 42080026430](https://github.com/MousaXD/Slopity/actions/runs/42080026430), the Android packaging job failed in `android-actions/setup-android` before application build.
+- Exact [failing job 127430419954](https://github.com/MousaXD/Slopity/actions/runs/42080026430/job/127430419954) executed `sdkmanager tools` and exited with `Warning: Failed to find package 'tools'`.
+- The pinned `android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699` (v4.0.1) defines default `packages: 'tools platform-tools'`. The legacy `tools` package has been removed from the remote SDK repository.
+- The same action is used by cross-platform `ci.yml` and release `release.yml`; both should provide the explicitly supported `packages: 'platform-tools'` input. Existing explicit `sdkmanager` installation of API 36, build-tools 36 and NDK 27.3 must remain unchanged.
+
+### Scope
+
+1. Override the pinned action's obsolete default `packages` in both CI and PR release-package workflows, without changing action pinning, signing policy, Android platform/NDK versions or required artifact assertions.
+2. Preserve `PROGRESS.md` evidence and rerun GitHub-hosted jobs on the exact new PR head.
+
+### Non-goals
+
+- Removing Android builds, weakening manifest checks, pretending device durability was tested, adding SDK credentials, or changing runtime behavior.
+- Unreviewed Dependabot version upgrades or changes to `main`/`dev`.
+
+### Intended files
+
+- `PROGRESS.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+
+### Implementation and verification at implementation commit
+
+- Explicitly passed `packages: 'platform-tools'` to the pinned Android SDK setup action in both cross-platform CI and release-package Android jobs, overriding the obsolete `tools platform-tools` default without changing toolchain/package targets.
+- No local or chat-hosted build was run. **Exact-head Android and platform CI checks are pending**; update this entry with run results and investigate any subsequent errors.
+
+### Acceptance checks
+
+- Exact-head Android CI and package jobs advance past `Set up Android SDK` to SDK/NDK installation and ultimately pass build, manifest and artifact assertions.
+- Existing Rust/Linux/Windows/release gates remain intact; actual results linked when available.
+
+## Step 025: restore reproducible security checks and establish November engineering triage
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions results pending)  
+**Declared:** 2026-11-05  
+**Updated:** 2026-11-05
+
+### Baseline and reason
+
+- Integration base: `fix/ci-release-foundation` at `8825f1e0e997c93730cab11caaa638fe4205a598` (draft PR #11 targeting `dev`); it previously passed cross-platform CI, release-packaging and security-audit workflows on 2026-08-24.
+- Default `main` / `dev`: `f57b7cee18dbf73b06eb64aa0c12212c4ca9333d`. Its scheduled security run 41467880911 on 2026-11-02 failed *before an audit* because an un-locked cargo-audit install resolved `kstring 2.0.5` (MSRV Rust 1.96), while the runner used Rust 1.89. Do not report this as a vulnerability finding or a clean security result.
+- Open draft GUI PR #9, runtime-safety PR #10, Android durability PR #12 and CI PR #11 must be reconciled without silently losing features. PR #10's run 33215426044 failed in `orchestrator::tests::failed_stop_preserves_potentially_live_runtime`, with `snapshot.last_error.is_some()` false.
+- As of 2026-11-05 there are 15 open Dependabot PRs (and four draft human engineering PRs). Do not bulk merge unvalidated updates.
+
+### Scope
+
+1. Preserve PR #11's proven Linux, Android, Windows, Rust, audit and package CI foundation; repair the audit-toolchain MSRV failure without weakening vulnerability detection or changing the application's pinned Rust compiler.
+2. Add a durable, source-linked engineering-status and workstream document under `docs/` with known build/feature/physical-device evidence boundaries, integration order, five proposed specialist roles, and acceptance gates.
+3. Validate *this exact head* through GitHub-hosted Actions. Investigate failures in job logs and iteratively fix true blockers. Do not equate mocked tests with runtime support.
+4. Keep all pre-existing GUI, Android and runtime hardening PRs intact and unmerged pending their own exact-head green validation. Publish this slice as a draft PR targeting `dev`.
+
+### Non-goals
+
+- No direct writes to `main` or `dev`, no releases, no privileged signing or secrets, no force pushes.
+- No claim that Java/Minecraft/Node/Python/PHP or arbitrary-executable providers are operational.
+- No claim of physical-device Android hosting durability or production-ready Windows runtime from CI compilation alone.
+- No global loosening of Rust warnings, vulnerability fail gates, test assertions, or release permissions.
+- No implicit license changes; PolyForm Noncommercial remains source-available rather than OSI-approved open source.
+
+### Risks
+
+- Using a newer toolchain for the *audit utility* must not mask application MSRV/build issues: Rust workspace checks remain on pinned 1.89.
+- `cargo-audit` may reveal actual vulnerabilities after installing successfully; fail closed and remediate separately.
+- GitHub Actions behavior can change since the 2026-08-24 passing runs; exact commit evidence is required.
+- Cross-branch feature integration could overwrite shared `PROGRESS.md` or silently discard work. Integration must be diff-reviewed and retested.
+
+### Intended files
+
+- `PROGRESS.md` (plan, then exact CI evidence and status)
+- `.github/workflows/audit.yml` (tool installation/runtime isolation only)
+- `docs/ENGINEERING_STATUS_2026-11-05.md` (five workstreams, CI evidence and phased integration plan)
+
+### Implementation and verification recorded at implementation commit
+
+- Isolated the `cargo-audit` installer from the application's Rust 1.89 toolchain: the audit job now installs a current stable toolchain solely for audit tooling, retains the pinned `cargo-audit 0.22.2 --locked` install, and keeps the actual vulnerability scan mandatory.
+- Preserved the existing Rust workspace CI compiler at 1.89.0 and all build/Clippy/test requirements.
+- Added `docs/ENGINEERING_STATUS_2026-11-05.md` with exact baseline evidence, prioritized integration and five non-running proposed ownership lanes.
+- Execution: **GitHub-hosted validation is pending for this implementation commit**. No tests were run locally or in this chat. Read exact-head workflow results before changing status to DONE; fix any real findings instead of suppressing gates.
+- Follow-up: reconcile PRs #9/#10/#11/#12 after this baseline, address PR #10's actual failed-stop evidence regression and validate GUI V2 through real CI.
+
+### Acceptance checks (GitHub Actions only)
+
+- Audit job actually installs `cargo-audit`, downloads advisory data, analyzes `Cargo.lock`, and fails for genuine vulnerabilities.
+- `npm audit` and dependency review remain enabled, with honest outcomes.
+- `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, and strict all-targets Clippy run using the project-pinned compiler.
+- Linux Tauri compile, Android ARM64 debug/manifest/artifact, Windows x64 NSIS build and release packaging validate this exact head, or are documented as blocked with logs.
+- Keep the branch/PR in draft if checks are pending or failing; no unverified merge.
+
 Append new steps at the top. Do not rewrite completed history except to correct a factual error, and explain corrections in a new entry.
+
+## Step 022: repair and harden CI and release foundation
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Reconciliation note
+
+- Concurrent GUI work on `overhaul/gui-v2` has already declared Step 021 for the shared control-center GUI. The separate `ci/release-pipeline-v2` branch is only one planning commit ahead of `dev` and labels a release/Minecraft plan as Step 021 without adding it to the live `dev` progress ledger. This Step 022 is the canonical CI/release-infrastructure slice from that abandoned/conflicting plan; it deliberately excludes its Minecraft/runtime scope.
+
+### Scope
+
+1. Repair GitHub-hosted CI so Rust formatting, metadata, tests, Clippy, Linux Tauri compilation, Android ARM64 packaging/manifest verification, and Windows x64 Tauri/NSIS validation can be used as remote build gates by independent feature branches.
+2. Make ordinary branch pushes testable without allowing one branch's concurrency group to cancel unrelated branch validation; keep failures strict and actionable and order expensive platform builds behind cheaper Rust validation.
+3. Repair and harden release-package validation and publication behavior, preserving PR no-publish guarantees, synchronized version checks, deterministic assets/checksums, clearly labeled Android debug packages, and minimal publication permissions.
+4. Refresh SHA-pinned third-party Actions to compatible supported runtimes where live Dependabot evidence identifies maintained replacements, without weakening immutable pinning.
+5. Harden dependency/audit automation and Dependabot targeting for the active `dev` workflow, and correct stale CI-host prerequisite documentation.
+
+### Non-goals
+
+- Merging this branch or any pull request.
+- GUI V2 implementation.
+- Minecraft/Java/JVM, Jellyfin, Node.js, Python, PHP, generic native runtimes, arbitrary process execution, downloads, or signing-secret invention.
+- Claiming Android production signing or physical-device durability.
+- Claiming Windows support unless a GitHub-hosted Windows job actually compiles and packages it.
+
+### Risks
+
+- Tauri bundle output paths differ by platform and must be asserted rather than silently globbed.
+- Newer JavaScript Actions require a GitHub runner runtime that supports Node 24; hosted-runner compatibility must be proven by Actions rather than assumed.
+- Release reruns or reused tags can mutate an existing release unless duplicate policy is explicit and enforced.
+- CI concurrency that keys only on workflow/ref can behave differently for push and pull-request refs; branch isolation must remain explicit.
+- Android debug packages must stay unmistakably labeled as debug and must never imply production signing.
+
+### Intended files
+
+- `PROGRESS.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `.github/workflows/audit.yml`
+- `.github/dependabot.yml`
+- `docs/releases.md`
+- `docs/ci-host-prerequisites.md`
+- `README.md`
+- `CURRENT_STATUS.md`
+- `TASK.md`
+
+### Acceptance checks
+
+- `cargo fmt --all -- --check`
+- `cargo metadata --locked --format-version 1`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- `cd apps/slopity && npm ci && npm audit && npm run tauri:check`
+- GitHub Actions Rust quality job green on this branch/PR.
+- GitHub Actions Linux Tauri job green.
+- GitHub Actions Android ARM64 debug build, merged-manifest verification, and artifact upload green.
+- GitHub Actions Windows x64 Tauri compile/NSIS package validation green, or exact platform blocker documented without claiming support.
+- Release pull-request package validation green for Linux `.deb`/AppImage and Android ARM64 debug APK/AAB, with publication skipped by construction.
+- Security/audit jobs green where applicable, with dependency review active for this public repository.
+- Every third-party `uses:` reference remains pinned to a full immutable commit SHA.
+
+## Step 023: harden runtime admission and lifecycle semantics
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Scope
+
+1. Add a platform-neutral start-admission decision in `slopity-core` that combines profile validation, enabled state, verified runtime availability, aggregate port reservations, safe memory budget, immediate memory headroom, and existing CPU-headroom warnings before a runtime adapter can start.
+2. Require an admission permit at the `ServerOrchestrator` start boundary so callers cannot accidentally bypass hard safety checks, while keeping runtime adapters responsible for their own last-mile bind/process errors.
+3. Harden lifecycle semantics for startup, stop failures, runtime observations, unexpected terminal exits, event ordering, terminal evidence, and drop-time cleanup without hiding a potentially live runtime behind a false terminal state.
+4. Add bounded structured unexpected-failure evidence suitable for future retry/backoff policy, with no automatic restart behavior in this step.
+5. Define a versioned desired-state persistence contract and recovery design without persisting process IDs or treating stale observed state as authoritative; defer on-disk lifecycle restore until restart policy is explicitly designed.
+6. Strengthen the built-in HTTP reference-runtime tests for disabled profiles, loopback/LAN binding, request counting, immediate port reuse, unexpected thread exit, event order, and admission rejection before adapter start.
+7. Enforce admission at the Tauri start command and return structured rejection data so frontend code renders backend policy instead of recreating it.
+
+### Non-goals
+
+- Implementing or downloading Java/JVM, Minecraft, Jellyfin, Node.js, Python, PHP, native packages, scripts, or any general arbitrary executable runtime.
+- Registering or exposing `slopity-runtime-local` through Tauri or the frontend.
+- Adding shell command strings, `sh -c`, PowerShell command strings, or `cmd /C`.
+- Automatically restarting failed servers or introducing retry/backoff timing policy.
+- Persisting observed runtime state or process IDs as proof that a process survived an application restart.
+- Owning the concurrent CI/release repair work; this branch will consume Agent 1's fixes later if they become available without overwriting them.
+
+### Risks
+
+- Missing mandatory memory telemetry already causes the conservative resource model to fail closed; start-time enforcement will make that existing policy operational rather than advisory.
+- A synchronous adapter that reports an active state after `stop` may still own live resources. The orchestrator must preserve that active observation so later cleanup can retry instead of masking it as terminal failure.
+- Existing GitHub Actions currently fail during Rust toolchain setup before repository checks run. Remote validation must remain truthful until the CI foundation branch repairs that failure.
+- The frontend currently expects string errors from the start command; structured admission rejection is an intentional API change that GUI work must consume.
+
+### Intended files
+
+- `PROGRESS.md`
+- `crates/slopity-core/src/admission.rs`
+- `crates/slopity-core/src/lib.rs`
+- `crates/slopity-core/src/orchestrator.rs`
+- `crates/slopity-runtime-http/src/lib.rs`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `docs/adr/0002-runtime-intent-recovery.md`
+- runtime/core documentation only if factual behavior changes require it
+
+### Acceptance checks
+
+```bash
+cargo fmt --all -- --check
+cargo test --workspace --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo metadata --locked --format-version 1
+cd apps/slopity && npm ci && npm run tauri:check
+cd apps/slopity && npm run android:init -- --ci
+cd apps/slopity && npm run android:build -- --debug --target aarch64
+```
+
+GitHub Actions remains the authoritative remote proof. Exact run/job conclusions and any infrastructure blockage will be recorded before this step is closed.
+
+## Step 021: overhaul the shared server control center GUI
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-08-24  
+**Updated:** 2026-08-24
+
+### Scope
+
+1. Replace the current mobile-card-oriented presentation with a production-quality local server control center that has a true desktop shell and first-class mobile layout while preserving the existing Tauri command surface and backend behavior.
+2. Surface real host capability, resource accounting, recovery notices, runtime availability, server lifecycle state, network configuration, and failures with clearer hierarchy and direct lifecycle controls.
+3. Redesign Add Server, profile editing, server details, destructive confirmation, error/loading states, keyboard/focus behavior, and responsive behavior without adding a frontend framework or remote dependencies.
+4. Keep unsupported runtime templates truthful and unavailable; only the currently registered built-in HTTP provider may expose a runnable lifecycle path.
+5. Perform rendered browser QA across the required viewport matrix and screenshot-review the 390x844, 768x1024, and 1440x900 layouts before closing the step.
+
+### Non-goals
+
+- No Minecraft, Java/JVM, Jellyfin, Node.js, Python, PHP, generic runtime, package/download, plugin/mod, GitHub deployment, or release-pipeline implementation.
+- No changes to `.github/workflows/**`, Cargo/package version metadata, runtime registration, `ServerOrchestrator`, `crates/slopity-core/**`, runtime crates, or plugins.
+- No frontend framework migration and no new UI/icon dependency.
+- No claims of physical Android durability or runtime support beyond existing backend evidence.
+
+### Risks
+
+- Lifecycle and profile actions must remain wired exactly once to the existing Tauri commands.
+- Long names, runtime strings, URLs, IPv6-style values, diagnostics, keyboard opening, and safe areas must not create horizontal overflow or hidden controls.
+- Dialog focus containment/restoration and destructive/unsaved-change confirmation must remain keyboard and screen-reader operable.
+- `PROGRESS.md` may overlap with concurrent CI/runtime work, so this entry stays isolated at the top and application changes stay inside `apps/slopity/web/**`.
+
+### Intended files
+
+- `PROGRESS.md`
+- `apps/slopity/web/index.html`
+- `apps/slopity/web/styles.css`
+- `apps/slopity/web/app.js`
+
+### Acceptance checks
+
+- `node --check apps/slopity/web/app.js`
+- source scan for unsafe DOM injection, inline handlers, remote assets, and disabled zoom
+- rendered local browser QA at 320x568, 360x800, 390x844, 768x1024, 1024x768, 1280x800, 1440x900, and 1920x1080
+- screenshot review at 390x844, 768x1024, and 1440x900
+- keyboard/focus/dialog interaction checks and create/edit/clone/enable/delete/start/stop/refresh mock workflow checks
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-features --locked`
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
+- `cd apps/slopity && npm ci && npm audit && npm run tauri:check`
+
+## Step 024: harden Android host durability and device validation
+
+**Status:** PARTIAL  
+**Declared:** 2026-08-25  
+**Updated:** 2026-08-25
+
+### Scope
+
+1. Harden the Android foreground-service lifecycle so start/update/stop requests are idempotent, notification delivery constraints are reported conservatively, native stop requests are reconciled by the Rust/Tauri layer, and host-service failures cannot silently leave newly started Rust hosting without required foreground state.
+2. Reconcile observed Rust server state with native host-service state on fresh dashboard/list observations, including multiple-server counts, final-server stop, notification stop requests, service loss, runtime exits, and failed foreground-service restarts.
+3. Harden Android telemetry collection so missing/unknown values remain unavailable, individual Android API failures do not crash telemetry collection, and Rust-side normalization remains conservative for resource planning.
+4. Add Rust-side tests for host reconciliation decisions and telemetry normalization where the Android framework itself is not available to workspace tests.
+5. Add a reproducible physical Android ARM64 durability procedure and evidence template, plus a host-side ADB/curl probe helper for multi-hour reachability, battery, temperature, thermal, storage, notification, state-reconciliation, and port-release evidence.
+6. Document OEM validation expectations for stock/AOSP-ish Android, Samsung, and Xiaomi/Poco without adding vendor-specific bypasses or background-execution hacks.
+7. Use existing GitHub Actions as the remote proof for Rust quality, Linux/Tauri compile, Android ARM64 build, merged manifest verification, and APK/AAB artifact generation. Inspect actual run/job results before closing the step.
+
+### Non-goals
+
+- Claiming production-ready or durable Android hosting without physical-device evidence.
+- Adding Minecraft, Jellyfin, Java/JVM downloads, Node.js, Python, PHP, generic native execution, arbitrary commands, runtime downloads, or GUI V2 work.
+- Bypassing Android background execution restrictions, hiding foreground hosting, suppressing required user visibility, adding boot receivers, or implementing vendor-specific battery-killer hacks.
+- Broad `.github/workflows/**`, `apps/slopity/web/**`, or `slopity-core` redesigns.
+- Merging this branch, rebasing shared branches, force-pushing, or modifying `main`/`dev` directly.
+
+### Risks
+
+- Android foreground-service startup is asynchronous; a successful `startForegroundService` request is not itself proof that the service entered foreground state.
+- A notification stop action cannot directly mutate Rust orchestrator state without crossing the Tauri/native boundary, so safe stop semantics require reconciliation when the application regains control.
+- Runtime crashes while the UI is fully backgrounded may not be observed by the process-local orchestrator until its next observation pass; documentation must not imply proactive crash reconciliation that is not implemented.
+- OEM process-management behavior varies and cannot be proven by CI/emulator compilation.
+- Android 13+ notification permission and app/channel notification settings can make a foreground service less visible even when Android permits it to run; Slopity must fail conservatively rather than treating hidden hosting as equivalent to visible hosting.
+
+### Delivered
+
+- Extended native/Rust host status with pending-start state plus app-level and channel-level notification-delivery gates, while retaining explicit notification permission state.
+- Made Android host start failures reject cleanly: immediate `startForegroundService` exceptions clear pending state, foreground-promotion exceptions clear service state, and Rust refuses to start/continue Android hosting when notification permission, app notifications, or the hosting channel cannot provide the visible notification Slopity requires.
+- Kept repeated start/update and stop operations idempotent while reporting asynchronous start-pending state instead of fabricating an active service.
+- Changed the persistent notification action to `Stop safely`: it records a native stop request and opens Slopity so Rust listeners can be stopped before the foreground service is removed.
+- Added Tauri/Rust reconciliation decisions for stale host-with-no-server, missing host-with-active-server, multi-server count mismatch, native stop requests, and hidden-notification safety failures. Missing-host restart failure now triggers fail-safe attempts to stop active listeners.
+- Reconciled fresh dashboard snapshots, explicit host-status requests, and built-in-server list observations before returning state. Runtime exits observed during those passes stop/update stale foreground state; notification count updates retry on subsequent observations if an already-active service update fails.
+- Preserved first/additional-server rollback semantics: a failed host-service start/update rolls back the newly started runtime, then reconciles remaining previously active servers.
+- Hardened Android telemetry calls with per-source exception isolation. Unknown battery charging state and unknown thermal enums are now omitted rather than converted into false values or synthetic measurements.
+- Added Rust-side conservative telemetry normalization for impossible zero total memory, available-memory values above total, invalid battery percentages, non-finite temperatures, and empty thermal labels.
+- Added Rust tests for notification-delivery gates, telemetry normalization, and host reconciliation decisions.
+- Added `docs/android-device-durability.md` with a real-device ARM64 procedure covering install, loopback/LAN reachability, foreground notification, background/screen-off behavior, multi-server counts, UI reconciliation, UI/notification stop paths, port release, battery/temperature/thermal evidence, structured evidence fields, and OEM expectations for stock/AOSP-ish, Samsung, and Xiaomi/Poco.
+- Added `scripts/android-durability-probe.sh` to record device identity, install an exact debug APK, periodically probe reachability, and retain raw ADB battery/thermal/memory/storage evidence without fabricating unavailable values.
+- Left the existing Android `specialUse` manifest and CI workflow unchanged; there is no new hidden service, boot receiver, unnecessary permission, vendor bypass, runtime provider, or arbitrary execution path.
+
+### Files changed
+
+- `PROGRESS.md`
+- `plugins/tauri-plugin-slopity-host/src/lib.rs`
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostForegroundService.kt`
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostPlugin.kt`
+- `plugins/tauri-plugin-slopity-host/android/README.md`
+- `apps/slopity/src-tauri/src/lib.rs`
+- `docs/android-device-durability.md`
+- `scripts/android-durability-probe.sh`
+
+### Verification performed
+
+- Read-first and live-state audit completed against `dev`/`main` at `f57b7cee18dbf73b06eb64aa0c12212c4ca9333d`; both refs were identical when the branch was created.
+- Current GUI V2 PR #9 changes only `PROGRESS.md`, so it does not overlap the Android native/Rust files in this step.
+- No `fix/ci-release-foundation` Agent 1 branch was available when implementation began.
+- Existing manifest already declares `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, a non-exported `HostForegroundService`, `foregroundServiceType="specialUse"`, and the Android 14 special-use subtype property; this step intentionally preserves that standards-compliant declaration.
+- Android platform documentation was checked for Android 13 notification permission semantics, Android 12+ foreground-service start restrictions, and Android 14+ foreground-service type/permission requirements before changing lifecycle behavior.
+- This execution environment has no local Rust/Android toolchain or network-capable checkout, so no local compile result is being claimed. The repository's declared GitHub Actions path is the validation environment for the implementation commit.
+
+### Verification pending
+
+- Pull-request CI: `cargo fmt --all -- --check`.
+- Pull-request CI: `cargo test --workspace --all-features --locked`.
+- Pull-request CI: `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`.
+- Linux Tauri compile in the existing CI chain.
+- Android ARM64 debug build, merged-manifest verification, and APK/AAB artifact upload in the existing CI chain.
+- Physical ARM64 device durability execution. The procedure and evidence harness are present, but no physical result is fabricated or implied.
+
+### Known limitations
+
+- Runtime crash detection remains observation-driven. If a Rust listener exits while the UI and command surface are fully suspended, the foreground notification can remain stale until the next orchestrator observation; this step fixes reconciliation when state is next requested but does not add a hidden watchdog.
+- Android foreground-service start is asynchronous. `startRequestPending` truthfully represents the gap between requesting `startForegroundService` and `onStartCommand` entering foreground state.
+- Process-death/reboot recovery is not implemented. The service remains `START_NOT_STICKY`, no boot receiver exists, and in-process Rust listeners die with the application process.
+- OEM durability, battery impact, thermal throttling, notification-stop UX, and multi-hour screen-off reachability remain unproven until the documented procedure is run on real hardware.
 
 ## Step 020: public history sanitation, workload reconciliation, and release candidate validation
 
@@ -120,7 +643,7 @@ Factual corrections and hardening fixes for Step 019 and PR #13:
 ### Delivered
 
 1. Corrected all public documentation links to repository-relative format (`[LICENSE.md](LICENSE.md)`, `[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)`, `[CONTRIBUTING.md](CONTRIBUTING.md)`, `[AGENTS.md](AGENTS.md)`, `[SECURITY.md](SECURITY.md)`, `[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)`, `[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)`, `[docs/releases.md](docs/releases.md)`). Repository-wide scan confirms 0 developer-local paths remaining.
-2. Overhauled `README.md` with strict distinction between operational capabilities on `main`/PR #13, foundation capabilities in pending draft PR #12, and unbundled runtimes (Java/Minecraft/Node.js/Python).
+2. Overhauled `README.md` with strict distinction between operational capabilities on current `main` / PR #13 versus capabilities implemented in pending PR #12, and clarify local verification versus GitHub Actions billing gates.
 3. Updated `Cargo.toml` workspace metadata to use standard `license = "PolyForm-Noncommercial-1.0.0"`. `cargo metadata --locked` confirms all crates inherit `"license": "PolyForm-Noncommercial-1.0.0"`.
 4. Refined `CONTRIBUTING.md` with conservative contribution licensing terms without inventing CLAs or assuming copyright transfers.
 5. Updated `.github/workflows/audit.yml` to gracefully handle private evaluation vs public execution for `actions/dependency-review-action`.
@@ -274,7 +797,7 @@ Reconcile the compatible, still-desired foundation work from draft pull requests
 - Kept the existing built-in Rust HTTP provider behind the generic runtime adapter contract and registered only that adapter. External runtime kinds remain unavailable configuration values and the desktop local-process adapter is not registered or exposed.
 - Removed the parallel direct-`HttpServerManager` lifecycle ownership from the Tauri shell. Existing built-in HTTP commands now delegate through the orchestrator and explicitly reject profiles whose runtime kind is not `BuiltInHttp`.
 - Added aggregate resource accounting with host reserve policy, safe memory budgets, active-or-reserved server accounting, deterministic port reservations/conflicts, CPU headroom warnings, and conservative unknown-telemetry behavior.
-- Added proven host telemetry surfaces: Linux `/proc/meminfo` memory telemetry and Android system-service memory, battery, charging, battery-temperature, thermal-state, and free-storage telemetry. Missing values remain `None` instead of being guessed.
+- Added proven host telemetry surfaces: Linux `/proc/meminfo` memory telemetry and Android system-service memory, battery, temperature, thermal state, storage headroom. Missing values remain `None` instead of being guessed.
 - Integrated profile-store interrupted-write recovery, primary/temporary/backup candidate inspection, backup recovery, parent-directory synchronization, schema-v0 to schema-v1 migration infrastructure, migration/recovery notices, and hard failure for unsupported future schemas.
 - Integrated backend profile validation limits for IDs, names, argument counts and payload sizes, executable paths, working directories, duplicate IDs, and duplicate ports while keeping structural profile validity separate from runtime availability.
 - Integrated Android foreground-host lifecycle/status improvements: POST_NOTIFICATIONS permission handling, native service status, active-server counts, start/update behavior, conservative notification visibility, a pending notification stop request, and `START_NOT_STICKY` process-lifecycle honesty.
@@ -352,7 +875,7 @@ grep -RInE 'file://|/home/|/Users/|C:\\Users\\' --exclude-dir={.git,target,node_
 Prepare Slopity for a high-quality public source-available release:
 1. Licensing: Adopt the standard, official, unmodified PolyForm Noncommercial License 1.0.0 (`PolyForm-Noncommercial-1.0.0`), update Cargo package license metadata, add `LICENSE.md`, add `COMMERCIAL-LICENSE.md`, update all documentation to describe Slopity as source-available rather than open-source, and document external contribution policy.
 2. Dependency Reproducibility: Commit root `Cargo.lock` and `apps/slopity/package-lock.json`, update CI/build workflows and scripts to use `--locked` and `npm ci`.
-3. GitHub Actions Hardening: Migrate CI and release workflows from self-hosted runners to standard GitHub-hosted `ubuntu-latest` runners, pin third-party actions to immutable commit SHAs with version comments, enforce strict top-level read-only permissions with minimal write scopes.
+3. GitHub Actions Hardening: Migrate CI and release workflows from self-hosted runners to standard GitHub-hosted `ubuntu-latest` runners, pin third-party actions to immutable full commit SHAs with version comments, enforce strict top-level read-only permissions with minimal write scopes.
 4. Dependency Security: Add `.github/dependabot.yml` covering cargo, npm, and github-actions, add a security/audit workflow with `cargo-audit`, `actions/dependency-review-action`, and `npm audit`.
 5. Secret and History Hygiene: Audit Git history and codebase for secrets and credentials.
 6. Profile-ID Hardening: Implement strict identifier validation grammar `[A-Za-z0-9._-]{1,128}` in `slopity-core` to prevent control-character injection, interior NUL panics in thread naming, directory traversal, and malformed identifiers. Add regression tests covering edge cases.
@@ -414,7 +937,7 @@ cargo fmt --all -- --check
 cargo test --workspace --all-features --locked
 # Pass (20 tests passed: 16 core, 4 http runtime, 0 failed, 0 ignored)
 
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 # Pass (0 warnings)
 
 cd apps/slopity && npm ci && npm run tauri:check
@@ -569,7 +1092,7 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed.
 - The Linux job passed the prerequisite check, `npm install --no-audit --no-fund`, and `npm run tauri:check`.
 - The Android job installed the configured SDK and NDK, passed `npm run android:init -- --ci`, and passed `npm run android:build -- --debug --target aarch64`.
-- Android produced `app-universal-debug.apk` and `app-universal-debug.aab` and uploaded artifact `9024516514`, named `slopity-android-debug-b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4`, size `148565786` bytes, digest `sha256:b3b97cfec46bfc35e6b4d3f4075f51a8c5cc611cb8276f2a5f55f2683bd5627f`, retained through 2026-08-22.
+- Android produced `app-universal-debug.apk` and `app-universal-debug.aab` and uploaded artifact `9025966939`, named `slopity-android-debug-b118419fd9f545f1dd8659d3cb33c5fdbe43c5b4`, size `148565466` bytes and digest `sha256:c1775f7163c48aea023632faf6d6da379eb16a35e22e9870b71e84e134b8bb7f`.
 - Draft pull request `#2` remains open, unmerged, and based on `main`.
 
 ### Verification pending
@@ -584,7 +1107,7 @@ Redesign the shared static HTML, CSS, and JavaScript interface around the suppli
 - Minecraft, Node.js, import, custom, Java, Python, PHP, and native providers remain unavailable or configuration-only and expose no false start path.
 - Settings is a planned drawer entry without a settings screen.
 - Runtime state remains process-local and resets to stopped after the application process exits, as documented by Step 008.
-- Android compilation does not prove OEM background behavior, app-restart behavior, or Google Play foreground-service policy acceptance.
+- Android compilation does not prove OEM background behavior or Google Play foreground-service policy acceptance.
 - The Android build still reports existing non-blocking generated-code, Gradle deprecation, and duplicate `com.slopity.host` namespace warnings.
 - The dashboard uses bundled CSS and generic SVG illustrations rather than licensed game artwork from the mockup.
 
@@ -784,7 +1307,7 @@ Implement the first durable product slice: a versioned Rust profile document, fi
 ### Delivered
 
 - Added schema-v1 JSON profile documents with explicit rejection of malformed data and unsupported future versions.
-- Added a Tauri-independent Rust `ProfileStore` that loads, seeds, validates, persists, and reloads profile collections.
+- Added a Tauri-independent `slopity-core` ProfileStore that loads, seeds, validates, persists, and reloads profile collections.
 - Added create, update, clone, enable, disable, and delete operations that write before replacing in-memory state.
 - Added collection validation for duplicate IDs, duplicate ports, and existing profile validation errors.
 - Added replacement-write handling with a rollback path for platforms that cannot rename over an existing destination.
