@@ -1,5 +1,26 @@
 # Progress ledger
 
+## Step 047: preserve an already-foregrounded Android host after update promotion failure
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-07  
+**Owner:** Agent 04 — Android hosting & durability  
+**Branch:** `fix/slopity-android-agent04`  
+**Base:** `1340ecb5a09dbd0ffaaafbf91fe84c738b5b4805`
+
+### Finding and scope
+
+- `HostForegroundService.onStartCommand` currently calls `markStartFailed` and `stopSelf` unconditionally when `startForeground()` throws, even if this is a rejected **update** while a previous foreground notification protects Rust-owned listeners. This unconditionally removes the previous foreground service and risks orphaning live servers with no notification.
+- Reject only the failing native start/update request and preserve previously acknowledged active foreground state and count when a promotion error occurs during an update. An unsuccessful initial foreground promotion still resets state, rejects the request and stops the service. Notification permission/channel gates remain checked independently by the Rust application, which must reconcile/stop servers on delivery loss.
+- Scope limited to `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostForegroundService.kt`, `plugins/tauri-plugin-slopity-host/android/src/test/java/com/slopity/host/HostForegroundServiceTest.kt`, Android README, and this progress ledger. Do not modify Agent 01 workflows or Agent 00 application Rust code.
+
+### Verification and limits
+
+- Add JVM lifecycle tests for promotion-failure preservation vs. first-start rejection and ensure callbacks fire exactly once without pending states.
+- Check GitHub-hosted exact-head Android ARM64 build, Rust quality, package workflows and **combined** CI Gradle JUnit suite using isolated validation branch based on Agent 01's CI gate.
+- No claims about physical notification UI, service-kill durability, battery/thermal behavior or issue #44; no merging, publishing, signing or force pushes.
+
+
 ## Step 044: Agent 04 Android foreground-host start acknowledgement and stop-race hardening
 
 **Status:** PARTIAL (implementation committed; exact-head CI and real-device verification pending)  
