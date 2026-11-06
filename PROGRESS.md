@@ -1,5 +1,32 @@
 # Progress ledger
 
+## Step 036: gate Android native plugin JUnit tests in hosted CI
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-07  
+**Updated:** 2026-11-07
+
+### Verified baseline and review request
+
+- Step 035 implementation SHA `895ca859dc27bad1823264380d871c3101fb1129` passed [cross-platform CI 42284217620](https://github.com/MousaXD/Slopity/actions/runs/42284217620), [security audit 42284217458](https://github.com/MousaXD/Slopity/actions/runs/42284217458), and [release-package CI 42284217616](https://github.com/MousaXD/Slopity/actions/runs/42284217616), including both Linux .deb/AppImage and Android debug packages; PR publishing skipped.
+- Independent QA [comment 6694209878](https://github.com/MousaXD/Slopity/pull/47#issuecomment-6694209878) and Android owner [comment 6694244126](https://github.com/MousaXD/Slopity/pull/47#issuecomment-6694244126) identify missing hosted Kotlin/JUnit lifecycle test execution from Android [draft PR #51](https://github.com/MousaXD/Slopity/pull/51). Android ARM64 compile alone is not native JVM unit test certification.
+- PR #51 provides `HostForegroundServiceTest.kt` and `junit:junit:4.13.2` in the Android library. Those files are **not yet in this CI branch's base** and must not be copied into another owner's lane.
+
+### Intended scope / files
+
+- `scripts/check-android-host-junit.sh`: following Tauri Android debug build, invoke generated Android Gradle wrapper's `testDebugUnitTest` from the generated multi-module project and verify plugin-specific, nonempty JUnit XML results when the lifecycle test source exists.
+- `.github/workflows/ci.yml` and `.github/workflows/release.yml`: add Android native host unit-test step **after Tauri Android build and before manifest/artifact acceptance** in both hosted Android workflows, keeping artifact, manifest and no-publish gates unchanged.
+- `PROGRESS.md`: implementation and exact-run evidence.
+
+### Fail-closed acceptance, limitations and risks
+
+- If the lifecycle source test exists, missing Gradle test task/project, missing or empty plugin JUnit XML, skipped tests, failures or errors **must fail CI**. Gradle cannot silently pass on `NO-SOURCE`.
+- If lifecycle tests are absent from this branch, explicitly label the test source missing and the resulting execution unverified; the Gradle unit-test task will still be invoked to validate its availability, but **this is not proof that PR #51's new tests ran**. Agent 00 must validate merged PR #51 together with this gate.
+- Generated Android Gradle modules/settings are created by Tauri Android build; test step must run after build. Hosted Gradle may need additional dependency downloads and can reveal real test bugs.
+- Preserve Rust fmt/locked tests/strict Clippy, frontend gates, all 4 platform build targets, audit/dependency review, action SHA pins, job limits, and PR no-release publication policy.
+- No edits to Android/Kotlin application or plugin business logic, dependencies, signatures, production release settings, other agent branches, `main` or `dev`. No local-test claims.
+- Require exact new-head GitHub-hosted CI and release results and describe absent native test evidence truthfully.
+
 ## Step 035: remove premature apt wall-clock cutoff from hosted Linux builds
 
 **Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
