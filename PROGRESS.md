@@ -1,5 +1,27 @@
 # Progress ledger
 
+## Step 032: repair runtime admission formatting gate
+
+**Status:** PARTIAL (minimal formatting fix committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Evidence and scope
+
+- [PR #38 CI run 42083372641](https://github.com/MousaXD/Slopity/actions/runs/42083372641) failed the Rust quality job at `cargo fmt --all -- --check` before tests and Clippy.
+- The exact diff in `crates/slopity-core/src/admission.rs` is a rustfmt-only line wrap of `serde_json::to_value(&rejection).expect(...)`.
+- Correct only that formatting; retain admission rejection diagnostics, assertions, serialization shape, and fail-closed policy.
+- Intended files: `crates/slopity-core/src/admission.rs`, `PROGRESS.md`.
+- Non-goals: runtime policy changes, warning suppression, skipped tests, Android device claims, workflow changes, merges or releases.
+- Acceptance: exact-head GitHub-hosted Rust format, locked tests, strict Clippy, Linux/Android/Windows and release checks; record any failures honestly. No local tests will be claimed.
+
+### Implementation and evidence
+
+- Applied only the rustfmt-required line wrap in `crates/slopity-core/src/admission.rs`; no admission semantics, JSON assertions, or policy changes.
+- No local tests or physical-device tests were run. GitHub Actions exact-head results are pending; the original PR #38 Rust gate failure is not evidence of downstream test results.
+- Follow-up: inspect exact-head Rust, platform and release results; reconcile this patch with PR #38 only after review.
+
+
 ## Step 030: reduce admission error footprint without weakening checks
 
 **Status:** PARTIAL (layout change and JSON regression assertion committed; exact-head CI pending)  

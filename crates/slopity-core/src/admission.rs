@@ -261,8 +261,8 @@ mod tests {
             .any(|warning| warning.code == ResourceWarningCode::DeviceTelemetryUnavailable));
         // Boxing large diagnostics must not alter the Tauri/JS rejection
         // payload or remove the full resource-allocation evidence.
-        let json = serde_json::to_value(&rejection)
-            .expect("admission rejection must remain serializable");
+        let json =
+            serde_json::to_value(&rejection).expect("admission rejection must remain serializable");
         assert_eq!(json["allocation"]["fits"], false);
         assert!(json["allocation"]["warnings"].is_array());
         assert!(json["validationIssues"].is_array());
