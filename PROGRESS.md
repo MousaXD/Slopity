@@ -1,5 +1,146 @@
 # Progress ledger
 
+## Step 047: prevent stale server polls from bypassing recovery
+
+**Status:** PARTIAL (implementation committed; exact-head CI/manual verification pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, risk and acceptance
+- A backend mutation can commit while its dashboard reload fails; a concurrently executing server-list poll must never clear the stale-state warning or restore profile-mutation controls without an authoritative full dashboard refresh.
+- Gate poll start and poll result application against busy/offline state and snapshot identity; discard results from older snapshots rather than overwriting fresher server data.
+- Preserve manual Retry connection, emergency Stop of observed active servers, UI refresh settings, and existing backend calls without inventing state.
+- Intended files: `apps/slopity/web/app.js`, `apps/slopity/web/domain/mutation-outcome.js`, `apps/slopity/web/tests/preferences-mutations.test.mjs`, and this `PROGRESS.md`.
+- Non-goals: Rust, Android, CI/workflow edits, shared manifests, fake server states, platform runtime support, direct integration changes, merges, scheduled tasks.
+- Checks: GitHub-hosted exact-head frontend format/lint/Node tests, Rust/Linux/Android/Windows and release validation. Manual app-shell behavior remains unverified.
+
+### Implementation and test evidence
+- Added explicit conditions to begin/apply server polling only while the latest snapshot is authoritative and the interface is not busy, hidden, or waiting for a full refresh.
+- Captured snapshot identity before asynchronous `listServers` calls and discarded results/errors from superseded snapshots, so delayed polling cannot overwrite a newer dashboard or clear a stale-state lock.
+- Polling only refreshes the server-list portion of a snapshot; the stale-state warning can now clear only through a successful full `dashboard_snapshot` request.
+- Added Node regression tests for stale refresh lock, hidden/busy/pending suppression, and out-of-order asynchronous result rejection.
+- No local tests or physical-device tests run. Exact-head CI and manual keyboard/real backend validation remain pending.
+
+
+## Step 046: truthful mutation outcomes and functional UI refresh settings
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions and manual UX checks pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope and intended files
+- Fix a real UX/data-integrity risk: a profile/server operation may succeed, then the dashboard refresh may fail. Do not report the committed operation as failed or encourage accidental retry; retain the existing snapshot, communicate stale state, and require refresh before further non-emergency mutation.
+- Continue allowing Stop for an observed active server during stale-state recovery, subject to backend policy; never falsely claim that a failure is success.
+- Add a real Settings screen for UI-only auto-refresh on/off and interval (2/5/10/30 seconds), with safe optional local persistence and explicit messaging that these options do not affect native server hosting.
+- Improve busy/offline controls on server cards and details so users cannot launch duplicate mutations while the backend state is stale; retain read-only details/export and retry controls.
+- Add Node tests proving mutation/action vs refresh outcomes, preference validation/storage failure, and rendering behavior. Preserve all existing functionality.
+- Intended files: `apps/slopity/web/app.js`, `index.html`, `styles.css`, `components/server-card.js`, `views/dashboard.js`, new `domain/ui-preferences.js`, new `domain/mutation-outcome.js`, new frontend tests, `PROGRESS.md`.
+- No Rust, Android, native settings, package manifests, GitHub workflows, or shared integration changes.
+
+### Risks, non-goals and acceptance
+- An action's failure must never be converted to success; distinguish only the separately failing follow-up snapshot request.
+- Cached/stale dashboards are never evidence of live backend status. Blocking profile starts during unknown state must not remove the user's ability to attempt Stop on an already-observed active server.
+- Local storage can be unavailable in WebViews; settings must still work for the current session. Do not claim local preferences change hosting durability.
+- No mocked backend success, unsupported runtimes, executable imports, or scheduled tasks.
+- Acceptance: exact-head GitHub-hosted frontend format/lint/Node tests, Linux Tauri, Rust, Android and Windows where applicable, release package validation, manual app-shell keyboard/visual/WebView verification documented truthfully.
+
+### Delivered
+- Added an operational Settings screen to desktop/mobile navigation with auto-refresh toggle, validated 2/5/10/30-second intervals, read-only UI polling semantics, safe local persistence and explicit session-only fallback.
+- Fixed false failure reporting when a backend action commits but the subsequent dashboard snapshot request fails. User-facing notices now distinguish committed mutation from missing refresh. Stale-state guards block new profile mutations/server starts until a full refresh succeeds, while emergency Stop remains available for servers observed active.
+- Added disabled/busy states for server cards/details and backend-unavailable profile actions without suppressing actual backend admission errors.
+- Added Node tests covering preference loading, malformed values, storage unavailability, action failure versus post-mutation refresh failure, successful refresh and stale/busy lifecycle button behavior.
+- Changed only frontend source/test files and this ledger. No native/platform/workflow manifests were edited.
+
+### Evidence and limitations
+- Previous head `acc32598e1f4493261c4b7e36eb5c5444ac221da` passed cross-platform CI [42281605318](https://github.com/MousaXD/Slopity/actions/runs/42281605318): Rust format/locked tests/strict Clippy, Linux Tauri frontend format/lint/Node tests and compile, Windows NSIS, Android ARM64 debug. Release package validation [42281605320](https://github.com/MousaXD/Slopity/actions/runs/42281605320) passed Linux and Android packaging; publish skipped.
+- Those green checks validate only the *prior* head. This step requires fresh exact-head Actions evidence. No local tests or physical Android device tests were run.
+- Manual keyboard/screen-reader, cross-viewport UI, Tauri desktop/Android actual downloads and real backend failure reproduction remain unverified. Security audit workflow filters dependency changes; it did not run on these frontend-only commits. CI Linux job independently runs `npm audit`.
+
+
+## Step 045: preserve Rust-compatible profile metadata through JSON transfer
+
+**Status:** PARTIAL (implementation committed; exact-head CI pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, non-goals, risks and acceptance
+- Audit versioned profile import/export validation against the actual `slopity-core` model and validation constants, especially UTF-8 path/argument limits and u32 memory budgets.
+- Preserve existing built-in HTTP configuration metadata (which the backend warns about but does not execute); a JSON import is never a runtime launch or executable-file import.
+- Retain strict JSON format, field allowlist, profile-count/file-size limits, conflict skipping, disabled-on-import behavior, backend validation, and truthful partial-failure states.
+- Avoid exporting JSON that fails the declared file limit. Increase the bounded document limit if necessary to support the Rust model with up to 100 profiles.
+- Intended files: `apps/slopity/web/domain/profile-transfer.js`, `apps/slopity/web/app.js`, `apps/slopity/web/tests/discovery-transfer.test.mjs`, and this `PROGRESS.md` only.
+- No shared manifests, Rust/Android/workflows, filesystem execution, runtime enablement, merges or release operations.
+- Acceptance: exact-head GitHub Actions frontend tests, format/lint and platform builds; manual WebView download behavior remains unverified.
+
+### Implementation and evidence
+- Aligned JSON profile validation with Rust's 4,096-byte path fields, 256 arguments / 8,192 UTF-8 bytes each / 65,536-byte combined argument payload and u32 memory value. The backend continues to apply its runtime/memory policy independently.
+- Preserved inert executable/working-directory/argument metadata even on built-in HTTP profiles, matching the persisted model (the backend warns but never executes these fields).
+- Bounded JSON document import **and export** to 8 MiB with at most 100 profiles; oversized/unsupported content fails before backend mutation.
+- Expanded regression tests for compatible metadata round trips, malformed payload rejection, UTF-8/argument limits, and memory overflow.
+- No local checks or Android WebView download tests claimed; GitHub-hosted exact-head runs are required after committing this implementation.
+
+
+## Step 044: retain keyboard focus through live card updates
+
+**Status:** PARTIAL (implemented; exact-head Actions and manual keyboard checks pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, risks and checks
+- Keep keyboard focus on the same server action when the two-second backend state poll or filter redraws server cards. Never steal focus from a dialog or another view; do not fabricate lifecycle state.
+- Give every server action an accessible profile-specific name. Let the Runtime unavailable filter find unavailable adapters even if the profile is disabled; preserve the primary disabled status for badges.
+- Limit changes to `apps/slopity/web/components/server-card.js`, `views/dashboard.js`, `domain/profile-query.js`, their dedicated Node tests, and this ledger.
+- Risks: focused rows may be removed by filters/deletion, in which case do not redirect focus to unrelated controls. CSS selector values must remain allowlisted to avoid injection.
+- Acceptance: exact-head GitHub-hosted frontend format/lint/Node regression tests and platform builds; no local or device-test claims. Manual keyboard checks remain necessary.
+- Non-goals: Rust/Android/package/CI changes, new runtimes, fake backend controls, merges, or releases.
+
+### Implementation and verification
+- Card lifecycle and Details buttons now have profile-specific accessible labels and stable action identities.
+- Re-rendering a card restores keyboard focus to the same action when it remains available, or to that card's Details action if the lifecycle action became disabled; no focus theft from other views or removed profiles.
+- Runtime unavailable filter now includes disabled profiles with unsupported backend adapters, while their primary badge still correctly reports disabled state.
+- Added dedicated Node regression cases for focus retention/fallback and updated filter behavior.
+- No local tests claimed; GitHub Actions exact-head frontend, Rust, Linux/Android/Windows and package checks are pending. Manual keyboard/assistive-technology tests still required.
+
+
+## Step 043: Agent 03 GUI V2 discoverability, accessibility and safe profile transfer
+
+**Status:** PARTIAL (implemented; exact-head GitHub Actions and manual app-shell UX verification pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX (branch `feat/slopity-gui-agent03`; base `feat/owner-integration-20261106`)
+
+### Scope and acceptance
+- Audit GUI V2 dashboard, server cards/details, profile editor, runtime registry, device status and dialog behavior against the real Tauri API.
+- Add server search, runtime/status filtering and sorting, understandable result counts and no-match states; do not confuse saved-profile state with observed backend state.
+- Improve initial loading, backend-offline/retry behavior, accessible notices/focus and safe modal interactions without inventing backend success.
+- Provide versioned JSON-only profile import/export with strict schema, size/count guards, preview, duplicate-ID conflict handling, never auto-start, and per-profile backend validation/persistence; do not overwrite existing profiles or import executable payloads.
+- Add tests for selectors, import parsing/preview/conflicts, error handling, and accessibility-facing rendering.
+- Intended files: `apps/slopity/web/index.html`, `app.js`, `styles.css`, `views/dashboard.js`, `views/dialogs.js`, `views/profile-editor.js`, new focused `domain/` and `views/` modules, frontend `tests/`, and this `PROGRESS.md`. No shared package manifest, Rust, Android, or workflow edits.
+- Acceptance checks: GitHub-hosted exact-head frontend format, lint, Node tests; Linux/Android/Windows CI and security/release workflows as applicable. Record exact results and manual accessibility/device verification gaps.
+
+### Implementation submitted
+- Added pure server selectors with name/ID/runtime/port search, actual observed-state filtering, runtime filtering, port/status/name sort and match counts. Empty/no-match screens distinguish zero saved data from filtered results.
+- Added versioned, strict JSON-only profile transfer with 256 KiB and 100-profile limits, allowlisted fields and runtimes, type/range validation, disabled-on-import policy, safe DOM preview, existing/duplicate ID skip behavior, per-profile backend validation and partial-failure reporting. Existing profiles are never overwritten or auto-started.
+- Added responsive search/filter controls, JSON import/export controls, backend connection/retry state, informative failure notices, protected polling, editor double-submit guard, backend error formatting and native-dialog focus restoration. The UI still uses the real Tauri API, not simulated commands or resources.
+- Added `web/tests/discovery-transfer.test.mjs` for selectors, filtering, sorting, import/export and malicious payload rejection, plus existing frontend tests retained.
+- Changed only `apps/slopity/web/**` and this ledger. No Rust, Android, workflows or shared manifests changed.
+
+### Verification status and limitations
+- No local test execution is claimed; the required frontend format/lint/Node tests and Rust/platform checks must run on the exact implementation SHA in GitHub Actions after the draft PR is opened.
+- Manual keyboard/assistive-technology testing, narrow mobile layouts, Tauri Android/desktop WebView JSON download behavior, browser-native Escape focus and physical device telemetry remain unverified.
+- Bulk import intentionally reports partial success when backend validation or creation rejects an individual profile; rerunning skips IDs already persisted. External runtime fields remain configuration metadata, never executed by import.
+- Follow-up: inspect exact-head jobs, resolve real failures with a newly planned two-commit correction step if needed, then request coordinator review; do not merge this draft PR.
+
+### Non-goals and risks
+- No external runtime activation, shell execution, import of runnable files, arbitrary filesystem paths, silent profile replacement, pretend telemetry, backend admission policy edits, or merges.
+- All JSON is untrusted; invalid items must not be saved. Bulk import can partially succeed if the backend rejects an item; report the partial result explicitly.
+- Browser/WebView file download and keyboard/assistive-technology behavior require manual app-shell validation beyond Node tests.
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  

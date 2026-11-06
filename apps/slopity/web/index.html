@@ -34,6 +34,10 @@
             <span class="nav-glyph" aria-hidden="true">◉</span>
             <span>Device status</span>
           </button>
+          <button class="nav-item" type="button" data-nav-target="settings" aria-current="false">
+            <span class="nav-glyph" aria-hidden="true">⚙</span>
+            <span>Settings</span>
+          </button>
         </nav>
 
         <div class="sidebar-footer">
@@ -54,7 +58,11 @@
           </div>
         </header>
 
-        <div id="global-notice" class="global-notice" role="status" aria-live="polite" hidden></div>
+        <div id="global-notice" class="global-notice" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <div id="connection-status" class="connection-status" role="status" aria-live="polite" hidden>
+          <p id="connection-message">Connecting to the native backend…</p>
+          <button id="retry-button" class="button secondary small" type="button">Retry connection</button>
+        </div>
         <div id="recovery-notices" class="recovery-stack" role="status" aria-live="polite" hidden></div>
 
         <main id="main-content" tabindex="-1">
@@ -109,7 +117,22 @@
               </div>
               <p>Start and stop verified runtimes. Unsupported runtime profiles remain editable configuration only.</p>
             </div>
-            <div id="server-grid" class="server-grid" aria-live="polite"></div>
+            <div class="server-toolbar" role="search" aria-label="Find server profiles">
+              <label class="field server-search"><span>Search profiles</span><input id="profile-search" type="search" placeholder="Name, ID, runtime or port" autocomplete="off" /></label>
+              <label class="field"><span>Runtime</span><select id="profile-runtime-filter"><option value="all">All runtimes</option><option value="built-in-http">Built-in HTTP</option><option value="java">Java</option><option value="node-js">Node.js</option><option value="python">Python</option><option value="php">PHP</option><option value="native">Native</option><option value="custom">Custom</option></select></label>
+              <label class="field"><span>Status</span><select id="profile-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="stopped">Stopped</option><option value="failed">Failed</option><option value="disabled">Disabled</option><option value="unavailable">Runtime unavailable</option></select></label>
+              <label class="field"><span>Sort</span><select id="profile-sort"><option value="name">Name</option><option value="port">Port</option><option value="state">Status</option></select></label>
+              <button id="profile-filter-reset" class="button secondary small" type="button">Clear filters</button>
+            </div>
+            <div class="server-list-heading">
+              <p id="profile-result-count" role="status" aria-live="polite" aria-atomic="true">Loading server profiles…</p>
+              <div class="profile-transfer-actions">
+                <button id="import-profiles-button" class="button secondary small" type="button">Import JSON</button>
+                <button id="export-profiles-button" class="button secondary small" type="button">Export JSON</button>
+              </div>
+            </div>
+            <input id="import-profile-file" type="file" accept=".json,application/json" aria-label="Choose Slopity profile JSON file" hidden />
+            <div id="server-grid" class="server-grid" aria-live="off" aria-label="Saved server profiles"></div>
           </section>
 
           <section class="page-section" data-section="device" tabindex="-1" hidden>
@@ -124,6 +147,42 @@
               <div id="device-grid" class="device-grid"></div>
             </section>
           </section>
+
+          <section class="page-section" data-section="settings" tabindex="-1" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Preferences</p>
+                <h2>Display and refresh settings</h2>
+              </div>
+              <p>These options only control the Slopity interface, not native server processes.</p>
+            </div>
+            <section class="panel settings-panel" aria-labelledby="settings-refresh-title">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Live dashboard</p>
+                  <h2 id="settings-refresh-title">Background state polling</h2>
+                </div>
+              </div>
+              <label class="toggle-field">
+                <input id="settings-auto-refresh" type="checkbox" checked />
+                <span>
+                  <strong>Automatically update server status</strong>
+                  <small>Pause or resume read-only status requests while this app is visible. Hosting continues independently.</small>
+                </span>
+              </label>
+              <label class="field settings-interval">
+                <span>Refresh interval</span>
+                <select id="settings-refresh-interval">
+                  <option value="2000">Every 2 seconds</option>
+                  <option value="5000">Every 5 seconds</option>
+                  <option value="10000">Every 10 seconds</option>
+                  <option value="30000">Every 30 seconds</option>
+                </select>
+              </label>
+              <p id="settings-feedback" class="muted settings-feedback" role="status" aria-live="polite">Loading preferences…</p>
+              <p class="settings-help">Use Refresh in the header for an on-demand authoritative dashboard snapshot. Turning off automatic updates does not stop an active server.</p>
+            </section>
+          </section>
         </main>
       </div>
     </div>
@@ -132,6 +191,7 @@
       <button class="nav-item" type="button" data-nav-target="dashboard" aria-current="page"><span aria-hidden="true">▦</span><span>Dashboard</span></button>
       <button class="nav-item" type="button" data-nav-target="servers" aria-current="false"><span aria-hidden="true">▤</span><span>Servers</span></button>
       <button class="nav-item" type="button" data-nav-target="device" aria-current="false"><span aria-hidden="true">◉</span><span>Device</span></button>
+      <button class="nav-item" type="button" data-nav-target="settings" aria-current="false"><span aria-hidden="true">⚙</span><span>Settings</span></button>
     </nav>
 
     <dialog id="editor-dialog" class="modal wide-modal" aria-labelledby="editor-title">
@@ -237,6 +297,24 @@
           <button id="details-enable" class="button secondary" type="button">Disable profile</button>
           <button id="details-clone" class="button secondary" type="button">Clone</button>
           <button id="details-delete" class="button danger ghost" type="button">Delete</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <dialog id="import-dialog" class="modal wide-modal" aria-labelledby="import-title">
+      <div class="modal-card">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Configuration only</p>
+            <h2 id="import-title">Review imported profiles</h2>
+            <p>Conflicting IDs are skipped. Imported profiles are disabled and never started automatically.</p>
+          </div>
+          <button class="icon-button" type="button" data-dialog-close="import-dialog" aria-label="Close import preview">×</button>
+        </header>
+        <div id="import-preview" class="import-preview" aria-live="polite"></div>
+        <footer class="modal-actions">
+          <button class="button secondary" type="button" data-dialog-close="import-dialog">Cancel</button>
+          <button id="import-confirm" class="button primary" type="button">Import disabled profiles</button>
         </footer>
       </div>
     </dialog>
