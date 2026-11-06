@@ -1,5 +1,21 @@
 # Progress ledger
 
+## Step 045: preserve Rust-compatible profile metadata through JSON transfer
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, non-goals, risks and acceptance
+- Audit versioned profile import/export validation against the actual `slopity-core` model and validation constants, especially UTF-8 path/argument limits and u32 memory budgets.
+- Preserve existing built-in HTTP configuration metadata (which the backend warns about but does not execute); a JSON import is never a runtime launch or executable-file import.
+- Retain strict JSON format, field allowlist, profile-count/file-size limits, conflict skipping, disabled-on-import behavior, backend validation, and truthful partial-failure states.
+- Avoid exporting JSON that fails the declared file limit. Increase the bounded document limit if necessary to support the Rust model with up to 100 profiles.
+- Intended files: `apps/slopity/web/domain/profile-transfer.js`, `apps/slopity/web/app.js`, `apps/slopity/web/tests/discovery-transfer.test.mjs`, and this `PROGRESS.md` only.
+- No shared manifests, Rust/Android/workflows, filesystem execution, runtime enablement, merges or release operations.
+- Acceptance: exact-head GitHub Actions frontend tests, format/lint and platform builds; manual WebView download behavior remains unverified.
+
+
 ## Step 044: retain keyboard focus through live card updates
 
 **Status:** PARTIAL (implemented; exact-head Actions and manual keyboard checks pending)  
