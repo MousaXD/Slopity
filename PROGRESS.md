@@ -1,5 +1,89 @@
 # Progress ledger
 
+## Step 047: preserve an already-foregrounded Android host after update promotion failure
+
+**Status:** PARTIAL (safety correction committed; exact-head native/JVM and hosted CI pending)  
+**Declared:** 2026-11-07  
+**Updated:** 2026-11-07  
+**Owner:** Agent 04 — Android hosting & durability  
+**Branch:** `fix/slopity-android-agent04`  
+**Base:** `1340ecb5a09dbd0ffaaafbf91fe84c738b5b4805`
+
+### Finding and scope
+
+- `HostForegroundService.onStartCommand` currently calls `markStartFailed` and `stopSelf` unconditionally when `startForeground()` throws, even if this is a rejected **update** while a previous foreground notification protects Rust-owned listeners. This unconditionally removes the previous foreground service and risks orphaning live servers with no notification.
+- Reject only the failing native start/update request and preserve previously acknowledged active foreground state and count when a promotion error occurs during an update. An unsuccessful initial foreground promotion still resets state, rejects the request and stops the service. Notification permission/channel gates remain checked independently by the Rust application, which must reconcile/stop servers on delivery loss.
+- Scope limited to `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostForegroundService.kt`, `plugins/tauri-plugin-slopity-host/android/src/test/java/com/slopity/host/HostForegroundServiceTest.kt`, Android README, and this progress ledger. Do not modify Agent 01 workflows or Agent 00 application Rust code.
+
+### Verification and limits
+
+- Add JVM lifecycle tests for promotion-failure preservation vs. first-start rejection and ensure callbacks fire exactly once without pending states.
+- Check GitHub-hosted exact-head Android ARM64 build, Rust quality, package workflows and **combined** CI Gradle JUnit suite using isolated validation branch based on Agent 01's CI gate.
+- No claims about physical notification UI, service-kill durability, battery/thermal behavior or issue #44; no merging, publishing, signing or force pushes.
+
+### Implementation evidence
+
+- The Android service now distinguishes a rejected *initial* `startForeground()` promotion (native state cleared, request rejected, service stopped) from a rejected *update* on an already foregrounded service (only the rejected request is failed, previously acknowledged host/notification state retained).
+- Two Kotlin/JUnit regression tests assert the split, exact callback result, and no stale pending state. An Android permission or channel failure still reports unavailable notification delivery on the next Rust observation, triggering fail-closed reconciliation; no claim of ongoing notification visibility after Android revokes delivery.
+- Source/test/README and this ledger are committed together. Host-side Android compilation and the combined Agent 01 Gradle test gate must pass before the change is certified. Physical-device validation remains blocked by issue #44.
+
+
+## Step 044: Agent 04 Android foreground-host start acknowledgement and stop-race hardening
+
+**Status:** PARTIAL (implementation committed; exact-head CI and real-device verification pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 04 — Android Hosting & Durability  
+**Branch:** `fix/slopity-android-agent04`  
+**Base:** `feat/owner-integration-20261106` at `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
+
+### Scope and verified baseline
+
+- Audit native Kotlin `HostForegroundService` and Tauri `HostPlugin`, Android manifest, Rust plugin bridge, host lifecycle tests, and the device durability probe.
+- Native `startHosting` currently resolves immediately after enqueueing `startForegroundService`, before the service confirms `startForeground` succeeded. In-process snapshots and notification visibility can therefore be mistaken for confirmed service state. Fix the native acknowledgement boundary without hiding failures.
+- Preserve native notification Stop safely -> Rust reconciliation, protect pending stop from concurrent start/update, avoid stale native state after start/stop failures, and make channel/permission status conservative.
+- Add focused lifecycle regression tests or testable state checks and improve device/probe documentation where the evidence path is unclear.
+
+### Intended files
+
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/{HostForegroundService.kt,HostPlugin.kt}` and adjacent Android test sources as appropriate.
+- `plugins/tauri-plugin-slopity-host/src/lib.rs` only if required for honest status gating and compatible cross-platform tests.
+- `plugins/tauri-plugin-slopity-host/android/README.md`, `docs/android-device-durability.md`, `scripts/android-durability-probe.sh`.
+- `PROGRESS.md` (this plan and implementation evidence).
+
+### Guardrails and risks
+
+- Do not modify `apps/slopity/src-tauri/src/lib.rs` or overwrite Agent 00/02 runtime admission work; relay any required Rust application change to Agent 00.
+- Preserve built-in HTTP-only runtime support, user-initiated foreground hosting, native stop semantics, notification permission/channel fail-closed behavior, and in-process state/unknown-device limitations.
+- Android manifest/cross-compile passing is not physical-device foreground visibility, one-hour durability, thermal/battery safety, or Play policy certification.
+- Acknowledgement must be nonblocking for the Android service main thread; concurrent requests, denied permission, delayed lifecycle delivery, and stop-request races need explicit failure behavior.
+- No signing keys, releases, direct main/dev changes, bypasses, automated schedules, or manufactured device telemetry.
+
+### Acceptance checks
+
+- GitHub-hosted exact-HEAD Rust format, locked tests, strict Clippy; Android ARM64 debug compile/manifest and any available package/audit gates.
+- Review native lifecycle error propagation, start/stop/notification gate transitions, count updates, and no fabricated `notificationVisible` assertions.
+- Record precise GitHub Actions runs/job outcomes; no chat-local tests or physical device claim.
+- Keep physical ARM64 device release certification `BLOCKED` in [issue #44](https://github.com/MousaXD/Slopity/issues/44) until explicitly authorized device evidence is reviewed.
+- Open draft PR targeting `feat/owner-integration-20261106` for Agent 00; do not merge.
+
+### Implementation and evidence at this commit
+
+- Native foreground-service starts now use per-request asynchronous acknowledgement only after Android `startForeground()` returns; an unacknowledged request times out after 15 seconds. Canceled queued starts cannot promote a service, and service destruction rejects pending invokes.
+- Preserve stop-pending state across attempted count updates and retain active state while a stop is requested; native `stopHosting` no longer reports unconditional successful shutdown or clears state after a thrown stop exception.
+- Create/check the actual notification channel before Rust preflight; a missing channel is not considered enabled. Status visibility remains an inference rather than actual physical observation.
+- Rust plugin requires acknowledged, nonpending, visible-gated, exact-count Android status; a failed acknowledgement rolls back the newly started Rust listener through existing application code, while avoiding blind termination of an existing host service relied upon by other listeners.
+- Add Rust acknowledgement regressions for pending/denied/stopped/mismatched states; update Android bridge README and device durability cases; probe redacts device serial and timestamps ADB disconnect state.
+- `apps/slopity/src-tauri/src/lib.rs` intentionally unchanged to avoid racing Agent 00's runtime admission work. Existing reconciliation is observation-triggered, not an always-on watchdog.
+- Validation: changes are committed for GitHub-hosted exact-head Rust and Android ARM64 checks. No chat-local tests, emulator, or physical-device test was performed; no CI result claimed until the run completes. Physical certification remains **BLOCKED** under issue #44.
+- Pre-PR static review follow-up: corrected nullable Android `Intent?` access in Kotlin, and latched native shutdown before requesting `stopService` so an overlapping queued start cannot outrun a Rust-owned stop. CI compilation remains pending.
+- Android platform-restriction follow-up: replaced the new notification stop action's Android 12+ prohibited service-to-activity trampoline with a direct immutable Activity PendingIntent. Native `HostPlugin` processes the initial/new Activity Intent using a one-time per-process stop token; old service-action notifications keep a fallback. Rust-side reconciliation is still observation-triggered, not guaranteed by the Intent alone. No physical-device behavior claim.
+- Added `HostForegroundServiceTest.kt` Android local JVM regression scenarios for delayed acknowledgement, shutdown cancellation, preserving an acknowledged host on an update failure, and failed promotion with multiple pending starts. Added a scoped JUnit test dependency. These tests must be run by a generated Android Gradle unit-test task in CI; merely checking in the tests is not passing evidence. Agent 01 owns workflow wiring if absent.
+- Exact-head `076a5fc93dfb21f088a311cbfa2a91a0ffa10c6c` passed [Cross-platform CI 42281473924](https://github.com/MousaXD/Slopity/actions/runs/42281473924): Rust quality, Linux Tauri, Android ARM64 debug/manifest, Windows NSIS. Also passed [PR release-package run 42281473893](https://github.com/MousaXD/Slopity/actions/runs/42281473893): Linux and Android debug packages; release publication skipped. These checks do not execute Kotlin JUnit tests or prove physical-device lifecycle.
+- Post-CI review identified overlapping native start requests could produce a successful `startForeground` callback with `startRequestPending=true`, causing Rust's confirmed-host check to reject the first caller and potentially introduce out-of-order server count updates. Native request registration is now serialized (one pending promotion), with regression checks and an explicit retryable rejection message. CI must be repeated on the new exact HEAD.
+
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
