@@ -83,6 +83,42 @@ class HostForegroundServiceTest {
     }
 
     @Test
+    fun failedForegroundUpdateRejectsOnlyUpdateAndRetainsExistingHost() {
+        val first = HostForegroundService.registerStartRequest { }!!
+        assertTrue(HostForegroundService.finishStartRequest(first, "Existing host", 1))
+        val callbacks = mutableListOf<String?>()
+        val update = HostForegroundService.registerStartRequest { callbacks.add(it) }!!
+
+        assertTrue(
+            HostForegroundService.rejectForegroundPromotion(update, "notification refresh failed")
+        )
+        val snapshot = HostForegroundService.snapshot()
+        assertTrue(snapshot.active)
+        assertFalse(snapshot.startRequestPending)
+        assertFalse(snapshot.stopRequestPending)
+        assertEquals(1, snapshot.activeServerCount)
+        assertEquals("Existing host", snapshot.label)
+        assertEquals(listOf("notification refresh failed"), callbacks)
+        assertFalse(HostForegroundService.hasStartRequest(update))
+    }
+
+    @Test
+    fun failedFirstPromotionRejectsRequestAndStopsUnacknowledgedHost() {
+        val callbacks = mutableListOf<String?>()
+        val first = HostForegroundService.registerStartRequest { callbacks.add(it) }!!
+
+        assertFalse(
+            HostForegroundService.rejectForegroundPromotion(first, "promotion not permitted")
+        )
+        val snapshot = HostForegroundService.snapshot()
+        assertFalse(snapshot.active)
+        assertFalse(snapshot.startRequestPending)
+        assertEquals(0, snapshot.activeServerCount)
+        assertEquals(listOf("promotion not permitted"), callbacks)
+        assertFalse(HostForegroundService.hasStartRequest(first))
+    }
+
+    @Test
     fun failedPromotionRejectsPendingAndResetsNativeState() {
         val results = mutableListOf<String?>()
         val first = HostForegroundService.registerStartRequest { results.add(it) }!!

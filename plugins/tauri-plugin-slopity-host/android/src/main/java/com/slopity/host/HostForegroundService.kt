@@ -75,8 +75,16 @@ class HostForegroundService : Service() {
         } catch (error: RuntimeException) {
             val detail = error.message?.takeIf { it.isNotBlank() }
                 ?: error.javaClass.simpleName
-            markStartFailed("Android failed to promote Slopity into foreground hosting: $detail")
-            stopSelf(startId)
+            // An update failure must not remove an already-running foreground
+            // service used by other Rust-owned listeners. Fail only this request;
+            // a failed first promotion still stops the unacknowledged service.
+            if (!rejectForegroundPromotion(
+                    requestId,
+                    "Android failed to promote Slopity into foreground hosting: $detail"
+                )
+            ) {
+                stopSelf(startId)
+            }
         }
         return START_NOT_STICKY
     }
@@ -284,6 +292,27 @@ class HostForegroundService : Service() {
             failOutstandingStartRequests(
                 "A notification stop request is pending; foreground host updates are rejected."
             )
+        }
+
+        internal fun rejectForegroundPromotion(requestId: Int, reason: String): Boolean {
+            // startForeground() may fail while updating a service that was
+            // previously acknowledged. Preserve the old foreground host and
+            // count in that case. The caller retries or rolls back the update.
+            val (hadActiveHost, callbacks) = synchronized(stateLock) {
+                if (state.active) {
+                    val callback = pendingStarts.remove(requestId)
+                    state = state.copy(startRequestPending = pendingStarts.isNotEmpty())
+                    Pair(true, listOfNotNull(callback))
+                } else {
+                    val callbacks = pendingStarts.values.toList()
+                    pendingStarts.clear()
+                    state = HostServiceSnapshot()
+                    stopToken = UUID.randomUUID().toString()
+                    Pair(false, callbacks)
+                }
+            }
+            callbacks.forEach { callback -> callback(reason) }
+            return hadActiveHost
         }
 
         internal fun markStartFailed(reason: String) {

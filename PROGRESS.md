@@ -2,8 +2,9 @@
 
 ## Step 047: preserve an already-foregrounded Android host after update promotion failure
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (safety correction committed; exact-head native/JVM and hosted CI pending)  
 **Declared:** 2026-11-07  
+**Updated:** 2026-11-07  
 **Owner:** Agent 04 — Android hosting & durability  
 **Branch:** `fix/slopity-android-agent04`  
 **Base:** `1340ecb5a09dbd0ffaaafbf91fe84c738b5b4805`
@@ -19,6 +20,12 @@
 - Add JVM lifecycle tests for promotion-failure preservation vs. first-start rejection and ensure callbacks fire exactly once without pending states.
 - Check GitHub-hosted exact-head Android ARM64 build, Rust quality, package workflows and **combined** CI Gradle JUnit suite using isolated validation branch based on Agent 01's CI gate.
 - No claims about physical notification UI, service-kill durability, battery/thermal behavior or issue #44; no merging, publishing, signing or force pushes.
+
+### Implementation evidence
+
+- The Android service now distinguishes a rejected *initial* `startForeground()` promotion (native state cleared, request rejected, service stopped) from a rejected *update* on an already foregrounded service (only the rejected request is failed, previously acknowledged host/notification state retained).
+- Two Kotlin/JUnit regression tests assert the split, exact callback result, and no stale pending state. An Android permission or channel failure still reports unavailable notification delivery on the next Rust observation, triggering fail-closed reconciliation; no claim of ongoing notification visibility after Android revokes delivery.
+- Source/test/README and this ledger are committed together. Host-side Android compilation and the combined Agent 01 Gradle test gate must pass before the change is certified. Physical-device validation remains blocked by issue #44.
 
 
 ## Step 044: Agent 04 Android foreground-host start acknowledgement and stop-race hardening
