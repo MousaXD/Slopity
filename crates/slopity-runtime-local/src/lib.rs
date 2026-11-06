@@ -4,7 +4,10 @@ use slopity_core::{
     RuntimeAdapter, RuntimeAvailability, RuntimeError, RuntimeExitReason, RuntimeHandle,
     RuntimeKind, RuntimeObservation, RuntimeRequest, ServerId, ServerState,
 };
-use std::{collections::HashMap, process::{Child, ExitStatus}};
+use std::{
+    collections::HashMap,
+    process::{Child, ExitStatus},
+};
 
 pub struct LocalProcessRuntime {
     runtime_kind: RuntimeKind,
@@ -287,7 +290,9 @@ mod tests {
         };
         let mut runtime = LocalProcessRuntime::new(RuntimeKind::Native);
         runtime
-            .start(RuntimeRequest { profile: profile.clone() })
+            .start(RuntimeRequest {
+                profile: profile.clone(),
+            })
             .expect("initial test process should launch");
         runtime
             .children
@@ -301,7 +306,10 @@ mod tests {
             .expect("natural exit must not block a new process");
         assert!(runtime.children.contains_key(&id));
         assert_eq!(
-            runtime.observations.get(&id).map(|observation| observation.state),
+            runtime
+                .observations
+                .get(&id)
+                .map(|observation| observation.state),
             Some(ServerState::Running)
         );
         runtime.stop(&id).expect("new process must be stoppable");
