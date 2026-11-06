@@ -1,5 +1,128 @@
 # Progress ledger
 
+## Step 105: retain independent QA admission regressions in Rust test suite
+
+**Status:** PARTIAL (QA regressions committed; new exact-head CI pending)
+**Declared:** 2026-11-07
+**Updated:** 2026-11-07
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Baseline:** Step 104 exact SHA `11356868918b146be98bc5989bee78504544ee8f` and [successful cross-platform CI 42285264906](https://github.com/MousaXD/Slopity/actions/runs/42285264906).
+
+### Scope
+- Independent QA's [test-only PR #49](https://github.com/MousaXD/Slopity/pull/49), SHA `48e2e9f4b6215f7bd53a4c315670c89a70ea8ef4`, demonstrated two baseline defects: disabled-after-admission and loopback-to-LAN-after-admission permit reuse.
+- Carry both exact, named QA regression tests into the fixed Rust `admission.rs` module, preserving the QA assertions without reducing existing orchestration tests or the full-profile permit match.
+- Intended files: `crates/slopity-core/src/admission.rs` and `PROGRESS.md`. No production behavior changes expected.
+
+### Non-goals and acceptance
+- No changes to Tauri/Android/GUI/CI workflows, package graph, other agents' branches, `main`, `dev` or integration branch. Do not merge the intentionally red QA branch.
+- Mandatory planning commit first; implementation/tests and status ledger in the second commit.
+- Verify exact implementation SHA on GitHub-hosted Rust fmt, locked tests, strict Clippy, Linux/Android/Windows and package validation. Record incomplete jobs honestly; no local/device tests claimed.
+
+### Implementation and evidence
+- Copied QA's two named test cases `permit_rejects_profile_disabled_after_admission` and `permit_rejects_network_scope_expanded_after_admission` without modifying their assertion logic.
+- Retained existing full-profile equality permit implementation, structured admission rejection, and all other tests unchanged.
+- Changes: `crates/slopity-core/src/admission.rs` and same-commit `PROGRESS.md` only.
+- Parent SHA `11356868918b146be98bc5989bee78504544ee8f` passed [cross-platform run 42285264906](https://github.com/MousaXD/Slopity/actions/runs/42285264906), including 86 Rust tests, formatting, strict Clippy, Linux Tauri, Android ARM64, and Windows NSIS. This does **not** certify this newly tested head.
+- This head needs new exact-head Actions. No local tests or physical device checks performed.
+
+
+## Step 104: apply GitHub-hosted Rust formatting gate for Step 103
+
+**Status:** PARTIAL (exact formatting patch committed; new-head CI pending)
+**Declared:** 2026-11-06
+**Updated:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Observed failure:** [Cross-platform CI 42284944250](https://github.com/MousaXD/Slopity/actions/runs/42284944250), Rust quality job `128123228627` at `3169e211436d3273cd767baeaeb23272c1ac0c26`.
+
+### Scope and non-goals
+- Apply only the three exact `rustfmt` layout diffs reported by Rust 1.89.0 in `crates/slopity-runtime-local/src/lib.rs`: nested std import, multiline start request, multiline chained observation assertion.
+- Preserve all Step 102/103 semantics, security checks, tests, process-handling behavior and existing assertions unchanged.
+- Intended files: `crates/slopity-runtime-local/src/lib.rs`, `PROGRESS.md`.
+- No workflows, GUI, shared Tauri, Android Kotlin, `main`, `dev`, integration edits, or merges.
+
+### Acceptance
+- Planning commit precedes code change. Implementation commit carries only formatting and closure of this entry.
+- Exact-head GitHub-hosted formatting, locked workspace tests, strict Clippy and Linux/Android/Windows/build-package jobs. The failed Step 103 run did not execute tests or Clippy.
+- Maintain draft PR #46 until the last implementation SHA passes; no local tests or device proof claimed.
+
+### Implementation and evidence
+- Applied exactly three rustfmt-requested formatting changes to `crates/slopity-runtime-local/src/lib.rs`, without changing process semantics, regression test logic, or lint settings.
+- Updated this `PROGRESS.md` entry in the implementation commit.
+- Prior run [42284944250](https://github.com/MousaXD/Slopity/actions/runs/42284944250) failed solely at `cargo fmt --all -- --check` and never ran the workspace test/Clippy steps; downstream platform jobs were skipped.
+- New-head GitHub-hosted exact-SHA checks remain pending. No local build or physical-device checks performed.
+
+
+## Step 103: observe and reap desktop child-process exits
+
+**Status:** PARTIAL (source and tests committed; exact-head CI pending)
+**Declared:** 2026-11-06
+**Updated:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Parent implementation SHA:** `d6714fe21665e10fda6180fdca91f4635870db96`
+
+### Scope
+- The currently unregistered `LocalProcessRuntime` stores process handles, but implements no `observe` or `observations`. A natural child exit remains a stale Running state in `ServerOrchestrator` and a stale process handle prevents restart.
+- Implement nonblocking, trustworthy child `try_wait` observations and record terminal states. A zero exit is a completed stop, a nonzero exit a failure with diagnostic evidence; an inconclusive wait error must not discard a potentially live child.
+- Reap completed processes before new start attempts and retain known terminal observations so the orchestrator can detect unexpected exits; cleanly reset a restarted server's terminal snapshot.
+- Add tests for nonzero exit, clean exit, and restart eligibility after a terminated child.
+- Intended implementation files: `crates/slopity-runtime-local/src/lib.rs` and this same-commit `PROGRESS.md`.
+
+### Non-goals and safety
+- No registration of external runtime providers, actual Java/Node/Python/PHP support claims, shell commands, new OS process-kill permissions, or Android process execution.
+- No edits to shared Tauri, Kotlin, GUI, workflows, `main`, `dev` or integration branch.
+- Do not erase errors or report a possibly live process terminal merely because `try_wait` fails; keep structured executable arguments, path validation and the Step 102 stop-failure protections.
+
+### Acceptance
+- GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, strict Clippy, Linux/Android/Windows and package validation, with exact run links recorded truthfully. No local or physical-device tests claimed.
+- Commit A is this plan only. Commit B combines the source changes, regression tests and this closed ledger entry; keep PR #46 draft while exact-head CI is not certified.
+
+### Implementation and evidence
+- Implemented `RuntimeAdapter::observe` and `observations` for the dormant local process adapter; `try_wait` polls distinguish live processes from clean exit, nonzero exit, and inconclusive poll errors.
+- Natural exits are reaped and recorded as terminal observations. Failed exits retain exit status and last-error diagnostics for orchestrator failure capture; an inconclusive poll retains the live child handle.
+- A newly started child replaces stale terminal observations. Local-process `stop` records a user-requested stop when kill/wait confirms termination, or a known terminal observation if the child already exited.
+- Added Rust regression tests for clean process exit, nonzero exit diagnostics, and restart after natural exit without shell execution. Android still refuses adapter launches.
+- Changed files: `crates/slopity-runtime-local/src/lib.rs`, `PROGRESS.md`.
+- No local, physical Android, or manual process/GUI test was run. All exact-head CI checks are pending; no claim of full runtime-provider support. Previous PR #46 Actions runs were superseded by the Step 103 commits and cannot certify the new head.
+
+
+## Step 102: Agent 02 Rust admission and lifecycle fail-closed hardening
+
+**Status:** PARTIAL (implementation submitted; exact-head GitHub-hosted validation pending)
+**Declared:** 2026-11-06
+**Updated:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Baseline:** integration PR #43 head `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
+
+### Scope and acceptance
+- Review Rust core, admission/resource reservations, lifecycle observations, profile recovery, built-in HTTP and dormant local-process adapter for actual correctness and security defects.
+- Bind start permits to the *entire* validated profile, preventing post-authorization mutations (enabled, networking and process configuration) from reusing admission.
+- On adapter start failures, retain authoritative active observations and failure diagnostics instead of incorrectly marking a potentially live workload terminal.
+- Preserve local-process child handles when kill or wait fails so stop can be retried and ownership is not silently lost.
+- Add focused Rust regression tests for modified authorization and startup failure behavior; preserve existing failed-stop and telemetry tests.
+- Intended implementation files: `crates/slopity-core/src/admission.rs`, `crates/slopity-core/src/orchestrator.rs`, `crates/slopity-runtime-local/src/lib.rs`, and this `PROGRESS.md`.
+
+### Non-goals and safety
+- No changes to `main`, `dev`, integration branch, Tauri bridge, Android Kotlin, GUI, workflows, package dependencies, or release signing.
+- No new runtime-provider registration or support claims, shell command strings, downgraded admission rules, skipped assertions, or weakened Clippy.
+- Agent 00 owns Tauri `lib.rs` and will receive any cross-file findings separately.
+
+### Risks and checks
+- Changing startup failure handling must avoid false terminal evidence, stale diagnostics and loss of retry/cleanup visibility.
+- Local-process kill/wait errors must never orphan Slopity's in-memory process handle.
+- Verify via GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and relevant Linux/Android/Windows build jobs; report any incomplete gate accurately.
+- No local build or device test is claimed. This step requires a second commit combining implementation, regression tests, and the completed ledger entry.
+
+### Implementation and regression coverage
+- Admission permit captures the entire validated `ServerProfile`, including enabled status, network exposure and executable arguments rather than only ID/runtime/port/memory.
+- Orchestrator checks the adapter's observation after failed startup and conservatively keeps a still-active workload in snapshots (with a persistent startup error), so it remains visible and stoppable after partial launch.
+- The status reconciliation preserves live-state failure diagnostics until a fresh adapter error or terminal observation replaces them.
+- Desktop local-process termination keeps the child handle until kill/wait is confirmed; an already exited child may be reaped without treating it as a live stop failure.
+- Rust regressions cover changed-profile permit reuse, partial startup with live observations and subsequent stop, plus already reaped child cleanup.
+- Additional in-scope execution-path hardening: resolve the profile executable and working directory to concrete absolute filesystem paths before calling `Command::new` and `current_dir`. This closes the mismatch between `is_file()` checking a relative file and OS PATH lookup executing a different binary; added a non-file execution rejection test. Local-process registration is still intentionally disabled in the app.
+- Changed source: `crates/slopity-core/src/admission.rs`, `crates/slopity-core/src/orchestrator.rs`, `crates/slopity-runtime-local/src/lib.rs`; this progress entry is included in the implementation commit.
+- Acceptance is pending **this branch's final implementation SHA** in GitHub Actions; validation on an earlier commit does not certify subsequent source changes. The integration PR #43 baseline at `31d524f` had [Cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [Security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) successful; these historical results do not certify Agent 02 changes. No local checks are claimed.
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
