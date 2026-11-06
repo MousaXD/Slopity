@@ -1,5 +1,36 @@
 # Progress ledger
 
+## Step 034: bound Linux hosted dependency bootstrap without weakening checks
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Evidence and scope
+
+- PR #43 combined candidate at `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`: [exact-head cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) passed.
+- [Release validation run 42275322783, Linux job 128090109452](https://github.com/MousaXD/Slopity/actions/runs/42275322783/job/128090109452) remained in `Install Linux Tauri system dependencies` from 18:57:40 UTC through repeated inspection; Android release packages passed. Live job logs were unavailable (GitHub returned 404) so the precise apt operation/root cause is unknown.
+- Retain all original Linux package names and compiler/toolchain versions. Bound apt metadata refresh and package installation; explicitly configure network acquisition retries and timeouts so transient mirror problems retry and persistent stalls fail with a diagnostic before the overall job timeout.
+- Apply the same targeted Linux apt bootstrap handling to Rust quality, Linux Tauri CI, and Linux release bundling, maintaining identical package sets and all downstream gates.
+
+### Intended files
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `PROGRESS.md`
+
+### Non-goals and security boundaries
+
+- No changes to Rust business logic, GUI, Android host, dependencies, signing keys, publication conditions, pinned actions, tests, audit policy, release version or license.
+- No assertion that this corrects the particular run's underlying problem; the running job's log is not accessible, and a hang could be transient hosted-runner infrastructure.
+- No merge, release publication, direct `main`/`dev` writes, or local-test claims.
+
+### Risks and acceptance checks
+
+- Some mirrors or temporary GitHub runners can remain slow; bounded apt may turn indefinite stalls into explicit failures rather than guarantee a green build.
+- After implementation, require exact new branch-head GitHub-hosted Rust formatting, locked tests, strict Clippy, frontend checks, Linux Tauri, Windows NSIS, Android ARM64 manifest/packages, Cargo/npm audit, dependency review, Linux .deb/AppImage, and PR publication skipped.
+- Record exact runs and pass/fail/availability in this same entry when available; hold integration for Agent 00 if Linux packaging is not green.
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
