@@ -1,5 +1,23 @@
 # Progress ledger
 
+## Step 105: retain independent QA admission regressions in Rust test suite
+
+**Status:** IN PROGRESS
+**Declared:** 2026-11-07
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Baseline:** Step 104 exact SHA `11356868918b146be98bc5989bee78504544ee8f` and [successful cross-platform CI 42285264906](https://github.com/MousaXD/Slopity/actions/runs/42285264906).
+
+### Scope
+- Independent QA's [test-only PR #49](https://github.com/MousaXD/Slopity/pull/49), SHA `48e2e9f4b6215f7bd53a4c315670c89a70ea8ef4`, demonstrated two baseline defects: disabled-after-admission and loopback-to-LAN-after-admission permit reuse.
+- Carry both exact, named QA regression tests into the fixed Rust `admission.rs` module, preserving the QA assertions without reducing existing orchestration tests or the full-profile permit match.
+- Intended files: `crates/slopity-core/src/admission.rs` and `PROGRESS.md`. No production behavior changes expected.
+
+### Non-goals and acceptance
+- No changes to Tauri/Android/GUI/CI workflows, package graph, other agents' branches, `main`, `dev` or integration branch. Do not merge the intentionally red QA branch.
+- Mandatory planning commit first; implementation/tests and status ledger in the second commit.
+- Verify exact implementation SHA on GitHub-hosted Rust fmt, locked tests, strict Clippy, Linux/Android/Windows and package validation. Record incomplete jobs honestly; no local/device tests claimed.
+
+
 ## Step 104: apply GitHub-hosted Rust formatting gate for Step 103
 
 **Status:** PARTIAL (exact formatting patch committed; new-head CI pending)
