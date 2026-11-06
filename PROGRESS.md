@@ -2,7 +2,7 @@
 
 ## Step 051: remediate Tokio I/O-safety advisory without expanding Rust toolchain
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation committed; exact new-head Actions results pending)  
 **Declared:** 2026-11-06  
 **Updated:** 2026-11-06  
 **Owner:** Agent 05 on `fix/slopity-deps-agent05`, following Step 050's confirmed exact-head CI.
@@ -32,6 +32,14 @@
 - Exact-head GitHub-hosted `cargo metadata --locked`, formatting, locked workspace tests, strict Clippy on Rust 1.89, Cargo audit with Tokio RUSTSEC-2026-0386 **absent**, npm audit and dependency review.
 - Linux Tauri, Android ARM64 build/manifest, Windows NSIS and release package validation all remain passing, with pull-request publication skipped.
 - Accurately report any remaining unmaintained or soundness advisories; no false claim that green Cargo audit means a warning-free graph.
+
+### Implementation and initial evidence
+
+- Per Step 051 plan, changed **only** the Tokio `Cargo.lock` package version `1.53.1 -> 1.53.3` and checksum `202ca... -> ce3335...`; no Tokio dependency names/features, application manifests, or other crate entries were altered manually. The checksum is corroborated by publicly published resolved Cargo locks; hosted Cargo --locked checks are the acceptance authority.
+- Documented the eight original allowed warnings and dispositions in `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md`; corrected the incorrect suggestion that a passing cargo audit had no informational advisories. Kept all warnings enabled; no `--ignore`.
+- The original Step 050 implementation `bdfebbf` passed audit, Rust/Linux/Android/Windows CI and PR release packaging as linked above. **No local tests were executed.**
+- New Step 051 exact-head CI remains **pending** at this commit; completion depends on the selected new SHA's audit (Tokio warning absent) and unchanged cross-platform/release gates.
+- The `glib 0.18.5` unsoundness warning and six unmaintained dependency warnings are not fixed in this narrow compatibility-preserving update; their remediations are delegated for separate reviewed changes.
 
 ## Step 050: Agent 05 narrowly scoped dependency and supply-chain audit
 
