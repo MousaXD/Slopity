@@ -50,6 +50,7 @@
 - Validation: changes are committed for GitHub-hosted exact-head Rust and Android ARM64 checks. No chat-local tests, emulator, or physical-device test was performed; no CI result claimed until the run completes. Physical certification remains **BLOCKED** under issue #44.
 - Pre-PR static review follow-up: corrected nullable Android `Intent?` access in Kotlin, and latched native shutdown before requesting `stopService` so an overlapping queued start cannot outrun a Rust-owned stop. CI compilation remains pending.
 - Android platform-restriction follow-up: replaced the new notification stop action's Android 12+ prohibited service-to-activity trampoline with a direct immutable Activity PendingIntent. Native `HostPlugin` processes the initial/new Activity Intent using a one-time per-process stop token; old service-action notifications keep a fallback. Rust-side reconciliation is still observation-triggered, not guaranteed by the Intent alone. No physical-device behavior claim.
+- Added `HostForegroundServiceTest.kt` Android local JVM regression scenarios for delayed acknowledgement, shutdown cancellation, preserving an acknowledged host on an update failure, and failed promotion with multiple pending starts. Added a scoped JUnit test dependency. These tests must be run by a generated Android Gradle unit-test task in CI; merely checking in the tests is not passing evidence. Agent 01 owns workflow wiring if absent.
 
 
 
