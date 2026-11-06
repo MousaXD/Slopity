@@ -20,6 +20,8 @@
 
 - Combined exactly eight immutable source/test/docs/probe blob objects from Android PR #51 on Agent 01's exact CI tip, retaining the already-green Gradle JUnit gate and workflows unchanged. PR #51 and PR #47 are untouched; this test branch is **not mergeable release proof** until all integration source is separately certified.
 - Checks: GitHub-hosted workflow trigger on this branch's push (all branches); no local Android tooling or device/emulator in chat. JVM suite is marked **UNVERIFIED** until exact combined-tip `Run native Android host JUnit tests` output and nonempty XML are observed.
+- The earlier combined proof commit `cd74fffd42583a2837de9ac743cfc0181051da7a` **PASSED** [Cross-platform CI 42300906234](https://github.com/MousaXD/Slopity/actions/runs/42300906234): Rust, Android ARM64, Windows NSIS, Linux Tauri. Android job `128179657893` explicitly ran `:tauri-plugin-slopity-host:testDebugUnitTest` and reported **5 passed, zero failures/errors/skips**. This result validates the original combined source, *not* Agent 04's subsequent Step 047 update-failure correction.
+- New follow-up now copies exactly the 3 updated Agent 04 native source/test/README blobs from `24b949747c41b9af807a55426c880d465c3e3250` (no workflows or cross-owner files changed), giving **7** native JUnit lifecycle tests for fresh exact-head execution. The new run must be reviewed independently; it does not inherit prior green status.
 
 ### Mandatory evidence before acceptance
 
