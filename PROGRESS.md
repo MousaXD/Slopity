@@ -2,7 +2,7 @@
 
 ## Step 032: repair runtime admission formatting gate
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (minimal formatting fix committed; exact-head GitHub Actions pending)  
 **Declared:** 2026-11-06  
 **Updated:** 2026-11-06
 
@@ -17,7 +17,9 @@
 
 ### Implementation and evidence
 
-Pending implementation commit and exact-head GitHub Actions.
+- Applied only the rustfmt-required line wrap in `crates/slopity-core/src/admission.rs`; no admission semantics, JSON assertions, or policy changes.
+- No local tests or physical-device tests were run. GitHub Actions exact-head results are pending; the original PR #38 Rust gate failure is not evidence of downstream test results.
+- Follow-up: inspect exact-head Rust, platform and release results; reconcile this patch with PR #38 only after review.
 
 
 ## Step 030: reduce admission error footprint without weakening checks
