@@ -2,7 +2,7 @@
 
 ## Step 050: Agent 05 narrowly scoped dependency and supply-chain audit
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation and evidence recorded; exact new-head GitHub-hosted checks pending)  
 **Declared:** 2026-11-06  
 **Updated:** 2026-11-06  
 **Owner:** Agent 05, branch `fix/slopity-deps-agent05`, based on integration PR #43 head `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`.
@@ -37,6 +37,16 @@
 - Cargo vulnerability audit, `npm audit`, GitHub dependency review, frontend checks, Linux Tauri, Android ARM64 build/manifest, Windows NSIS, and non-publishing PR release-package validation.
 - Verify only the intended lockfile package/checksum and `main` Dependabot targets change. No physical Android device, production signing, or provenance claim from CI alone.
 
+
+### Implementation and evidence at implementation commit
+
+- Inspected all 15 open Dependabot PR patches, integration manifests/lockfile, pinned workflows, release permission model and untrusted executable boundary. Wrote the per-PR triage and future package verification gates in `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md`.
+- Changed exactly the `serde_json` package's version/checksum in `Cargo.lock` from 1.0.151 to 1.0.154, using the independently supplied checksum in #29; no additional package graph entry or manifest range changed.
+- Changed exactly three Dependabot `target-branch` fields `dev -> main`; aligned `docs/SECURITY_MODEL.md` with built-in HTTP runtime support and unverified Android hosting.
+- Remote baseline (before modification): [Rust / Linux / Android / Windows green](https://github.com/MousaXD/Slopity/actions/runs/42275322969), [Cargo/npm/dependency-review green](https://github.com/MousaXD/Slopity/actions/runs/42275322860). These validate only original integration head `31d524f`.
+- Static checks performed in GitHub connector: exact old serde_json version/checksum present exactly once; substitution makes only requested package metadata change; three `dev` target branches found; no workflow/source/licensing files written. **No local tests run.**
+- **Exact implementation-head CI: pending until draft PR is opened.** Do not mark this step DONE, close Dependabot #29, or merge before independently checking all new SHA jobs. Release-packaging status to be rechecked and cited separately.
+- Remaining action, CLI, Rust Tauri and package-management risks are delegated to their owning agents, with no implied approval or suppression.
 
 ## Step 033: owner-controlled cross-workstream integration candidate
 
