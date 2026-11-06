@@ -172,12 +172,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Keep mirror/download stalls bounded and retry transient apt acquisition errors.
-          sudo timeout --signal=TERM --kill-after=30s 300s apt-get \
+          # Retry stalled downloads without cutting off a slow but progressing package set.
+          # The GitHub job timeout remains the overall wall-clock bound.
+          sudo apt-get \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=30 \
             -o Acquire::https::Timeout=30 update
-          sudo timeout --signal=TERM --kill-after=30s 900s apt-get \
+          sudo apt-get \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=30 \
             -o Acquire::https::Timeout=30 \

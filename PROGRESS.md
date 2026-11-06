@@ -2,7 +2,7 @@
 
 ## Step 035: remove premature apt wall-clock cutoff from hosted Linux builds
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
 **Declared:** 2026-11-06  
 **Updated:** 2026-11-06
 
@@ -28,6 +28,14 @@
 - Hosted Ubuntu mirrors can still be slow. Per-request timeout/retries can fail genuine network outages while GitHub job time limits prevent unbounded hangs; a fast download is not guaranteed.
 - Require fresh GitHub Actions runs on exact implementation head: Rust fmt/locked workspace tests/strict Clippy, frontend tests/lint/format, Linux Tauri compile, Android ARM64 manifest and artifacts, Windows NSIS, Cargo/npm audits, dependency review, Linux .deb/AppImage and Android preview packages, with PR publication skipped.
 - Keep draft PR until every required check passes; do not claim local verification.
+
+### Implementation and verification at implementation commit
+
+- Removed the fixed 300-second/900-second GNU `timeout` wrappers from apt bootstrap in **both CI Linux jobs and the release Linux job**.
+- Retained apt acquisition `Acquire::Retries=3` and HTTP/HTTPS `Timeout=30` request timeouts, all original native packages and target/toolchain choices, GitHub job-level `timeout-minutes`, and every test, build, artifact, audit and no-publish gate.
+- No application code, dependency versions or pinned GitHub Actions were modified.
+- No local tests were run. Exact new-head GitHub-hosted CI, audits and release packages remain **pending** at implementation commit; report the new job URLs and final results separately and do not promote this PR until they pass.
+- Parent PR #43's Linux release job passing is **not** evidence that this new commit passes; the confirmed Step 034 cutoff regression is recorded above.
 
 ## Step 034: bound Linux hosted dependency bootstrap without weakening checks
 
