@@ -1,5 +1,44 @@
 # Progress ledger
 
+## Step 044: Agent 04 Android foreground-host start acknowledgement and stop-race hardening
+
+**Status:** IN PROGRESS (plan-only commit)  
+**Declared:** 2026-11-06  
+**Owner:** Agent 04 — Android Hosting & Durability  
+**Branch:** `fix/slopity-android-agent04`  
+**Base:** `feat/owner-integration-20261106` at `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
+
+### Scope and verified baseline
+
+- Audit native Kotlin `HostForegroundService` and Tauri `HostPlugin`, Android manifest, Rust plugin bridge, host lifecycle tests, and the device durability probe.
+- Native `startHosting` currently resolves immediately after enqueueing `startForegroundService`, before the service confirms `startForeground` succeeded. In-process snapshots and notification visibility can therefore be mistaken for confirmed service state. Fix the native acknowledgement boundary without hiding failures.
+- Preserve native notification Stop safely -> Rust reconciliation, protect pending stop from concurrent start/update, avoid stale native state after start/stop failures, and make channel/permission status conservative.
+- Add focused lifecycle regression tests or testable state checks and improve device/probe documentation where the evidence path is unclear.
+
+### Intended files
+
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/{HostForegroundService.kt,HostPlugin.kt}` and adjacent Android test sources as appropriate.
+- `plugins/tauri-plugin-slopity-host/src/lib.rs` only if required for honest status gating and compatible cross-platform tests.
+- `plugins/tauri-plugin-slopity-host/android/README.md`, `docs/android-device-durability.md`, `scripts/android-durability-probe.sh`.
+- `PROGRESS.md` (this plan and implementation evidence).
+
+### Guardrails and risks
+
+- Do not modify `apps/slopity/src-tauri/src/lib.rs` or overwrite Agent 00/02 runtime admission work; relay any required Rust application change to Agent 00.
+- Preserve built-in HTTP-only runtime support, user-initiated foreground hosting, native stop semantics, notification permission/channel fail-closed behavior, and in-process state/unknown-device limitations.
+- Android manifest/cross-compile passing is not physical-device foreground visibility, one-hour durability, thermal/battery safety, or Play policy certification.
+- Acknowledgement must be nonblocking for the Android service main thread; concurrent requests, denied permission, delayed lifecycle delivery, and stop-request races need explicit failure behavior.
+- No signing keys, releases, direct main/dev changes, bypasses, automated schedules, or manufactured device telemetry.
+
+### Acceptance checks
+
+- GitHub-hosted exact-HEAD Rust format, locked tests, strict Clippy; Android ARM64 debug compile/manifest and any available package/audit gates.
+- Review native lifecycle error propagation, start/stop/notification gate transitions, count updates, and no fabricated `notificationVisible` assertions.
+- Record precise GitHub Actions runs/job outcomes; no chat-local tests or physical device claim.
+- Keep physical ARM64 device release certification `BLOCKED` in [issue #44](https://github.com/MousaXD/Slopity/issues/44) until explicitly authorized device evidence is reviewed.
+- Open draft PR targeting `feat/owner-integration-20261106` for Agent 00; do not merge.
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
