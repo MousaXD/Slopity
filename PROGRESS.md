@@ -1,5 +1,20 @@
 # Progress ledger
 
+## Step 047: prevent stale server polls from bypassing recovery
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, risk and acceptance
+- A backend mutation can commit while its dashboard reload fails; a concurrently executing server-list poll must never clear the stale-state warning or restore profile-mutation controls without an authoritative full dashboard refresh.
+- Gate poll start and poll result application against busy/offline state and snapshot identity; discard results from older snapshots rather than overwriting fresher server data.
+- Preserve manual Retry connection, emergency Stop of observed active servers, UI refresh settings, and existing backend calls without inventing state.
+- Intended files: `apps/slopity/web/app.js`, `apps/slopity/web/domain/mutation-outcome.js`, `apps/slopity/web/tests/preferences-mutations.test.mjs`, and this `PROGRESS.md`.
+- Non-goals: Rust, Android, CI/workflow edits, shared manifests, fake server states, platform runtime support, direct integration changes, merges, scheduled tasks.
+- Checks: GitHub-hosted exact-head frontend format/lint/Node tests, Rust/Linux/Android/Windows and release validation. Manual app-shell behavior remains unverified.
+
+
 ## Step 046: truthful mutation outcomes and functional UI refresh settings
 
 **Status:** PARTIAL (implementation committed; exact-head GitHub Actions and manual UX checks pending)  
