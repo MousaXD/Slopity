@@ -34,6 +34,10 @@
             <span class="nav-glyph" aria-hidden="true">◉</span>
             <span>Device status</span>
           </button>
+          <button class="nav-item" type="button" data-nav-target="settings" aria-current="false">
+            <span class="nav-glyph" aria-hidden="true">⚙</span>
+            <span>Settings</span>
+          </button>
         </nav>
 
         <div class="sidebar-footer">
@@ -143,6 +147,42 @@
               <div id="device-grid" class="device-grid"></div>
             </section>
           </section>
+
+          <section class="page-section" data-section="settings" tabindex="-1" hidden>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Preferences</p>
+                <h2>Display and refresh settings</h2>
+              </div>
+              <p>These options only control the Slopity interface, not native server processes.</p>
+            </div>
+            <section class="panel settings-panel" aria-labelledby="settings-refresh-title">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Live dashboard</p>
+                  <h2 id="settings-refresh-title">Background state polling</h2>
+                </div>
+              </div>
+              <label class="toggle-field">
+                <input id="settings-auto-refresh" type="checkbox" checked />
+                <span>
+                  <strong>Automatically update server status</strong>
+                  <small>Pause or resume read-only status requests while this app is visible. Hosting continues independently.</small>
+                </span>
+              </label>
+              <label class="field settings-interval">
+                <span>Refresh interval</span>
+                <select id="settings-refresh-interval">
+                  <option value="2000">Every 2 seconds</option>
+                  <option value="5000">Every 5 seconds</option>
+                  <option value="10000">Every 10 seconds</option>
+                  <option value="30000">Every 30 seconds</option>
+                </select>
+              </label>
+              <p id="settings-feedback" class="muted settings-feedback" role="status" aria-live="polite">Loading preferences…</p>
+              <p class="settings-help">Use Refresh in the header for an on-demand authoritative dashboard snapshot. Turning off automatic updates does not stop an active server.</p>
+            </section>
+          </section>
         </main>
       </div>
     </div>
@@ -151,6 +191,7 @@
       <button class="nav-item" type="button" data-nav-target="dashboard" aria-current="page"><span aria-hidden="true">▦</span><span>Dashboard</span></button>
       <button class="nav-item" type="button" data-nav-target="servers" aria-current="false"><span aria-hidden="true">▤</span><span>Servers</span></button>
       <button class="nav-item" type="button" data-nav-target="device" aria-current="false"><span aria-hidden="true">◉</span><span>Device</span></button>
+      <button class="nav-item" type="button" data-nav-target="settings" aria-current="false"><span aria-hidden="true">⚙</span><span>Settings</span></button>
     </nav>
 
     <dialog id="editor-dialog" class="modal wide-modal" aria-labelledby="editor-title">

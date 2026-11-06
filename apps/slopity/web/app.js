@@ -9,6 +9,8 @@ import { clientValidateProfile, cloneIdentity, emptyDraft, nextAvailablePort, ne
 import { availabilityFor, commandErrorMessage, isActiveState, profileLifecycle } from './domain/runtime.js';
 import { MAX_IMPORT_BYTES, parseProfileImport, serializeProfiles } from './domain/profile-transfer.js';
 import { renderImportPreview } from './views/import-preview.js';
+import { performBackendMutation } from './domain/mutation-outcome.js';
+import { loadUiPreferences, saveUiPreferences } from './domain/ui-preferences.js';
 
 const api = createSlopityApi();
 const store = createStore();
@@ -20,6 +22,15 @@ let serverPollPending = false;
 let editorSaving = false;
 let pendingImport = null;
 let filters = { query: '', runtime: 'all', status: 'all', sort: 'name' };
+let uiPreferences = loadUiPreferences(preferenceStorage());
+
+function preferenceStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 function collectElements(root) {
   return {
@@ -42,6 +53,9 @@ function collectElements(root) {
     importPreview: root.querySelector('#import-preview'),
     importConfirm: root.querySelector('#import-confirm'),
     editorSave: root.querySelector('#profile-form button[type="submit"]'),
+    settingsAutoRefresh: root.querySelector('#settings-auto-refresh'),
+    settingsInterval: root.querySelector('#settings-refresh-interval'),
+    settingsFeedback: root.querySelector('#settings-feedback'),
     metrics: root.querySelector('#metric-grid'),
     runtimeGrid: root.querySelector('#runtime-grid'),
     resourceWarnings: root.querySelector('#resource-warnings'),
@@ -80,8 +94,8 @@ function renderState(state) {
   const snapshot = state.snapshot;
   elements.refresh.disabled = state.busy;
   elements.retry.disabled = state.busy;
-  elements.create.disabled = state.busy || !snapshot;
-  elements.import.disabled = state.busy || !snapshot;
+  elements.create.disabled = state.busy || !snapshot || Boolean(state.refreshError);
+  elements.import.disabled = state.busy || !snapshot || Boolean(state.refreshError);
   elements.export.disabled = state.busy || !snapshot?.profiles?.length;
   elements.connection.hidden = Boolean(snapshot && !state.refreshError);
   elements.connectionMessage.textContent = state.refreshError
@@ -101,6 +115,8 @@ function renderState(state) {
     onStart: startProfile,
     onStop: stopProfile,
     onDetails: openDetails,
+    mutationBusy: state.busy,
+    backendStale: Boolean(state.refreshError),
   }, filters);
   renderDeviceStatus(document, elements.deviceGrid, snapshot);
   elements.deviceSubtitle.textContent = `${snapshot.platform} · ${snapshot.architecture} · telemetry values remain unavailable when the backend cannot prove them`;
@@ -109,10 +125,11 @@ function renderState(state) {
 store.subscribe(renderState);
 
 async function refreshDashboard({ announce = false } = {}) {
+  if (store.get().busy) return null;
   try {
-    store.set({ busy: true, refreshError: null });
+    store.set({ busy: true });
     const snapshot = await api.dashboard();
-    store.set({ snapshot, busy: false });
+    store.set({ snapshot, busy: false, refreshError: null });
     if (announce) setNotice('Dashboard refreshed from the backend.', 'success');
     refreshOpenDetails();
     return snapshot;
@@ -142,22 +159,30 @@ async function refreshServerStates() {
   }
 }
 
-async function withMutation(action, successMessage) {
+async function withMutation(action, successMessage, { allowWhileStale = false } = {}) {
   if (store.get().busy) return false;
-  try {
-    store.set({ busy: true });
-    await action();
-    const snapshot = await api.dashboard();
-    store.set({ snapshot, busy: false, refreshError: null });
-    setNotice(successMessage, 'success');
-    refreshOpenDetails();
-    return true;
-  } catch (error) {
+  if (store.get().refreshError && !allowWhileStale) {
+    setNotice('Backend status is out of date. Refresh the connection before changing profiles or starting servers.', 'warning');
+    return false;
+  }
+  store.set({ busy: true });
+  const outcome = await performBackendMutation(action, () => api.dashboard());
+  if (!outcome.committed) {
     store.set({ busy: false });
-    setNotice(commandErrorMessage(error), 'error');
+    setNotice(commandErrorMessage(outcome.actionError), 'error');
     refreshOpenDetails();
     return false;
   }
+  if (outcome.refreshError) {
+    const message = commandErrorMessage(outcome.refreshError);
+    store.set({ busy: false, refreshError: message });
+    setNotice(`${successMessage} The change succeeded, but the dashboard could not reload: ${message}. Refresh before making other changes.`, 'warning');
+  } else {
+    store.set({ snapshot: outcome.snapshot, busy: false, refreshError: null });
+    setNotice(successMessage, 'success');
+    refreshOpenDetails();
+  }
+  return true;
 }
 
 async function startProfile(profile) {
@@ -174,11 +199,11 @@ async function stopProfile(profile) {
     setNotice(`${profile.name} is not active.`, 'warning');
     return false;
   }
-  return withMutation(() => api.stopServer(profile.id), `${profile.name} stopped.`);
+  return withMutation(() => api.stopServer(profile.id), `${profile.name} stopped.`, { allowWhileStale: true });
 }
 
 function openCreate() {
-  if (store.get().busy || !currentSnapshot()) {
+  if (store.get().busy || !currentSnapshot() || store.get().refreshError) {
     setNotice('Connect to the native backend before creating a profile.', 'warning');
     return;
   }
@@ -191,6 +216,10 @@ function openCreate() {
 }
 
 function openEdit(profile) {
+  if (store.get().busy || store.get().refreshError) {
+    setNotice('Refresh the backend connection before editing a profile.', 'warning');
+    return;
+  }
   const lifecycle = profileLifecycle(profile, currentSnapshot());
   if (lifecycle.active) {
     setNotice('Stop the server before editing its saved profile.', 'warning');
@@ -207,6 +236,10 @@ function openEdit(profile) {
 async function saveEditor(event) {
   event.preventDefault();
   if (editorSaving || store.get().busy) return;
+  if (store.get().refreshError) {
+    setNotice('Backend status is stale. Refresh before saving this profile.', 'warning');
+    return;
+  }
   editorSaving = true;
   elements.editorSave.disabled = true;
   try {
@@ -311,12 +344,15 @@ function updateDetailsActions(profile) {
   const lifecycle = profileLifecycle(profile, currentSnapshot());
   elements.detailsStartStop.textContent = lifecycle.active ? 'Stop server' : lifecycle.availability.available ? 'Start server' : 'Runtime unavailable';
   elements.detailsStartStop.className = lifecycle.active ? 'button danger' : 'button primary';
-  elements.detailsStartStop.disabled = store.get().busy || (lifecycle.active ? false : !lifecycle.runnable);
-  elements.detailsStartStop.title = lifecycle.active ? 'Stop this server' : lifecycle.startDisabledReason;
-  elements.detailsEdit.disabled = lifecycle.active || store.get().busy;
-  elements.detailsEnable.disabled = lifecycle.active || store.get().busy;
-  elements.detailsClone.disabled = store.get().busy;
-  elements.detailsDelete.disabled = lifecycle.active || store.get().busy;
+  const stale = Boolean(store.get().refreshError);
+  const busy = store.get().busy;
+  elements.detailsStartStop.disabled = busy || (!lifecycle.active && (stale || !lifecycle.runnable));
+  elements.detailsStartStop.title = lifecycle.active ? 'Stop this server' :
+    stale ? 'Refresh the backend connection before starting a server.' : lifecycle.startDisabledReason;
+  elements.detailsEdit.disabled = lifecycle.active || busy || stale;
+  elements.detailsEnable.disabled = lifecycle.active || busy || stale;
+  elements.detailsClone.disabled = busy || stale;
+  elements.detailsDelete.disabled = lifecycle.active || busy || stale;
   elements.detailsEnable.textContent = profile.enabled ? 'Disable profile' : 'Enable profile';
 }
 
@@ -441,7 +477,10 @@ async function previewProfileFile(event) {
 }
 
 async function importPreviewedProfiles() {
-  if (!pendingImport || store.get().busy || !currentSnapshot()) return;
+  if (!pendingImport || store.get().busy || !currentSnapshot() || store.get().refreshError) {
+    setNotice('Refresh the backend connection before importing profiles.', 'warning');
+    return;
+  }
   const entries = pendingImport.entries.filter((entry) => !entry.reason);
   const existingIds = new Set(currentSnapshot().profiles.map((profile) => profile.id));
   let imported = 0;
@@ -481,9 +520,31 @@ async function importPreviewedProfiles() {
   setNotice(`${summary} ${details}`.trim(), failures.length || refreshFailure || skipped ? 'warning' : 'success');
 }
 
+function setupUiPreferences() {
+  elements.settingsAutoRefresh.checked = uiPreferences.autoRefresh;
+  elements.settingsInterval.value = String(uiPreferences.refreshIntervalMs);
+  elements.settingsInterval.disabled = !uiPreferences.autoRefresh;
+  elements.settingsFeedback.textContent = 'Preferences apply to this interface only. Native servers continue running independently.';
+  function update() {
+    const result = saveUiPreferences(preferenceStorage(), {
+      autoRefresh: elements.settingsAutoRefresh.checked,
+      refreshIntervalMs: Number(elements.settingsInterval.value),
+    });
+    uiPreferences = result.preferences;
+    elements.settingsInterval.disabled = !uiPreferences.autoRefresh;
+    startPolling();
+    elements.settingsFeedback.textContent = result.persisted
+      ? 'Preferences saved on this device. Server hosting is unaffected.'
+      : 'Preferences applied for this session. Local preference storage is unavailable.';
+  }
+  elements.settingsAutoRefresh.addEventListener('change', update);
+  elements.settingsInterval.addEventListener('change', update);
+}
+
 function startPolling() {
   stopPolling();
-  pollTimer = window.setInterval(refreshServerStates, 2000);
+  if (!uiPreferences.autoRefresh || document.hidden) return;
+  pollTimer = window.setInterval(refreshServerStates, uiPreferences.refreshIntervalMs);
 }
 
 function stopPolling() {
@@ -525,11 +586,12 @@ elements.editorDialog.addEventListener('close', () => store.set({ editingProfile
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopPolling();
   else {
-    refreshDashboard().catch(() => {});
+    if (uiPreferences.autoRefresh) refreshDashboard().catch(() => {});
     startPolling();
   }
 });
 
 setupNavigation();
 setupProfileFilters();
+setupUiPreferences();
 refreshDashboard().catch(() => {}).finally(startPolling);

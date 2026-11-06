@@ -99,3 +99,22 @@ test('dialog helpers restore focus to the invoking control', async () => {
   await new Promise((resolve) => setTimeout(resolve, 1));
   assert.equal(restored, true);
 });
+
+
+test('backend-offline state disables new starts but preserves emergency Stop', () => {
+  const pending = renderServerCard(document, profile(), { runtimes: [ready], servers: [] }, { backendStale: true });
+  const start = findByClass(pending, 'primary')[0];
+  assert.equal(start.disabled, true);
+  assert.match(start.getAttribute('title'), /Refresh the backend connection/);
+  const running = renderServerCard(document, profile(), {
+    runtimes: [ready],
+    servers: [{ serverId: 'http-1', state: 'running' }],
+  }, { backendStale: true });
+  const stop = findByClass(running, 'danger')[0];
+  assert.equal(stop.disabled, false);
+});
+
+test('mutations in progress disable lifecycle actions until backend response', () => {
+  const card = renderServerCard(document, profile(), { runtimes: [ready], servers: [] }, { mutationBusy: true });
+  assert.equal(findByClass(card, 'primary')[0].disabled, true);
+});

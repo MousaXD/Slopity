@@ -2,8 +2,9 @@
 
 ## Step 046: truthful mutation outcomes and functional UI refresh settings
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions and manual UX checks pending)  
 **Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
 **Owner:** Agent 03 — GUI/UX
 
 ### Scope and intended files
@@ -21,6 +22,18 @@
 - Local storage can be unavailable in WebViews; settings must still work for the current session. Do not claim local preferences change hosting durability.
 - No mocked backend success, unsupported runtimes, executable imports, or scheduled tasks.
 - Acceptance: exact-head GitHub-hosted frontend format/lint/Node tests, Linux Tauri, Rust, Android and Windows where applicable, release package validation, manual app-shell keyboard/visual/WebView verification documented truthfully.
+
+### Delivered
+- Added an operational Settings screen to desktop/mobile navigation with auto-refresh toggle, validated 2/5/10/30-second intervals, read-only UI polling semantics, safe local persistence and explicit session-only fallback.
+- Fixed false failure reporting when a backend action commits but the subsequent dashboard snapshot request fails. User-facing notices now distinguish committed mutation from missing refresh. Stale-state guards block new profile mutations/server starts until a full refresh succeeds, while emergency Stop remains available for servers observed active.
+- Added disabled/busy states for server cards/details and backend-unavailable profile actions without suppressing actual backend admission errors.
+- Added Node tests covering preference loading, malformed values, storage unavailability, action failure versus post-mutation refresh failure, successful refresh and stale/busy lifecycle button behavior.
+- Changed only frontend source/test files and this ledger. No native/platform/workflow manifests were edited.
+
+### Evidence and limitations
+- Previous head `acc32598e1f4493261c4b7e36eb5c5444ac221da` passed cross-platform CI [42281605318](https://github.com/MousaXD/Slopity/actions/runs/42281605318): Rust format/locked tests/strict Clippy, Linux Tauri frontend format/lint/Node tests and compile, Windows NSIS, Android ARM64 debug. Release package validation [42281605320](https://github.com/MousaXD/Slopity/actions/runs/42281605320) passed Linux and Android packaging; publish skipped.
+- Those green checks validate only the *prior* head. This step requires fresh exact-head Actions evidence. No local tests or physical Android device tests were run.
+- Manual keyboard/screen-reader, cross-viewport UI, Tauri desktop/Android actual downloads and real backend failure reproduction remain unverified. Security audit workflow filters dependency changes; it did not run on these frontend-only commits. CI Linux job independently runs `npm audit`.
 
 
 ## Step 045: preserve Rust-compatible profile metadata through JSON transfer
