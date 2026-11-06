@@ -49,7 +49,7 @@ print_info() {
   require_device
   cat <<EOF
 captured_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-serial: $("${ADB[@]}" get-serialno 2>/dev/null || echo unavailable)
+serial: redacted (select the device privately with ANDROID_SERIAL)
 manufacturer: $(prop ro.product.manufacturer)
 model: $(prop ro.product.model)
 android_version: $(prop ro.build.version.release)
@@ -129,7 +129,7 @@ probe() {
     echo "url: $url"
     echo "duration_seconds: $duration"
     echo "interval_seconds: $interval"
-    echo "android_serial: $("${ADB[@]}" get-serialno 2>/dev/null || echo unavailable)"
+    echo "android_serial: redacted (ANDROID_SERIAL is not written to evidence)"
     echo "manufacturer: $(prop ro.product.manufacturer)"
     echo "model: $(prop ro.product.model)"
     echo "android_version: $(prop ro.build.version.release)"
@@ -138,13 +138,13 @@ probe() {
     echo "build_fingerprint: $(prop ro.build.fingerprint)"
   } > "$metadata"
 
-  echo "timestamp_utc,reachable,http_code,total_seconds" > "$reachability"
+  echo "timestamp_utc,reachable,http_code,total_seconds,adb_state" > "$reachability"
   local start_epoch
   start_epoch=$(date +%s)
   local deadline=$((start_epoch + duration))
 
   while (( $(date +%s) < deadline )); do
-    local now_iso now_epoch elapsed reachable http_code
+    local now_iso now_epoch elapsed reachable http_code adb_state
     now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     now_epoch=$(date +%s)
     elapsed=$((now_epoch - start_epoch))
@@ -159,7 +159,9 @@ probe() {
     else
       http_code="curl-error"
     fi
-    echo "$now_iso,$reachable,$http_code,$elapsed" >> "$reachability"
+    adb_state=$("${ADB[@]}" get-state 2>/dev/null || echo unavailable)
+    [[ "$adb_state" == "device" ]] || adb_state="unavailable"
+    echo "$now_iso,$reachable,$http_code,$elapsed,$adb_state" >> "$reachability"
 
     {
       echo "=== sample $now_iso elapsed_seconds=$elapsed ==="
@@ -194,7 +196,7 @@ probe() {
   } >> "$metadata"
 
   echo "Evidence written to: $output_dir"
-  echo "Do not edit failed samples out of $reachability. Attach the raw directory to the device test record."
+  echo "Do not edit failed samples out of $reachability. Redact private build/device details before sharing evidence."
 }
 
 case "${1:-}" in

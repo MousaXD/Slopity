@@ -2,8 +2,9 @@
 
 ## Step 046: isolated combined-branch proof of Android foreground host JVM lifecycle tests
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (combined exact-HEAD GitHub CI triggered; actual Gradle JUnit result pending)  
 **Declared:** 2026-11-07  
+**Updated:** 2026-11-07  
 **Owner:** Agent 04 — Android hosting validation  
 **Branch:** `test/android-native-junit-combined-proof-agent04` (throwaway CI evidence, not a merge candidate)  
 **Base:** Agent 01 CI `aba76b52c8a8f306c029800f6019fe669dff9e7e`
@@ -14,6 +15,11 @@
 - Copy only the eight non-ledger Android-agent changed file contents from PR #51 `1340ecb5a09dbd0ffaaafbf91fe84c738b5b4805` on top of the *exact* CI agent tip. Retain Agent 01's workflow and `scripts/check-android-host-junit.sh` unchanged.
 - This branch is an independent test combination, **not** a proposal to merge Agent 01's workflow ownership into Agent 04's PR or to replace the integration coordinator's controlled branch.
 - No modifications to main, dev, the integration branch, any CI workflow, signing/release scripts, or other agent PR branches.
+
+### Implementation submitted to GitHub-hosted CI
+
+- Combined exactly eight immutable source/test/docs/probe blob objects from Android PR #51 on Agent 01's exact CI tip, retaining the already-green Gradle JUnit gate and workflows unchanged. PR #51 and PR #47 are untouched; this test branch is **not mergeable release proof** until all integration source is separately certified.
+- Checks: GitHub-hosted workflow trigger on this branch's push (all branches); no local Android tooling or device/emulator in chat. JVM suite is marked **UNVERIFIED** until exact combined-tip `Run native Android host JUnit tests` output and nonempty XML are observed.
 
 ### Mandatory evidence before acceptance
 

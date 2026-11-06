@@ -36,6 +36,16 @@ class StartHostingArgs {
     ]
 )
 class HostPlugin(private val activity: Activity) : Plugin(activity) {
+    init {
+        // New Activity creation after a direct notification action.
+        activity.intent?.let { HostForegroundService.handleNotificationStopIntent(it) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        // Existing Activity brought to the front from "Stop safely".
+        HostForegroundService.handleNotificationStopIntent(intent)
+    }
+
     @Command
     fun deviceTelemetry(invoke: Invoke) {
         val appContext = activity.applicationContext
@@ -116,37 +126,72 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
         val args = invoke.parseArgs(StartHostingArgs::class.java)
         val label = args.label?.takeIf { it.isNotBlank() } ?: "Hosting a Slopity server"
         val activeServerCount = (args.activeServerCount ?: 1).coerceAtLeast(1)
-        HostForegroundService.markStartRequested(label, activeServerCount)
+        val requestId = HostForegroundService.registerStartRequest { error ->
+            if (error != null) {
+                invoke.reject(error)
+            } else {
+                invoke.resolve(status())
+            }
+        }
+        if (requestId == null) {
+            invoke.reject("Android foreground hosting is already starting or stopping. Wait for that request to finish before starting or updating hosting.")
+            return
+        }
 
         val intent = Intent(activity.applicationContext, HostForegroundService::class.java)
             .setAction(HostForegroundService.ACTION_START_OR_UPDATE)
             .putExtra(HostForegroundService.EXTRA_LABEL, label)
             .putExtra(HostForegroundService.EXTRA_ACTIVE_SERVER_COUNT, activeServerCount)
+            .putExtra(HostForegroundService.EXTRA_START_REQUEST_ID, requestId)
         try {
             ContextCompat.startForegroundService(activity.applicationContext, intent)
-            invoke.resolve(status())
         } catch (error: RuntimeException) {
-            HostForegroundService.markStartFailed()
             val detail = error.message?.takeIf { it.isNotBlank() }
                 ?: error.javaClass.simpleName
-            invoke.reject("Android rejected the Slopity foreground-service start: $detail")
+            HostForegroundService.failStartRequest(
+                requestId,
+                "Android rejected the Slopity foreground-service start: $detail"
+            )
         }
+
+        // Do not resolve a Tauri start while Android has merely queued the service.
+        // This also prevents indefinitely pending invokes if Android never delivers it.
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (HostForegroundService.failStartRequest(
+                    requestId,
+                    "Android did not confirm foreground hosting within 15 seconds."
+                ) && !HostForegroundService.snapshot().active
+            ) {
+                runCatching {
+                    activity.applicationContext.stopService(
+                        Intent(activity.applicationContext, HostForegroundService::class.java)
+                    )
+                }
+            }
+        }, START_CONFIRMATION_TIMEOUT_MS)
     }
 
     @Command
     fun stopHosting(invoke: Invoke) {
-        val stopped = runCatching {
-            activity.applicationContext.stopService(
+        HostForegroundService.markShutdownRequested()
+        try {
+            val stopRequested = activity.applicationContext.stopService(
                 Intent(activity.applicationContext, HostForegroundService::class.java)
             )
-        }.getOrDefault(false)
-        HostForegroundService.markStopped()
-        val reason = if (stopped) {
-            "Android foreground host service stopped after the application stopped its hosted servers."
-        } else {
-            "Android foreground host service was already stopped."
+            if (!stopRequested) {
+                HostForegroundService.markStopped()
+            }
+            val reason = if (stopRequested) {
+                "Android foreground host stop was requested; removal is confirmed only when onDestroy runs."
+            } else {
+                "Android foreground host service was not running."
+            }
+            invoke.resolve(status(reason))
+        } catch (error: RuntimeException) {
+            val detail = error.message?.takeIf { it.isNotBlank() }
+                ?: error.javaClass.simpleName
+            invoke.reject("Android rejected the Slopity foreground-service stop: $detail")
         }
-        invoke.resolve(status(reason))
     }
 
     @Command
@@ -181,11 +226,14 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
         val appNotificationsEnabled = runCatching {
             notificationManager?.areNotificationsEnabled() ?: false
         }.getOrDefault(false)
-        val channelEnabled = runCatching {
-            notificationManager?.let { manager ->
-                val channel = manager.getNotificationChannel(HostForegroundService.CHANNEL_ID)
-                channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
-            } ?: false
+        // Ensure the channel exists before Rust's pre-start delivery check.
+        // Re-creating an existing channel does not override a user's disabled setting.
+        val channelReady = runCatching {
+            HostForegroundService.ensureNotificationChannel(activity.applicationContext)
+        }.isSuccess
+        val channelEnabled = channelReady && runCatching {
+            notificationManager?.getNotificationChannel(HostForegroundService.CHANNEL_ID)
+                ?.importance?.let { it != NotificationManager.IMPORTANCE_NONE } ?: false
         }.getOrDefault(false)
         val notificationVisible = snapshot.active &&
             notificationPermissionGranted &&
@@ -206,7 +254,7 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
             !channelEnabled ->
                 "Hosting cannot remain active because the Slopity hosting notification channel is disabled."
             notificationVisible ->
-                "Android foreground hosting is active and its persistent notification should be visible."
+                "Android foreground hosting was acknowledged and its notification should be visible; device UI visibility has not been independently verified."
             else ->
                 "Android foreground hosting is active, but notification visibility could not be confirmed."
         }
@@ -229,5 +277,6 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
 
     companion object {
         private const val BYTES_PER_MIB = 1024L * 1024L
+        private const val START_CONFIRMATION_TIMEOUT_MS = 15_000L
     }
 }
