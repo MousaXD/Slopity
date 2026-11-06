@@ -1,5 +1,64 @@
 # Progress ledger
 
+## Step 033: owner-controlled cross-workstream integration candidate
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Mission and baseline
+
+- Owner-authorized convergence of the existing Slopity Rust/Tauri, GUI, CI, and Android work into one branch for eventual promotion to `main` **only after exact-head CI and independent review**.
+- Start from `fix/runtime-admission-rustfmt-ledger-20261106` at `9c061c6d4a3dc9a2a43fb15c43d988ee846cbeb7`: it contains the recovered CI #35 and the runtime safety/Clippy remediation #38/#42. Cross-platform CI [42140594899](https://github.com/MousaXD/Slopity/actions/runs/42140594899) and release-package validation [42140594848](https://github.com/MousaXD/Slopity/actions/runs/42140594848) passed on that exact SHA.
+- GUI V2 [PR #37](https://github.com/MousaXD/Slopity/pull/37) on SHA `b6a5b30ad8682a54abf476b33f8f59f0852d1995` passed [cross-platform CI](https://github.com/MousaXD/Slopity/actions/runs/42082159333), [security audit](https://github.com/MousaXD/Slopity/actions/runs/42082159369), and [release package validation](https://github.com/MousaXD/Slopity/actions/runs/42082159284). These are historical separate-branch passes, **not** combined verification.
+- Android durability PR #12 is only partially supported by hosted CI; physical Android survival remains an explicit release limitation.
+- Earlier draft PRs #9/#10/#11/#12/#35-#42 remain intact until an audited integration decision. Do not bulk merge conflicting PRs or Dependabot updates.
+
+### Workstream ownership (six roles + coordinator, not independently launched agents)
+
+1. CI/release: preserve locked Rust, Linux, Android, Windows, security and no-publish release gates.
+2. Rust/lifecycle: preserve fail-closed admission and stop-failure diagnostics, evaluate original #40/#41 diffs against corrected #38/#42.
+3. GUI/UX: integrate all modular GUI V2 frontend functionality and tests, check keyboard, responsive behavior, truthful unsupported runtimes.
+4. Android: integrate foreground service, durable status reconciliation and documentation from #12, but require real-device proof separately.
+5. Security/dependencies: review 15 Dependabot PRs as independent locked batches after a green baseline, preserve license and pinned actions.
+6. Independent QA: compare source inventories, exact-head tests, regression gates and release claims; block merges on real failures.
+
+Coordinator controls the only integration branch, workstream conflicts and final promotion.
+
+### Scope
+
+- Incorporate all existing GUI V2 changed frontend files from PR #37, preserving its frontend format/lint/test gates.
+- Reconcile Android durability source changes without overwriting modern Rust admission behavior. If conflict resolution cannot be verified, leave it isolated and document it as blocked; do not fake readiness.
+- Preserve the original historical Step 021 and other workstream ledger entries, and reconcile CI evidence from PR #39.
+- Create a single draft integration PR to `main`, initially no merge, so GitHub Actions can validate the actual combined tree.
+- Only after all required exact-head CI passes, security review, and known platform limitations are truthfully documented may the owner consider a merge. No signing secrets, forced pushes, or premature release.
+
+### Non-goals and security boundaries
+
+- No external runtime presented as operational without real platform proof; only built-in HTTP is registered.
+- No arbitrary profile shell execution, relaxed resource admission, fake device telemetry, disabled tests, global lint exemptions, license changes, package downloads, or direct `main` edits.
+- No assertion that GitHub cross-compilation proves background Android durability or signed production releases.
+
+### Risks
+
+- Android PR #12 and Rust runtime PR #38 both touch Tauri `src/lib.rs`; manual semantic reconciliation and tests are mandatory.
+- GUI V2 assumes Tauri command shape and admission rejection JSON; combined build is necessary but insufficient for manual interaction proof.
+- CI jobs may need fresh reruns for each implementation SHA. A previously green parent is not approval of this integration.
+
+### Intended files
+
+- `PROGRESS.md`, `docs/ENGINEERING_STATUS_2026-11-05.md` and integration QA references.
+- `apps/slopity/package.json`, `apps/slopity/scripts/**` and `apps/slopity/web/**` from PR #37.
+- Reviewed Android `plugins/**`, `apps/slopity/src-tauri/src/lib.rs`, `docs/android-device-durability.md`, `scripts/android-durability-probe.sh`.
+
+### Acceptance checks — GitHub-hosted only
+
+- `cargo fmt --all -- --check`; `cargo metadata --locked --format-version 1`; `cargo test --workspace --all-features --locked`; strict all-targets/all-features Clippy.
+- Frontend format, lint and Node tests, Tauri Linux compile, Android ARM64 debug manifest/artifacts, Windows NSIS, Linux and Android release-package validation with PR publication skipped.
+- Cargo vulnerability audit, npm audit, GitHub dependency review and any new platform/contract regressions.
+- Independent source diff audit of all included slices, documentation accuracy and honest Android real-device caveat.
+- Use exact SHA/run URLs in this ledger. Until complete, mark PARTIAL and keep the integration PR in draft.
+
 ## Step 032: repair runtime admission formatting gate
 
 **Status:** PARTIAL (minimal formatting fix committed; exact-head GitHub Actions pending)  
