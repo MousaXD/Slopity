@@ -36,6 +36,16 @@ class StartHostingArgs {
     ]
 )
 class HostPlugin(private val activity: Activity) : Plugin(activity) {
+    init {
+        // New Activity creation after a direct notification action.
+        activity.intent?.let { HostForegroundService.handleNotificationStopIntent(it) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        // Existing Activity brought to the front from "Stop safely".
+        HostForegroundService.handleNotificationStopIntent(intent)
+    }
+
     @Command
     fun deviceTelemetry(invoke: Invoke) {
         val appContext = activity.applicationContext

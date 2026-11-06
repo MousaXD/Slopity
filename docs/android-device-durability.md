@@ -206,12 +206,12 @@ Start the server again and verify it is reachable. Tap **Stop safely** in the pe
 Expected behavior:
 
 1. the native service records a stop request;
-2. Slopity opens for safe Rust-side reconciliation;
+2. Android opens Slopity directly through an immutable Activity PendingIntent (no service-to-activity notification trampoline), and the plugin authenticates the one-time stop token;
 3. the application stops active hosted listeners before removing the foreground service;
 4. the port is released;
 5. the notification disappears after the final listener stops.
 
-The notification action intentionally does not kill the Kotlin service first while Rust listeners are still active. Android may block the service-originated activity launch: if Slopity does not open, manually open it, inspect whether the stop request remained pending, and record the failure. The server may remain foregrounded until Rust reconciles. Never count a manually completed stop as a successful automatic notification action.
+The notification action intentionally does not kill the Kotlin service first while Rust listeners are still active. On Android 12+ a service-to-activity notification trampoline is prohibited; Slopity instead uses a direct Activity PendingIntent with a one-time token. If Slopity still does not open, manually open it, inspect whether a stop request was recorded, and record the failure. The server may remain foregrounded until Rust reconciles. Never count a manually completed stop as a successful automatic notification action.
 
 ## 12. Observe battery and thermal behavior
 

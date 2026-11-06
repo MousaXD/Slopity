@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import java.util.UUID
 
 internal data class HostServiceSnapshot(
     val active: Boolean = false,
@@ -121,15 +122,25 @@ class HostForegroundService : Service() {
                 }
 
                 if (!snapshot.stopRequestPending) {
-                    val stopIntent = Intent(this@HostForegroundService, HostForegroundService::class.java)
-                        .setAction(ACTION_REQUEST_STOP)
-                    val stopPendingIntent = PendingIntent.getService(
-                        this@HostForegroundService,
-                        1,
-                        stopIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    addAction(0, "Stop safely", stopPendingIntent)
+                    // Android 12+ blocks notification trampolines from a service
+                    // into an Activity. The notification must open the Activity
+                    // directly, where HostPlugin records the one-time stop token.
+                    packageManager.getLaunchIntentForPackage(packageName)?.let { stopIntent ->
+                        stopIntent.action = ACTION_REQUEST_STOP
+                        stopIntent.putExtra(EXTRA_STOP_TOKEN, currentStopToken())
+                        stopIntent.addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        )
+                        val stopPendingIntent = PendingIntent.getActivity(
+                            this@HostForegroundService,
+                            1,
+                            stopIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        addAction(0, "Stop safely", stopPendingIntent)
+                    }
                 }
             }
             .build()
@@ -153,6 +164,7 @@ class HostForegroundService : Service() {
         const val EXTRA_LABEL = "slopity.host.label"
         const val EXTRA_ACTIVE_SERVER_COUNT = "slopity.host.activeServerCount"
         const val EXTRA_START_REQUEST_ID = "slopity.host.startRequestId"
+        const val EXTRA_STOP_TOKEN = "slopity.host.stopToken"
         internal const val CHANNEL_ID = "slopity_hosting"
         private const val NOTIFICATION_ID = 8_081
 
@@ -160,6 +172,7 @@ class HostForegroundService : Service() {
         private var state = HostServiceSnapshot()
         private var nextRequestId = 1
         private val pendingStarts = mutableMapOf<Int, (String?) -> Unit>()
+        private var stopToken = UUID.randomUUID().toString()
 
         internal fun ensureNotificationChannel(context: Context) {
             val channel = NotificationChannel(
@@ -172,6 +185,25 @@ class HostForegroundService : Service() {
             }
             context.getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
+        }
+
+        private fun currentStopToken(): String = synchronized(stateLock) { stopToken }
+
+        internal fun handleNotificationStopIntent(intent: Intent): Boolean {
+            if (intent.action != ACTION_REQUEST_STOP) return false
+            val receivedToken = intent.getStringExtra(EXTRA_STOP_TOKEN) ?: return false
+            synchronized(stateLock) {
+                if (receivedToken != stopToken || !state.active || state.stopRequestPending) {
+                    return false
+                }
+                // Reject replays or an external app forging ACTION_REQUEST_STOP.
+                stopToken = UUID.randomUUID().toString()
+                state = state.copy(stopRequestPending = true)
+            }
+            failOutstandingStartRequests(
+                "A notification stop request is pending; foreground host updates are rejected."
+            )
+            return true
         }
 
         internal fun snapshot(): HostServiceSnapshot = synchronized(stateLock) { state.copy() }
@@ -256,6 +288,7 @@ class HostForegroundService : Service() {
                 val registered = pendingStarts.values.toList()
                 pendingStarts.clear()
                 state = HostServiceSnapshot()
+                stopToken = UUID.randomUUID().toString()
                 registered
             }
             callbacks.forEach { callback -> callback(reason) }

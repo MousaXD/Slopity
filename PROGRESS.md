@@ -49,6 +49,7 @@
 - `apps/slopity/src-tauri/src/lib.rs` intentionally unchanged to avoid racing Agent 00's runtime admission work. Existing reconciliation is observation-triggered, not an always-on watchdog.
 - Validation: changes are committed for GitHub-hosted exact-head Rust and Android ARM64 checks. No chat-local tests, emulator, or physical-device test was performed; no CI result claimed until the run completes. Physical certification remains **BLOCKED** under issue #44.
 - Pre-PR static review follow-up: corrected nullable Android `Intent?` access in Kotlin, and latched native shutdown before requesting `stopService` so an overlapping queued start cannot outrun a Rust-owned stop. CI compilation remains pending.
+- Android platform-restriction follow-up: replaced the new notification stop action's Android 12+ prohibited service-to-activity trampoline with a direct immutable Activity PendingIntent. Native `HostPlugin` processes the initial/new Activity Intent using a one-time per-process stop token; old service-action notifications keep a fallback. Rust-side reconciliation is still observation-triggered, not guaranteed by the Intent alone. No physical-device behavior claim.
 
 
 
