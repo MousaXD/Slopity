@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -19,30 +20,27 @@ internal data class HostServiceSnapshot(
 )
 
 class HostForegroundService : Service() {
-    override fun onCreate() {
-        super.onCreate()
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Slopity hosting",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Shows when user-started Slopity server hosting is active."
-            setShowBadge(false)
-        }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_REQUEST_STOP) {
             markStopRequested()
             val current = snapshot()
             if (current.active) {
-                getSystemService(NotificationManager::class.java).notify(
-                    NOTIFICATION_ID,
-                    buildNotification(current)
-                )
+                // A failed notification refresh must not crash the Rust hosting process.
+                runCatching {
+                    getSystemService(NotificationManager::class.java).notify(
+                        NOTIFICATION_ID,
+                        buildNotification(current)
+                    )
+                }
             }
             openSlopityForStopReconciliation()
+            return START_NOT_STICKY
+        }
+
+        val requestId = intent?.getIntExtra(EXTRA_START_REQUEST_ID, -1) ?: -1
+        if (!hasStartRequest(requestId)) {
+            // A stop/timeout may have canceled this queued start before delivery.
+            if (!snapshot().active) stopSelf(startId)
             return START_NOT_STICKY
         }
 
@@ -50,13 +48,14 @@ class HostForegroundService : Service() {
             ?.takeIf { it.isNotBlank() }
             ?: "Hosting a Slopity server"
         val activeServerCount = intent
-            ?.getIntExtra(EXTRA_ACTIVE_SERVER_COUNT, 1)
-            ?.coerceAtLeast(1)
-            ?: 1
+            .getIntExtra(EXTRA_ACTIVE_SERVER_COUNT, 1)
+            .coerceAtLeast(1)
 
-        return try {
-            markActive(label, activeServerCount)
-            val notification = buildNotification(snapshot())
+        try {
+            ensureNotificationChannel(this)
+            val notification = buildNotification(
+                snapshot().copy(label = label, activeServerCount = activeServerCount)
+            )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(
                     NOTIFICATION_ID,
@@ -66,16 +65,22 @@ class HostForegroundService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-            START_NOT_STICKY
+
+            // Only a successful startForeground() may acknowledge hosting to Rust.
+            if (!finishStartRequest(requestId, label, activeServerCount) && !snapshot().active) {
+                stopSelf(startId)
+            }
         } catch (error: RuntimeException) {
-            markStartFailed()
+            val detail = error.message?.takeIf { it.isNotBlank() }
+                ?: error.javaClass.simpleName
+            markStartFailed("Android failed to promote Slopity into foreground hosting: $detail")
             stopSelf(startId)
-            throw error
         }
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        markStopped()
+        markStartFailed("Android destroyed the Slopity foreground host service.")
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
@@ -83,6 +88,8 @@ class HostForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun openSlopityForStopReconciliation() {
+        // Android may restrict activity launches from services. This is a best-effort
+        // prompt to reconcile, not proof that Rust received the stop request.
         runCatching {
             packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -134,7 +141,7 @@ class HostForegroundService : Service() {
 
     private fun notificationText(snapshot: HostServiceSnapshot): String = when {
         snapshot.stopRequestPending ->
-            "Stop requested. Slopity is opening to shut down hosted servers safely."
+            "Stop requested. Open Slopity to finish shutting down hosted servers safely."
         snapshot.label.isNotBlank() -> snapshot.label
         else -> "Hosting a Slopity server"
     }
@@ -144,53 +151,117 @@ class HostForegroundService : Service() {
         const val ACTION_REQUEST_STOP = "com.slopity.host.action.REQUEST_STOP"
         const val EXTRA_LABEL = "slopity.host.label"
         const val EXTRA_ACTIVE_SERVER_COUNT = "slopity.host.activeServerCount"
+        const val EXTRA_START_REQUEST_ID = "slopity.host.startRequestId"
         internal const val CHANNEL_ID = "slopity_hosting"
         private const val NOTIFICATION_ID = 8_081
 
         private val stateLock = Any()
         private var state = HostServiceSnapshot()
+        private var nextRequestId = 1
+        private val pendingStarts = mutableMapOf<Int, (String?) -> Unit>()
+
+        internal fun ensureNotificationChannel(context: Context) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Slopity hosting",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows when user-started Slopity server hosting is active."
+                setShowBadge(false)
+            }
+            context.getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
+        }
 
         internal fun snapshot(): HostServiceSnapshot = synchronized(stateLock) { state.copy() }
 
-        internal fun markStartRequested(label: String, activeServerCount: Int) {
+        internal fun registerStartRequest(callback: (String?) -> Unit): Int? =
             synchronized(stateLock) {
-                state = state.copy(
-                    startRequestPending = true,
-                    stopRequestPending = false,
-                    label = label,
-                    activeServerCount = activeServerCount
-                )
+                if (state.stopRequestPending) {
+                    null
+                } else {
+                    val requestId = nextRequestId++
+                    pendingStarts[requestId] = callback
+                    state = state.copy(startRequestPending = true)
+                    requestId
+                }
             }
+
+        internal fun hasStartRequest(requestId: Int): Boolean = synchronized(stateLock) {
+            !state.stopRequestPending && pendingStarts.containsKey(requestId)
         }
 
-        private fun markActive(label: String, activeServerCount: Int) {
-            synchronized(stateLock) {
-                state = HostServiceSnapshot(
-                    active = true,
-                    label = label,
-                    activeServerCount = activeServerCount
-                )
+        internal fun finishStartRequest(
+            requestId: Int,
+            label: String,
+            activeServerCount: Int
+        ): Boolean {
+            var succeeded = false
+            val callback = synchronized(stateLock) {
+                val registered = pendingStarts.remove(requestId)
+                if (registered != null && !state.stopRequestPending) {
+                    state = state.copy(
+                        active = true,
+                        startRequestPending = pendingStarts.isNotEmpty(),
+                        label = label,
+                        activeServerCount = activeServerCount
+                    )
+                    succeeded = true
+                } else {
+                    state = state.copy(startRequestPending = pendingStarts.isNotEmpty())
+                }
+                registered
             }
+            callback?.invoke(
+                if (succeeded) null
+                else "The Slopity host start was canceled by a pending stop request."
+            )
+            return succeeded
+        }
+
+        internal fun failStartRequest(requestId: Int, reason: String): Boolean {
+            val callback = synchronized(stateLock) {
+                val registered = pendingStarts.remove(requestId)
+                state = state.copy(startRequestPending = pendingStarts.isNotEmpty())
+                registered
+            }
+            callback?.invoke(reason)
+            return callback != null
+        }
+
+        internal fun failOutstandingStartRequests(reason: String) {
+            val callbacks = synchronized(stateLock) {
+                val registered = pendingStarts.values.toList()
+                pendingStarts.clear()
+                state = state.copy(startRequestPending = false)
+                registered
+            }
+            callbacks.forEach { callback -> callback(reason) }
         }
 
         private fun markStopRequested() {
             synchronized(stateLock) {
                 if (state.active) {
-                    state = state.copy(stopRequestPending = true, startRequestPending = false)
+                    state = state.copy(stopRequestPending = true)
                 }
             }
+            failOutstandingStartRequests(
+                "A notification stop request is pending; foreground host updates are rejected."
+            )
         }
 
-        internal fun markStartFailed() {
-            synchronized(stateLock) {
+        internal fun markStartFailed(reason: String) {
+            val callbacks = synchronized(stateLock) {
+                val registered = pendingStarts.values.toList()
+                pendingStarts.clear()
                 state = HostServiceSnapshot()
+                registered
             }
+            callbacks.forEach { callback -> callback(reason) }
         }
 
         internal fun markStopped() {
-            synchronized(stateLock) {
-                state = HostServiceSnapshot()
-            }
+            markStartFailed("Android foreground hosting was stopped.")
         }
     }
 }

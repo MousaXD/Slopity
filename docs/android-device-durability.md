@@ -191,6 +191,14 @@ adb shell 'command -v ss >/dev/null && ss -ltn || true'
 
 The `curl` command is expected to fail after a clean stop. For a loopback test, keep the same `adb forward` in place so failure means the device listener is gone rather than the forwarding rule disappearing.
 
+## Start acknowledgement and negative visibility cases
+
+On the exact debug APK, exercise service start/update while the notification permission is denied, while app notifications are disabled, and with the `slopity_hosting` channel disabled. Check that the command rejects or rolls back the listener, and verify the health endpoint is **not** reachable after rejection. Re-enable the necessary settings explicitly before continuing.
+
+Check a fresh installation's first start: the notification channel must be created before delivery preflight, and native `startHosting` must not return successful status merely because `startForegroundService` queued work. Record any start timeout (15 seconds), delayed foreground promotion, count mismatch, or foreground promotion exception. If you see a running Rust listener without a deliverable notification, record a **safety failure** and do not continue a durability run.
+
+The native `notificationVisible` flag is derived from successful `startForeground` acknowledgement and notification permission/settings; it is not proof that the Android notification shade actually displays the notification. Take screenshots and verify manually. A disappearing foreground service while Slopity is backgrounded cannot currently guarantee immediate Rust listener shutdown: the architecture is in-process and reconciliation may only occur after the UI resumes. Do not classify such a run as fail-closed or device-certified without demonstrating the listener actually stopped.
+
 ## 11. Repeat using the notification stop action
 
 Start the server again and verify it is reachable. Tap **Stop safely** in the persistent notification.
@@ -203,7 +211,7 @@ Expected behavior:
 4. the port is released;
 5. the notification disappears after the final listener stops.
 
-The notification action intentionally does not kill the Kotlin service first while Rust listeners are still active. If the app fails to open, the request remains pending, the server remains foregrounded, and that result must be recorded as a failure/limitation rather than forcing a hidden stop.
+The notification action intentionally does not kill the Kotlin service first while Rust listeners are still active. Android may block the service-originated activity launch: if Slopity does not open, manually open it, inspect whether the stop request remained pending, and record the failure. The server may remain foregrounded until Rust reconciles. Never count a manually completed stop as a successful automatic notification action.
 
 ## 12. Observe battery and thermal behavior
 

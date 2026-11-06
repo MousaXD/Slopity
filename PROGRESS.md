@@ -2,8 +2,9 @@
 
 ## Step 044: Agent 04 Android foreground-host start acknowledgement and stop-race hardening
 
-**Status:** IN PROGRESS (plan-only commit)  
+**Status:** PARTIAL (implementation committed; exact-head CI and real-device verification pending)  
 **Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
 **Owner:** Agent 04 — Android Hosting & Durability  
 **Branch:** `fix/slopity-android-agent04`  
 **Base:** `feat/owner-integration-20261106` at `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
@@ -37,6 +38,17 @@
 - Record precise GitHub Actions runs/job outcomes; no chat-local tests or physical device claim.
 - Keep physical ARM64 device release certification `BLOCKED` in [issue #44](https://github.com/MousaXD/Slopity/issues/44) until explicitly authorized device evidence is reviewed.
 - Open draft PR targeting `feat/owner-integration-20261106` for Agent 00; do not merge.
+
+### Implementation and evidence at this commit
+
+- Native foreground-service starts now use per-request asynchronous acknowledgement only after Android `startForeground()` returns; an unacknowledged request times out after 15 seconds. Canceled queued starts cannot promote a service, and service destruction rejects pending invokes.
+- Preserve stop-pending state across attempted count updates and retain active state while a stop is requested; native `stopHosting` no longer reports unconditional successful shutdown or clears state after a thrown stop exception.
+- Create/check the actual notification channel before Rust preflight; a missing channel is not considered enabled. Status visibility remains an inference rather than actual physical observation.
+- Rust plugin requires acknowledged, nonpending, visible-gated, exact-count Android status; a failed acknowledgement rolls back the newly started Rust listener through existing application code, while avoiding blind termination of an existing host service relied upon by other listeners.
+- Add Rust acknowledgement regressions for pending/denied/stopped/mismatched states; update Android bridge README and device durability cases; probe redacts device serial and timestamps ADB disconnect state.
+- `apps/slopity/src-tauri/src/lib.rs` intentionally unchanged to avoid racing Agent 00's runtime admission work. Existing reconciliation is observation-triggered, not an always-on watchdog.
+- Validation: changes are committed for GitHub-hosted exact-head Rust and Android ARM64 checks. No chat-local tests, emulator, or physical-device test was performed; no CI result claimed until the run completes. Physical certification remains **BLOCKED** under issue #44.
+
 
 
 ## Step 033: owner-controlled cross-workstream integration candidate
