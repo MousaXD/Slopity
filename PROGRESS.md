@@ -1,5 +1,20 @@
 # Progress ledger
 
+## Step 044: retain keyboard focus through live card updates
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, risks and checks
+- Keep keyboard focus on the same server action when the two-second backend state poll or filter redraws server cards. Never steal focus from a dialog or another view; do not fabricate lifecycle state.
+- Give every server action an accessible profile-specific name. Let the Runtime unavailable filter find unavailable adapters even if the profile is disabled; preserve the primary disabled status for badges.
+- Limit changes to `apps/slopity/web/components/server-card.js`, `views/dashboard.js`, `domain/profile-query.js`, their dedicated Node tests, and this ledger.
+- Risks: focused rows may be removed by filters/deletion, in which case do not redirect focus to unrelated controls. CSS selector values must remain allowlisted to avoid injection.
+- Acceptance: exact-head GitHub-hosted frontend format/lint/Node regression tests and platform builds; no local or device-test claims. Manual keyboard checks remain necessary.
+- Non-goals: Rust/Android/package/CI changes, new runtimes, fake backend controls, merges, or releases.
+
+
 ## Step 043: Agent 03 GUI V2 discoverability, accessibility and safe profile transfer
 
 **Status:** PARTIAL (implemented; exact-head GitHub Actions and manual app-shell UX verification pending)  
