@@ -1,5 +1,118 @@
 # Progress ledger
 
+## Step 036: gate Android native plugin JUnit tests in hosted CI
+
+**Status:** PARTIAL (native test gate implemented; exact-head hosted CI pending and PR #51 tests not present on this branch)  
+**Declared:** 2026-11-07  
+**Updated:** 2026-11-07
+
+### Verified baseline and review request
+
+- Step 035 implementation SHA `895ca859dc27bad1823264380d871c3101fb1129` passed [cross-platform CI 42284217620](https://github.com/MousaXD/Slopity/actions/runs/42284217620), [security audit 42284217458](https://github.com/MousaXD/Slopity/actions/runs/42284217458), and [release-package CI 42284217616](https://github.com/MousaXD/Slopity/actions/runs/42284217616), including both Linux .deb/AppImage and Android debug packages; PR publishing skipped.
+- Independent QA [comment 6694209878](https://github.com/MousaXD/Slopity/pull/47#issuecomment-6694209878) and Android owner [comment 6694244126](https://github.com/MousaXD/Slopity/pull/47#issuecomment-6694244126) identify missing hosted Kotlin/JUnit lifecycle test execution from Android [draft PR #51](https://github.com/MousaXD/Slopity/pull/51). Android ARM64 compile alone is not native JVM unit test certification.
+- PR #51 provides `HostForegroundServiceTest.kt` and `junit:junit:4.13.2` in the Android library. Those files are **not yet in this CI branch's base** and must not be copied into another owner's lane.
+
+### Intended scope / files
+
+- `scripts/check-android-host-junit.sh`: following Tauri Android debug build, invoke generated Android Gradle wrapper's `testDebugUnitTest` from the generated multi-module project and verify plugin-specific, nonempty JUnit XML results when the lifecycle test source exists.
+- `.github/workflows/ci.yml` and `.github/workflows/release.yml`: add Android native host unit-test step **after Tauri Android build and before manifest/artifact acceptance** in both hosted Android workflows, keeping artifact, manifest and no-publish gates unchanged.
+- `PROGRESS.md`: implementation and exact-run evidence.
+
+### Fail-closed acceptance, limitations and risks
+
+- If the lifecycle source test exists, missing Gradle test task/project, missing or empty plugin JUnit XML, skipped tests, failures or errors **must fail CI**. Gradle cannot silently pass on `NO-SOURCE`.
+- If lifecycle tests are absent from this branch, explicitly label the test source missing and the resulting execution unverified; the Gradle unit-test task will still be invoked to validate its availability, but **this is not proof that PR #51's new tests ran**. Agent 00 must validate merged PR #51 together with this gate.
+- Generated Android Gradle modules/settings are created by Tauri Android build; test step must run after build. Hosted Gradle may need additional dependency downloads and can reveal real test bugs.
+- Preserve Rust fmt/locked tests/strict Clippy, frontend gates, all 4 platform build targets, audit/dependency review, action SHA pins, job limits, and PR no-release publication policy.
+- No edits to Android/Kotlin application or plugin business logic, dependencies, signatures, production release settings, other agent branches, `main` or `dev`. No local-test claims.
+- Require exact new-head GitHub-hosted CI and release results and describe absent native test evidence truthfully.
+
+### Implementation and evidence at implementation commit
+
+- Added `scripts/check-android-host-junit.sh` to run generated Gradle `testDebugUnitTest` after the Tauri Android build, using GitHub-hosted JDK 17/SDK/NDK setup.
+- Validates nonempty JUnit XML for the exact `com.slopity.host.HostForegroundServiceTest` class and rejects missing reports, zero tests, skipped tests, errors and failures when the source exists. A successful Android APK compilation or Gradle `NO-SOURCE` alone is never reported as lifecycle test certification.
+- Added the native JVM test command to the CI and release-package Android jobs, preserving ARM64 debug builds, manifest checks and artifact assertions.
+- **Branch boundary:** PR #51's Kotlin/JUnit source is not yet integrated into this branch's base. If the source is absent, CI prints an explicit GitHub warning that these lifecycle tests have **not** been certified. Agent 00 must validate the combined tree with PR #51 after integration.
+- No Android plugin source, dependency versions or Rust/GUI files modified; no local tests run. GitHub-hosted new-head validation is pending at implementation commit.
+- Earlier Step 035 implementation was validated: [CI 42284217620](https://github.com/MousaXD/Slopity/actions/runs/42284217620), [security 42284217458](https://github.com/MousaXD/Slopity/actions/runs/42284217458), [release packages 42284217616](https://github.com/MousaXD/Slopity/actions/runs/42284217616) succeeded, publication skipped. These historical results do not certify this new script.
+
+## Step 035: remove premature apt wall-clock cutoff from hosted Linux builds
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Confirmed failure and rationale
+
+- [PR #47 release run 42279623891](https://github.com/MousaXD/Slopity/actions/runs/42279623891) failed its [Linux .deb/AppImage job 128104932881](https://github.com/MousaXD/Slopity/actions/runs/42279623891/job/128104932881) during `Install Linux Tauri system dependencies`, with **exit 124** after the 900-second GNU `timeout` set in Step 034. The logs show apt still successfully fetching necessary packages until the forced cutoff.
+- The unmodified parent PR #43's [release run 42275322783](https://github.com/MousaXD/Slopity/actions/runs/42275322783) subsequently **passed** Linux packaging and published no release. Its Linux job spent approximately **32 minutes 37 seconds** fetching 33.6 MB from a severely slow Ubuntu mirror; the explicit 900-second limit introduced a regression relative to that working base.
+- [PR #47 cross-platform CI 42279623935](https://github.com/MousaXD/Slopity/actions/runs/42279623935) and [security audit 42279623942](https://github.com/MousaXD/Slopity/actions/runs/42279623942) passed; the Linux package failure is infrastructure download time, not evidence that application build or tests failed.
+
+### Scope and intended files
+
+- Remove both GNU `timeout` wrappers in the apt bootstrap steps from `.github/workflows/ci.yml` and `.github/workflows/release.yml`. Keep `Acquire::Retries=3` and per-request HTTP/HTTPS timeouts (30 seconds) to bound stalled acquisition attempts without prematurely rejecting a long but progressing package set.
+- Preserve the original `timeout-minutes` limits on the GitHub jobs as the overarching wall-clock bound, all existing Ubuntu package names and flags, and all downstream Rust/frontend/package gates.
+- Update `PROGRESS.md` in the implementation commit with exact-head CI evidence.
+
+### Non-goals
+
+- No changes to application code, platform targets, dependencies, audit policy, release signing, publication behavior, action pinning, user functionality, `main` or `dev`.
+- No suppression of security advisories, disabling tests, skipping Linux artifacts, bypassing permission controls, or speculative mirror changes.
+
+### Risks and acceptance
+
+- Hosted Ubuntu mirrors can still be slow. Per-request timeout/retries can fail genuine network outages while GitHub job time limits prevent unbounded hangs; a fast download is not guaranteed.
+- Require fresh GitHub Actions runs on exact implementation head: Rust fmt/locked workspace tests/strict Clippy, frontend tests/lint/format, Linux Tauri compile, Android ARM64 manifest and artifacts, Windows NSIS, Cargo/npm audits, dependency review, Linux .deb/AppImage and Android preview packages, with PR publication skipped.
+- Keep draft PR until every required check passes; do not claim local verification.
+
+### Implementation and verification at implementation commit
+
+- Removed the fixed 300-second/900-second GNU `timeout` wrappers from apt bootstrap in **both CI Linux jobs and the release Linux job**.
+- Retained apt acquisition `Acquire::Retries=3` and HTTP/HTTPS `Timeout=30` request timeouts, all original native packages and target/toolchain choices, GitHub job-level `timeout-minutes`, and every test, build, artifact, audit and no-publish gate.
+- No application code, dependency versions or pinned GitHub Actions were modified.
+- No local tests were run. Exact new-head GitHub-hosted CI, audits and release packages remain **pending** at implementation commit; report the new job URLs and final results separately and do not promote this PR until they pass.
+- Parent PR #43's Linux release job passing is **not** evidence that this new commit passes; the confirmed Step 034 cutoff regression is recorded above.
+
+## Step 034: bound Linux hosted dependency bootstrap without weakening checks
+
+**Status:** PARTIAL (bounded bootstrap implemented; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Evidence and scope
+
+- PR #43 combined candidate at `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`: [exact-head cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) passed.
+- [Release validation run 42275322783, Linux job 128090109452](https://github.com/MousaXD/Slopity/actions/runs/42275322783/job/128090109452) remained in `Install Linux Tauri system dependencies` from 18:57:40 UTC through repeated inspection; Android release packages passed. Live job logs were unavailable (GitHub returned 404) so the precise apt operation/root cause is unknown.
+- Retain all original Linux package names and compiler/toolchain versions. Bound apt metadata refresh and package installation; explicitly configure network acquisition retries and timeouts so transient mirror problems retry and persistent stalls fail with a diagnostic before the overall job timeout.
+- Apply the same targeted Linux apt bootstrap handling to Rust quality, Linux Tauri CI, and Linux release bundling, maintaining identical package sets and all downstream gates.
+
+### Intended files
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `PROGRESS.md`
+
+### Non-goals and security boundaries
+
+- No changes to Rust business logic, GUI, Android host, dependencies, signing keys, publication conditions, pinned actions, tests, audit policy, release version or license.
+- No assertion that this corrects the particular run's underlying problem; the running job's log is not accessible, and a hang could be transient hosted-runner infrastructure.
+- No merge, release publication, direct `main`/`dev` writes, or local-test claims.
+
+### Risks and acceptance checks
+
+- Some mirrors or temporary GitHub runners can remain slow; bounded apt may turn indefinite stalls into explicit failures rather than guarantee a green build.
+- After implementation, require exact new branch-head GitHub-hosted Rust formatting, locked tests, strict Clippy, frontend checks, Linux Tauri, Windows NSIS, Android ARM64 manifest/packages, Cargo/npm audit, dependency review, Linux .deb/AppImage, and PR publication skipped.
+- Record exact runs and pass/fail/availability in this same entry when available; hold integration for Agent 00 if Linux packaging is not green.
+
+### Implementation and verification at implementation commit
+
+- Applied bounded GNU `timeout` to `apt-get update` (300 seconds) and dependency installation (900 seconds), with a 30-second termination grace period.
+- Set `Acquire::Retries=3` and 30-second HTTP/HTTPS acquisition timeouts. Preserved the complete pre-existing packages, Tauri/build commands, pinned Actions, platform target choices, warning strictness, vulnerability checks, and PR publication guard.
+- Updated both Rust and Linux CI apt steps and Linux release package apt step; no application or dependency files changed.
+- At this implementation commit, exact new-head GitHub Actions checks are pending. Do not count the successful parent PR #43 runs as validation of these new workflow edits. No local tests were run.
+- Remaining known review item outside CI ownership: PR #43 Cargo audit succeeded but emitted eight RustSec warnings (six unmaintained dependencies and two unsoundness advisories, including `glib` and `tokio`). They are **not** reported by cargo-audit as a zero-warning result; dependency/security owner must triage, not suppress.
+- Root cause of the observed Linux runner stall remains unconfirmed until the original run's job log is available. If the Linux release still fails, retain draft status and investigate exact new-head log before further changes.
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
