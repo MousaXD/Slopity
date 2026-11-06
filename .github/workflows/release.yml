@@ -280,6 +280,9 @@ jobs:
       - name: Build ARM64 debug APK and AAB
         working-directory: apps/slopity
         run: npm run android:build -- --debug --target aarch64
+      - name: Run native Android host JUnit tests
+        shell: bash
+        run: bash scripts/check-android-host-junit.sh
       - name: Validate merged Android host manifest
         shell: bash
         run: |

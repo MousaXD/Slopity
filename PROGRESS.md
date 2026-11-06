@@ -2,7 +2,7 @@
 
 ## Step 036: gate Android native plugin JUnit tests in hosted CI
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (native test gate implemented; exact-head hosted CI pending and PR #51 tests not present on this branch)  
 **Declared:** 2026-11-07  
 **Updated:** 2026-11-07
 
@@ -26,6 +26,15 @@
 - Preserve Rust fmt/locked tests/strict Clippy, frontend gates, all 4 platform build targets, audit/dependency review, action SHA pins, job limits, and PR no-release publication policy.
 - No edits to Android/Kotlin application or plugin business logic, dependencies, signatures, production release settings, other agent branches, `main` or `dev`. No local-test claims.
 - Require exact new-head GitHub-hosted CI and release results and describe absent native test evidence truthfully.
+
+### Implementation and evidence at implementation commit
+
+- Added `scripts/check-android-host-junit.sh` to run generated Gradle `testDebugUnitTest` after the Tauri Android build, using GitHub-hosted JDK 17/SDK/NDK setup.
+- Validates nonempty JUnit XML for the exact `com.slopity.host.HostForegroundServiceTest` class and rejects missing reports, zero tests, skipped tests, errors and failures when the source exists. A successful Android APK compilation or Gradle `NO-SOURCE` alone is never reported as lifecycle test certification.
+- Added the native JVM test command to the CI and release-package Android jobs, preserving ARM64 debug builds, manifest checks and artifact assertions.
+- **Branch boundary:** PR #51's Kotlin/JUnit source is not yet integrated into this branch's base. If the source is absent, CI prints an explicit GitHub warning that these lifecycle tests have **not** been certified. Agent 00 must validate the combined tree with PR #51 after integration.
+- No Android plugin source, dependency versions or Rust/GUI files modified; no local tests run. GitHub-hosted new-head validation is pending at implementation commit.
+- Earlier Step 035 implementation was validated: [CI 42284217620](https://github.com/MousaXD/Slopity/actions/runs/42284217620), [security 42284217458](https://github.com/MousaXD/Slopity/actions/runs/42284217458), [release packages 42284217616](https://github.com/MousaXD/Slopity/actions/runs/42284217616) succeeded, publication skipped. These historical results do not certify this new script.
 
 ## Step 035: remove premature apt wall-clock cutoff from hosted Linux builds
 
