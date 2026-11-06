@@ -21,7 +21,8 @@ export function selectProfiles(snapshot = {}, options = {}) {
   return [...(snapshot.profiles ?? [])]
     .filter((profile) => {
       if (runtime !== 'all' && profile.runtime !== runtime) return false;
-      if (status !== 'all' && profileStatus(profile, snapshot) !== status) return false;
+      if (status === 'unavailable' && availabilityFor(profile.runtime, snapshot.runtimes ?? []).available) return false;
+      if (status !== 'all' && status !== 'unavailable' && profileStatus(profile, snapshot) !== status) return false;
       if (!query) return true;
       return [profile.name, profile.id, profile.runtime, String(profile.port)]
         .some((value) => String(value ?? '').toLocaleLowerCase().includes(query));

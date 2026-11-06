@@ -2,8 +2,9 @@
 
 ## Step 044: retain keyboard focus through live card updates
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implemented; exact-head Actions and manual keyboard checks pending)  
 **Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
 **Owner:** Agent 03 — GUI/UX
 
 ### Scope, risks and checks
@@ -13,6 +14,13 @@
 - Risks: focused rows may be removed by filters/deletion, in which case do not redirect focus to unrelated controls. CSS selector values must remain allowlisted to avoid injection.
 - Acceptance: exact-head GitHub-hosted frontend format/lint/Node regression tests and platform builds; no local or device-test claims. Manual keyboard checks remain necessary.
 - Non-goals: Rust/Android/package/CI changes, new runtimes, fake backend controls, merges, or releases.
+
+### Implementation and verification
+- Card lifecycle and Details buttons now have profile-specific accessible labels and stable action identities.
+- Re-rendering a card restores keyboard focus to the same action when it remains available, or to that card's Details action if the lifecycle action became disabled; no focus theft from other views or removed profiles.
+- Runtime unavailable filter now includes disabled profiles with unsupported backend adapters, while their primary badge still correctly reports disabled state.
+- Added dedicated Node regression cases for focus retention/fallback and updated filter behavior.
+- No local tests claimed; GitHub Actions exact-head frontend, Rust, Linux/Android/Windows and package checks are pending. Manual keyboard/assistive-technology tests still required.
 
 
 ## Step 043: Agent 03 GUI V2 discoverability, accessibility and safe profile transfer

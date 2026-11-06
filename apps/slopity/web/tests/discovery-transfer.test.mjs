@@ -27,7 +27,7 @@ test('status and runtime filtering use real runtime registration and observed st
   assert.equal(profileStatus(java, snapshot), 'disabled');
   assert.deepEqual(selectProfiles(snapshot, { status: 'active' }).map((p) => p.id), ['http-2']);
   assert.deepEqual(selectProfiles(snapshot, { status: 'disabled', runtime: 'java' }).map((p) => p.id), ['java-1']);
-  assert.deepEqual(selectProfiles(snapshot, { status: 'unavailable' }), []);
+  assert.deepEqual(selectProfiles(snapshot, { status: 'unavailable' }).map((p) => p.id), ['java-1']);
   assert.deepEqual(selectProfiles({ ...snapshot, profiles: [{ ...java, enabled: true }] },
     { status: 'unavailable' }).map((p) => p.id), ['java-1']);
 });
