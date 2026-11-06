@@ -2,8 +2,9 @@
 
 ## Step 103: observe and reap desktop child-process exits
 
-**Status:** IN PROGRESS
+**Status:** PARTIAL (source and tests committed; exact-head CI pending)
 **Declared:** 2026-11-06
+**Updated:** 2026-11-06
 **Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
 **Parent implementation SHA:** `d6714fe21665e10fda6180fdca91f4635870db96`
 
@@ -21,7 +22,15 @@
 
 ### Acceptance
 - GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, strict Clippy, Linux/Android/Windows and package validation, with exact run links recorded truthfully. No local or physical-device tests claimed.
-- Commit A is this plan only. Commit B must combine source/tests and closure of this ledger entry. Keep PR #46 draft while CI is not certified.
+- Commit A is this plan only. Commit B combines the source changes, regression tests and this closed ledger entry; keep PR #46 draft while exact-head CI is not certified.
+
+### Implementation and evidence
+- Implemented `RuntimeAdapter::observe` and `observations` for the dormant local process adapter; `try_wait` polls distinguish live processes from clean exit, nonzero exit, and inconclusive poll errors.
+- Natural exits are reaped and recorded as terminal observations. Failed exits retain exit status and last-error diagnostics for orchestrator failure capture; an inconclusive poll retains the live child handle.
+- A newly started child replaces stale terminal observations. Local-process `stop` records a user-requested stop when kill/wait confirms termination, or a known terminal observation if the child already exited.
+- Added Rust regression tests for clean process exit, nonzero exit diagnostics, and restart after natural exit without shell execution. Android still refuses adapter launches.
+- Changed files: `crates/slopity-runtime-local/src/lib.rs`, `PROGRESS.md`.
+- No local, physical Android, or manual process/GUI test was run. All exact-head CI checks are pending; no claim of full runtime-provider support. Previous PR #46 Actions runs were superseded by the Step 103 commits and cannot certify the new head.
 
 
 ## Step 102: Agent 02 Rust admission and lifecycle fail-closed hardening
