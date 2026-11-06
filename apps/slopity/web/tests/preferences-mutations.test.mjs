@@ -7,7 +7,7 @@ import {
   normalizeUiPreferences,
   saveUiPreferences,
 } from '../domain/ui-preferences.js';
-import { performBackendMutation } from '../domain/mutation-outcome.js';
+import { canApplyServerPoll, canStartServerPoll, performBackendMutation } from '../domain/mutation-outcome.js';
 
 test('refresh preferences default to genuine two-second updates', () => {
   assert.deepEqual(normalizeUiPreferences(null), DEFAULT_UI_PREFERENCES);
@@ -66,4 +66,23 @@ test('successful profile mutation and refresh return the authoritative snapshot'
   assert.equal(result.committed, true);
   assert.equal(result.refreshError, null);
   assert.equal(result.snapshot, snapshot);
+});
+
+test('server polling cannot clear a failed full dashboard refresh', () => {
+  const snapshot = { profiles: [{ id: 'http-1' }], servers: [] };
+  const state = { snapshot, busy: false, refreshError: null };
+  assert.equal(canStartServerPoll(state, false, false), true);
+  assert.equal(canStartServerPoll({ ...state, refreshError: 'stale dashboard' }, false, false), false);
+  assert.equal(canApplyServerPoll({ ...state, refreshError: 'stale dashboard' }, snapshot), false);
+  assert.equal(canStartServerPoll(state, true, false), false);
+  assert.equal(canStartServerPoll(state, false, true), false);
+});
+
+test('in-flight server responses are discarded after full-refresh snapshot replacement or mutation', () => {
+  const original = { profiles: [{ id: 'old' }] };
+  const updated = { profiles: [{ id: 'new' }] };
+  const state = { snapshot: updated, busy: false, refreshError: null };
+  assert.equal(canApplyServerPoll(state, original), false);
+  assert.equal(canApplyServerPoll({ ...state, busy: true }, updated), false);
+  assert.equal(canApplyServerPoll(state, updated), true);
 });

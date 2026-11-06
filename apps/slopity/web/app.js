@@ -9,7 +9,7 @@ import { clientValidateProfile, cloneIdentity, emptyDraft, nextAvailablePort, ne
 import { availabilityFor, commandErrorMessage, isActiveState, profileLifecycle } from './domain/runtime.js';
 import { MAX_IMPORT_BYTES, parseProfileImport, serializeProfiles } from './domain/profile-transfer.js';
 import { renderImportPreview } from './views/import-preview.js';
-import { performBackendMutation } from './domain/mutation-outcome.js';
+import { canApplyServerPoll, canStartServerPoll, performBackendMutation } from './domain/mutation-outcome.js';
 import { loadUiPreferences, saveUiPreferences } from './domain/ui-preferences.js';
 
 const api = createSlopityApi();
@@ -141,15 +141,16 @@ async function refreshDashboard({ announce = false } = {}) {
 }
 
 async function refreshServerStates() {
-  if (serverPollPending || document.hidden || store.get().busy || !currentSnapshot()) return;
+  if (!canStartServerPoll(store.get(), document.hidden, serverPollPending)) return;
+  const requestedSnapshot = currentSnapshot();
   serverPollPending = true;
   try {
     const servers = await api.listServers();
-    if (store.get().busy || !currentSnapshot()) return;
-    store.set({ snapshot: { ...currentSnapshot(), servers }, refreshError: null });
+    if (!canApplyServerPoll(store.get(), requestedSnapshot)) return;
+    store.set({ snapshot: { ...requestedSnapshot, servers } });
     refreshOpenDetails();
   } catch (error) {
-    if (!store.get().refreshError) {
+    if (canApplyServerPoll(store.get(), requestedSnapshot)) {
       const message = commandErrorMessage(error);
       store.set({ refreshError: message });
       setNotice(`Server state refresh failed: ${message}`, 'error');

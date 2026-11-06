@@ -2,8 +2,9 @@
 
 ## Step 047: prevent stale server polls from bypassing recovery
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (implementation committed; exact-head CI/manual verification pending)  
 **Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
 **Owner:** Agent 03 — GUI/UX
 
 ### Scope, risk and acceptance
@@ -13,6 +14,13 @@
 - Intended files: `apps/slopity/web/app.js`, `apps/slopity/web/domain/mutation-outcome.js`, `apps/slopity/web/tests/preferences-mutations.test.mjs`, and this `PROGRESS.md`.
 - Non-goals: Rust, Android, CI/workflow edits, shared manifests, fake server states, platform runtime support, direct integration changes, merges, scheduled tasks.
 - Checks: GitHub-hosted exact-head frontend format/lint/Node tests, Rust/Linux/Android/Windows and release validation. Manual app-shell behavior remains unverified.
+
+### Implementation and test evidence
+- Added explicit conditions to begin/apply server polling only while the latest snapshot is authoritative and the interface is not busy, hidden, or waiting for a full refresh.
+- Captured snapshot identity before asynchronous `listServers` calls and discarded results/errors from superseded snapshots, so delayed polling cannot overwrite a newer dashboard or clear a stale-state lock.
+- Polling only refreshes the server-list portion of a snapshot; the stale-state warning can now clear only through a successful full `dashboard_snapshot` request.
+- Added Node regression tests for stale refresh lock, hidden/busy/pending suppression, and out-of-order asynchronous result rejection.
+- No local tests or physical-device tests run. Exact-head CI and manual keyboard/real backend validation remain pending.
 
 
 ## Step 046: truthful mutation outcomes and functional UI refresh settings
