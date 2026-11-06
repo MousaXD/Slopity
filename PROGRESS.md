@@ -2,7 +2,7 @@
 
 ## Step 051: remediate Tokio I/O-safety advisory without expanding Rust toolchain
 
-**Status:** PARTIAL (implementation committed; exact new-head Actions results pending)  
+**Status:** DONE (Step 051 implementation at `728fa08` verified by all required exact-head GitHub Actions; seven pre-existing advisory warnings tracked in issue #52)  
 **Declared:** 2026-11-06  
 **Updated:** 2026-11-06  
 **Owner:** Agent 05 on `fix/slopity-deps-agent05`, following Step 050's confirmed exact-head CI.
@@ -40,6 +40,15 @@
 - The original Step 050 implementation `bdfebbf` passed audit, Rust/Linux/Android/Windows CI and PR release packaging as linked above. **No local tests were executed.**
 - New Step 051 exact-head CI remains **pending** at this commit; completion depends on the selected new SHA's audit (Tokio warning absent) and unchanged cross-platform/release gates.
 - The `glib 0.18.5` unsoundness warning and six unmaintained dependency warnings are not fixed in this narrow compatibility-preserving update; their remediations are delegated for separate reviewed changes.
+
+### Final exact implementation-head CI verification (2026-11-06)
+
+- **Verified implementation SHA:** `728fa080d345650da008658820da77e2e905ee16` on draft [PR #48](https://github.com/MousaXD/Slopity/pull/48), targeting `feat/owner-integration-20261106`. The implemented lockfile and source tree were tested on this exact SHA. No local tests ran.
+- [Cross-platform CI run **42284699140**](https://github.com/MousaXD/Slopity/actions/runs/42284699140): **success**. Rust 1.89.0 `cargo fmt --all -- --check`, `cargo metadata --locked --format-version 1`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` all **passed**. Linux Tauri compilation, Android ARM64 debug APK/AAB + manifest validation, and Windows x64 NSIS build/validation all **passed**.
+- [Security and dependency audit run **42284699790**](https://github.com/MousaXD/Slopity/actions/runs/42284699790): **success** for Cargo vulnerability audit, npm audit (`found 0 vulnerabilities`), and GitHub dependency review. Cargo-audit log: **7 allowed warnings**, down from 8 at Step 050; **RUSTSEC-2026-0386 (`tokio`) is absent** after pinned Tokio 1.53.3, with 6 `unmaintained` crate warnings and `glib 0.18.5` **RUSTSEC-2024-0429 (`unsound`) still present**. No warning suppression or audit configuration change.
+- [Package and publish releases run **42284699112**](https://github.com/MousaXD/Slopity/actions/runs/42284699112): **success**. Linux `.deb` and AppImage bundles and Android ARM64 debug packages succeeded, including artifacts upload; GitHub prerelease publication **skipped** for PR as intended.
+- Unresolved GTK/Tauri and unmaintained transitive-dependency risk documented and delegated in [issue #52](https://github.com/MousaXD/Slopity/issues/52). No merge or production-signing/physical-device certification. Any independent `main` integration merge still requires the coordinator's explicit decision and CI on the final integration SHA.
+- **Closeout note:** this progress-only documentation update follows the verified implementation SHA, so it creates a **new PR head**; the latest head's required checks must also pass before the coordinator accepts the PR. Do not mislabel the above historical implementation SHA's green results as validation of this new documentation SHA.
 
 ## Step 050: Agent 05 narrowly scoped dependency and supply-chain audit
 
