@@ -2,7 +2,7 @@
 
 ## Step 106: Agent 06 independent permit integrity regression review
 
-**Status:** IN PROGRESS (test-only draft; baseline SHA `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`)  
+**Status:** BLOCKED (regression assertions submitted; expected failures await owner implementation fix and GitHub CI evidence)  
 **Declared:** 2026-11-06  
 **Owner:** Agent 06, independent QA
 
@@ -20,6 +20,14 @@
 - Acceptance: GitHub-hosted exact-head `cargo test --workspace --all-features --locked`, Rust format, strict Clippy, and independent review. Record failures honestly; no local or physical-device tests claimed.
 - Create a **draft test-only PR** based on integration commit `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`. Do not merge; Agent 02 owns any implementation fix, and Agent 06 must not self-certify the eventual code changes.
 - Non-goals: no implementation fixes, warning suppressions, profile schema changes, Android capability claims, release publication or schedules.
+
+### Implementation and validation boundary
+
+- Added two Rust regression tests that require a start permit to reject an **enabled-to-disabled** profile revision and a **loopback-to-LAN** profile revision after the original admission decision.
+- Existing baseline implementation checks only ID/runtime/port/memory, so these are intentionally failing assertions until Agent 02 closes the authorization gap. This branch changes no production logic.
+- No local test or device validation is claimed. GitHub Actions on the test-PR exact SHA must supply the independent failure evidence; do not mark green by skipping tests.
+- Agent 06 does not independently certify any Agent 02 fix; rerun on the final integration SHA after the fix has been reviewed.
+
 
 
 ## Step 033: owner-controlled cross-workstream integration candidate
