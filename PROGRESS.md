@@ -1,5 +1,43 @@
 # Progress ledger
 
+## Step 050: Agent 05 narrowly scoped dependency and supply-chain audit
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 05, branch `fix/slopity-deps-agent05`, based on integration PR #43 head `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`.
+
+### Scope and baseline
+
+- Independently review the resolved Cargo/npm lock graphs, pinned Rust compiler, GitHub Actions pins, exact-head audit jobs, 15 outstanding Dependabot PRs, executable/package trust boundaries, and reproducibility limitations.
+- Review [integration audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) and [cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969), both successful on the integration commit; release-package run 42275322783 was pending at initial inspection.
+- Apply exactly one reviewable, low-risk Rust lockfile patch: `serde_json 1.0.151 -> 1.0.154` with the registry checksum and unchanged dependency relationships from [Dependabot PR #29](https://github.com/MousaXD/Slopity/pull/29). Keep the existing semver-compatible workspace manifest; no unrelated `cargo update`.
+- Align `.github/dependabot.yml` target branches to supported `main`, which is the destination of integration PR #43 and the security-supported trunk defined in `SECURITY.md`; do not retarget existing bot PRs in this step.
+- Write `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md` with per-PR disposition, threat-model recommendations for *future* packages, action/provenance review, and unresolved risks. Cross-reference it from `docs/SECURITY_MODEL.md`.
+
+### Non-goals, coordination, risks
+
+- Never modify `.github/workflows/**` (Agent 01); do not change frontend dependencies (Agent 03), runtime execution (Agent 02), or Android code (Agent 04).
+- No package download/extraction/execution feature, no runtime support claim, no `main`/`dev` edits, no merge, no auto-merge, no release, and no PolyForm license change.
+- The Cargo 1.89.0 pin is an application test contract; do not raise it to satisfy a speculative dependency. Verify the updated lockfile with `--locked`, and revert on confirmed incompatibility.
+- GitHub Actions uses moving hosted images and scanner toolchain, so passing audits are time- and commit-scoped rather than permanent supply-chain certification.
+- Existing Dependabot action-major PRs were authored against older workflow trees; avoid bulk merging and coordinate any future action pin updates with Agent 01.
+
+### Intended files
+
+- `Cargo.lock`
+- `.github/dependabot.yml`
+- `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md` (new)
+- `docs/SECURITY_MODEL.md`
+- `PROGRESS.md` (implementation, checks, results, and honest completion state **in the same implementation commit**)
+
+### Acceptance checks (GitHub-hosted; record exact head)
+
+- Rust formatting; `cargo metadata --locked`; `cargo test --workspace --all-features --locked`; strict all-targets Clippy with `--locked`, using Rust 1.89.0.
+- Cargo vulnerability audit, `npm audit`, GitHub dependency review, frontend checks, Linux Tauri, Android ARM64 build/manifest, Windows NSIS, and non-publishing PR release-package validation.
+- Verify only the intended lockfile package/checksum and `main` Dependabot targets change. No physical Android device, production signing, or provenance claim from CI alone.
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
