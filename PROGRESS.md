@@ -2,7 +2,7 @@
 
 ## Step 034: bound Linux hosted dependency bootstrap without weakening checks
 
-**Status:** IN PROGRESS  
+**Status:** PARTIAL (bounded bootstrap implemented; exact-head GitHub Actions pending)  
 **Declared:** 2026-11-06  
 **Updated:** 2026-11-06
 
@@ -30,6 +30,15 @@
 - Some mirrors or temporary GitHub runners can remain slow; bounded apt may turn indefinite stalls into explicit failures rather than guarantee a green build.
 - After implementation, require exact new branch-head GitHub-hosted Rust formatting, locked tests, strict Clippy, frontend checks, Linux Tauri, Windows NSIS, Android ARM64 manifest/packages, Cargo/npm audit, dependency review, Linux .deb/AppImage, and PR publication skipped.
 - Record exact runs and pass/fail/availability in this same entry when available; hold integration for Agent 00 if Linux packaging is not green.
+
+### Implementation and verification at implementation commit
+
+- Applied bounded GNU `timeout` to `apt-get update` (300 seconds) and dependency installation (900 seconds), with a 30-second termination grace period.
+- Set `Acquire::Retries=3` and 30-second HTTP/HTTPS acquisition timeouts. Preserved the complete pre-existing packages, Tauri/build commands, pinned Actions, platform target choices, warning strictness, vulnerability checks, and PR publication guard.
+- Updated both Rust and Linux CI apt steps and Linux release package apt step; no application or dependency files changed.
+- At this implementation commit, exact new-head GitHub Actions checks are pending. Do not count the successful parent PR #43 runs as validation of these new workflow edits. No local tests were run.
+- Remaining known review item outside CI ownership: PR #43 Cargo audit succeeded but emitted eight RustSec warnings (six unmaintained dependencies and two unsoundness advisories, including `glib` and `tokio`). They are **not** reported by cargo-audit as a zero-warning result; dependency/security owner must triage, not suppress.
+- Root cause of the observed Linux runner stall remains unconfirmed until the original run's job log is available. If the Linux release still fails, retain draft status and investigate exact new-head log before further changes.
 
 ## Step 033: owner-controlled cross-workstream integration candidate
 
