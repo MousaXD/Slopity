@@ -210,7 +210,10 @@ class HostForegroundService : Service() {
 
         internal fun registerStartRequest(callback: (String?) -> Unit): Int? =
             synchronized(stateLock) {
-                if (state.stopRequestPending) {
+                // Only one foreground promotion may be in flight. Concurrent
+                // callers otherwise observe another request's pending flag or
+                // apply a stale server-count update out of order.
+                if (state.stopRequestPending || pendingStarts.isNotEmpty()) {
                     null
                 } else {
                     val requestId = nextRequestId++

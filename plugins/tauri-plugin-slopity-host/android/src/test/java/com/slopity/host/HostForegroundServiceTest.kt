@@ -68,16 +68,29 @@ class HostForegroundServiceTest {
     }
 
     @Test
-    fun failedPromotionRejectsAllPendingAndResetsNativeState() {
+    fun overlappingStartsAreRejectedUntilFirstPromotionCompletes() {
+        val firstResult = mutableListOf<String?>()
+        val first = HostForegroundService.registerStartRequest { firstResult.add(it) }!!
+        assertNull(HostForegroundService.registerStartRequest { })
+        assertTrue(HostForegroundService.hasStartRequest(first))
+        assertTrue(HostForegroundService.finishStartRequest(first, "First", 1))
+        assertEquals(listOf<String?>(null), firstResult)
+
+        val next = HostForegroundService.registerStartRequest { }!!
+        assertTrue(HostForegroundService.finishStartRequest(next, "Two", 2))
+        assertEquals(2, HostForegroundService.snapshot().activeServerCount)
+        assertFalse(HostForegroundService.snapshot().startRequestPending)
+    }
+
+    @Test
+    fun failedPromotionRejectsPendingAndResetsNativeState() {
         val results = mutableListOf<String?>()
         val first = HostForegroundService.registerStartRequest { results.add(it) }!!
-        val second = HostForegroundService.registerStartRequest { results.add(it) }!!
+        assertNull(HostForegroundService.registerStartRequest { })
         HostForegroundService.markStartFailed("foreground promotion failed")
 
         assertFalse(HostForegroundService.hasStartRequest(first))
-        assertFalse(HostForegroundService.hasStartRequest(second))
-        assertEquals(2, results.size)
-        assertTrue(results.all { it == "foreground promotion failed" })
+        assertEquals(listOf("foreground promotion failed"), results)
         assertFalse(HostForegroundService.snapshot().active)
         assertFalse(HostForegroundService.snapshot().startRequestPending)
         assertEquals(0, HostForegroundService.snapshot().activeServerCount)

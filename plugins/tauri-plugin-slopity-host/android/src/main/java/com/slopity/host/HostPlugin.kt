@@ -134,7 +134,7 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
             }
         }
         if (requestId == null) {
-            invoke.reject("A notification stop request is still pending. Stop the hosted servers before starting or updating hosting.")
+            invoke.reject("Android foreground hosting is already starting or stopping. Wait for that request to finish before starting or updating hosting.")
             return
         }
 
