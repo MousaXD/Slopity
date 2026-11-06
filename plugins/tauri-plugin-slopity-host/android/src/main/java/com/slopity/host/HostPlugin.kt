@@ -163,9 +163,7 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun stopHosting(invoke: Invoke) {
-        HostForegroundService.failOutstandingStartRequests(
-            "Android host shutdown canceled a pending foreground start."
-        )
+        HostForegroundService.markShutdownRequested()
         try {
             val stopRequested = activity.applicationContext.stopService(
                 Intent(activity.applicationContext, HostForegroundService::class.java)

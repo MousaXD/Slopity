@@ -48,8 +48,9 @@ class HostForegroundService : Service() {
             ?.takeIf { it.isNotBlank() }
             ?: "Hosting a Slopity server"
         val activeServerCount = intent
-            .getIntExtra(EXTRA_ACTIVE_SERVER_COUNT, 1)
-            .coerceAtLeast(1)
+            ?.getIntExtra(EXTRA_ACTIVE_SERVER_COUNT, 1)
+            ?.coerceAtLeast(1)
+            ?: 1
 
         try {
             ensureNotificationChannel(this)
@@ -258,6 +259,16 @@ class HostForegroundService : Service() {
                 registered
             }
             callbacks.forEach { callback -> callback(reason) }
+        }
+
+        internal fun markShutdownRequested() {
+            // Prevent any new or already-queued start from overtaking shutdown.
+            synchronized(stateLock) {
+                state = state.copy(stopRequestPending = true)
+            }
+            failOutstandingStartRequests(
+                "Android host shutdown canceled pending foreground starts."
+            )
         }
 
         internal fun markStopped() {
