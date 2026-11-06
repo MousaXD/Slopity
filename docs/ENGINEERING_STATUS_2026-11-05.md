@@ -1,5 +1,15 @@
 # Slopity engineering status and next-step coordination
 
+## Integration candidate — 2026-11-06
+
+- Single release-candidate branch: `feat/owner-integration-20261106`, derived from PR #42's successful runtime/CI head. It combines GUI V2 from PR #37 with Android host reconciliation from PR #12.
+- Proven separate-head Rust/platform checks: [PR #42 cross-platform CI](https://github.com/MousaXD/Slopity/actions/runs/42140594899) and [release packaging](https://github.com/MousaXD/Slopity/actions/runs/42140594848); [PR #37 cross-platform CI](https://github.com/MousaXD/Slopity/actions/runs/42082159333), [security audit](https://github.com/MousaXD/Slopity/actions/runs/42082159369), and [release packaging](https://github.com/MousaXD/Slopity/actions/runs/42082159284).
+- **Combined exact-head CI not yet known**. Green parent PRs are insufficient for release certification; use the integration PR's own jobs.
+- Six recommended specialist workstreams are coordination lanes, **not six independently running coding agents**. The coordinator owns integration and final merge decision.
+- Android physical-device one-hour durability/background reachability, notification UI behavior and power metrics remain unverified; CI builds cannot prove them.
+- No signed production release without a declared signing, provenance, installation and rollback gate. No external runtime declared runnable solely from GUI/profile configuration.
+
+
 **Observed:** 2026-11-05 UTC  
 **Scope:** repository evidence only. This document is a living maintainer aid, not a claim of completed app/runtime verification.
 
@@ -59,3 +69,16 @@ One integration owner coordinates sequence, branch boundaries, acceptance eviden
 ## Scope of Step 025
 
 The audit-tool-only Rust update repairs installation incompatibility, not a previously identified application vulnerability. Current security disposition stays **unknown until the new audit job completes**. No runtime providers, GUI components, signing, or product features are added in this CI recovery slice.
+
+## 2026-11-05 exact-head CI recovery addendum
+
+### Exact-head GitHub-hosted verification (2026-11-05)
+
+PR #35 head `0a5309ac49f3bd5e01dbb1fdb0014fa67bb01a7c` was independently queried using GitHub Actions commit-associated runs:
+- [Cross-platform CI #42081297534](https://github.com/MousaXD/Slopity/actions/runs/42081297534): completed, success.
+- [Security and dependency audit #42081297435](https://github.com/MousaXD/Slopity/actions/runs/42081297435): completed, success.
+- [Package and publish releases #42081297671](https://github.com/MousaXD/Slopity/actions/runs/42081297671): completed, success. PR release publication is not authorized; this is package validation, not a signed release.
+
+No local or physical Android device tests were performed. These runs validate only the named commit, not feature PRs #9, #10, #12 or their integration. PR #10's failed-stop evidence assertion remains a release blocker. GUI accessibility and Android one-hour durability proof remain outstanding.
+
+Historical pending language above refers to the earlier observation, before these runs completed. Step 025 and Step 028 now have successful exact-head workflow evidence; their ledger entries retain their historical pending wording pending a separate factual reconciliation, without retroactively altering their implementation commits.

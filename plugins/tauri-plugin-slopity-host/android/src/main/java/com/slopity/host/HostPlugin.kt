@@ -44,19 +44,29 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
             put("source", "android-system-services")
         }
 
-        val activityManager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-        activityManager?.let { manager ->
-            val memory = ActivityManager.MemoryInfo()
-            manager.getMemoryInfo(memory)
-            result.put("totalMemoryMib", memory.totalMem / BYTES_PER_MIB)
-            result.put("availableMemoryMib", memory.availMem / BYTES_PER_MIB)
+        runCatching {
+            val activityManager =
+                appContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            activityManager?.let { manager ->
+                val memory = ActivityManager.MemoryInfo()
+                manager.getMemoryInfo(memory)
+                if (memory.totalMem > 0L) {
+                    val totalMemoryMib = memory.totalMem / BYTES_PER_MIB
+                    val availableMemoryMib = memory.availMem
+                        .coerceAtMost(memory.totalMem)
+                        .coerceAtLeast(0L) / BYTES_PER_MIB
+                    result.put("totalMemoryMib", totalMemoryMib)
+                    result.put("availableMemoryMib", availableMemoryMib)
+                }
+            }
         }
 
-        val batteryIntent = appContext.registerReceiver(
-            null,
-            IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        )
-        batteryIntent?.let { battery ->
+        runCatching {
+            appContext.registerReceiver(
+                null,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            )
+        }.getOrNull()?.let { battery ->
             val level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
             if (level >= 0 && scale > 0) {
@@ -66,13 +76,11 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
                 )
             }
 
-            val status = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-            if (status != -1) {
-                result.put(
-                    "charging",
-                    status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                        status == BatteryManager.BATTERY_STATUS_FULL
-                )
+            when (battery.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)) {
+                BatteryManager.BATTERY_STATUS_CHARGING,
+                BatteryManager.BATTERY_STATUS_FULL -> result.put("charging", true)
+                BatteryManager.BATTERY_STATUS_DISCHARGING,
+                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> result.put("charging", false)
             }
 
             val temperatureTenthsCelsius =
@@ -83,17 +91,22 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
-            powerManager?.let { manager ->
-                result.put("thermalStatus", thermalStatusLabel(manager.currentThermalStatus))
+            runCatching {
+                appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            }.getOrNull()?.let { manager ->
+                runCatching { thermalStatusLabel(manager.currentThermalStatus) }
+                    .getOrNull()
+                    ?.let { status -> result.put("thermalStatus", status) }
             }
         }
 
         runCatching {
-            StatFs(appContext.filesDir.absolutePath).availableBytes / BYTES_PER_MIB
-        }.getOrNull()?.let { freeStorageMib ->
-            result.put("freeStorageMib", freeStorageMib)
-        }
+            StatFs(appContext.filesDir.absolutePath).availableBytes
+        }.getOrNull()
+            ?.takeIf { availableBytes -> availableBytes >= 0L }
+            ?.let { availableBytes ->
+                result.put("freeStorageMib", availableBytes / BYTES_PER_MIB)
+            }
 
         invoke.resolve(result)
     }
@@ -109,15 +122,24 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
             .setAction(HostForegroundService.ACTION_START_OR_UPDATE)
             .putExtra(HostForegroundService.EXTRA_LABEL, label)
             .putExtra(HostForegroundService.EXTRA_ACTIVE_SERVER_COUNT, activeServerCount)
-        ContextCompat.startForegroundService(activity.applicationContext, intent)
-        invoke.resolve(status())
+        try {
+            ContextCompat.startForegroundService(activity.applicationContext, intent)
+            invoke.resolve(status())
+        } catch (error: RuntimeException) {
+            HostForegroundService.markStartFailed()
+            val detail = error.message?.takeIf { it.isNotBlank() }
+                ?: error.javaClass.simpleName
+            invoke.reject("Android rejected the Slopity foreground-service start: $detail")
+        }
     }
 
     @Command
     fun stopHosting(invoke: Invoke) {
-        val stopped = activity.applicationContext.stopService(
-            Intent(activity.applicationContext, HostForegroundService::class.java)
-        )
+        val stopped = runCatching {
+            activity.applicationContext.stopService(
+                Intent(activity.applicationContext, HostForegroundService::class.java)
+            )
+        }.getOrDefault(false)
         HostForegroundService.markStopped()
         val reason = if (stopped) {
             "Android foreground host service stopped after the application stopped its hosted servers."
@@ -132,7 +154,7 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(status())
     }
 
-    private fun thermalStatusLabel(status: Int): String {
+    private fun thermalStatusLabel(status: Int): String? {
         return when (status) {
             PowerManager.THERMAL_STATUS_NONE -> "none"
             PowerManager.THERMAL_STATUS_LIGHT -> "light"
@@ -141,7 +163,7 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
             PowerManager.THERMAL_STATUS_CRITICAL -> "critical"
             PowerManager.THERMAL_STATUS_EMERGENCY -> "emergency"
             PowerManager.THERMAL_STATUS_SHUTDOWN -> "shutdown"
-            else -> "unknown-$status"
+            else -> null
         }
     }
 
@@ -153,11 +175,18 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
                 activity.applicationContext,
                 Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
-        val notificationManager = activity.applicationContext
-            .getSystemService(NotificationManager::class.java)
-        val appNotificationsEnabled = notificationManager.areNotificationsEnabled()
-        val channel = notificationManager.getNotificationChannel(HostForegroundService.CHANNEL_ID)
-        val channelEnabled = channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+        val notificationManager = runCatching {
+            activity.applicationContext.getSystemService(NotificationManager::class.java)
+        }.getOrNull()
+        val appNotificationsEnabled = runCatching {
+            notificationManager?.areNotificationsEnabled() ?: false
+        }.getOrDefault(false)
+        val channelEnabled = runCatching {
+            notificationManager?.let { manager ->
+                val channel = manager.getNotificationChannel(HostForegroundService.CHANNEL_ID)
+                channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+            } ?: false
+        }.getOrDefault(false)
         val notificationVisible = snapshot.active &&
             notificationPermissionGranted &&
             appNotificationsEnabled &&
@@ -171,11 +200,11 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
             !snapshot.active ->
                 "Android foreground host service is not active."
             notificationPermissionRequired && !notificationPermissionGranted ->
-                "Hosting is active, but POST_NOTIFICATIONS is denied, so the foreground notification is not visible in the notification drawer."
+                "Hosting cannot remain active because POST_NOTIFICATIONS is denied and Slopity requires visible foreground hosting."
             !appNotificationsEnabled ->
-                "Hosting is active, but application notifications are disabled in Android settings."
+                "Hosting cannot remain active because application notifications are disabled in Android settings."
             !channelEnabled ->
-                "Hosting is active, but the Slopity hosting notification channel is disabled."
+                "Hosting cannot remain active because the Slopity hosting notification channel is disabled."
             notificationVisible ->
                 "Android foreground hosting is active and its persistent notification should be visible."
             else ->
@@ -185,9 +214,12 @@ class HostPlugin(private val activity: Activity) : Plugin(activity) {
         return JSObject().apply {
             put("platform", "android")
             put("active", snapshot.active)
+            put("startRequestPending", snapshot.startRequestPending)
             put("notificationVisible", notificationVisible)
             put("notificationPermissionGranted", notificationPermissionGranted)
             put("notificationPermissionRequired", notificationPermissionRequired)
+            put("notificationsEnabled", appNotificationsEnabled)
+            put("notificationChannelEnabled", channelEnabled)
             put("label", snapshot.label)
             put("activeServerCount", snapshot.activeServerCount)
             put("stopRequestPending", snapshot.stopRequestPending)
