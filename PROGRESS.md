@@ -1,5 +1,26 @@
 # Progress ledger
 
+## Step 043: Agent 03 GUI V2 discoverability, accessibility and safe profile transfer
+
+**Status:** IN PROGRESS  
+**Declared:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX (branch `feat/slopity-gui-agent03`; base `feat/owner-integration-20261106`)
+
+### Scope and acceptance
+- Audit GUI V2 dashboard, server cards/details, profile editor, runtime registry, device status and dialog behavior against the real Tauri API.
+- Add server search, runtime/status filtering and sorting, understandable result counts and no-match states; do not confuse saved-profile state with observed backend state.
+- Improve initial loading, backend-offline/retry behavior, accessible notices/focus and safe modal interactions without inventing backend success.
+- Provide versioned JSON-only profile import/export with strict schema, size/count guards, preview, duplicate-ID conflict handling, never auto-start, and per-profile backend validation/persistence; do not overwrite existing profiles or import executable payloads.
+- Add tests for selectors, import parsing/preview/conflicts, error handling, and accessibility-facing rendering.
+- Intended files: `apps/slopity/web/index.html`, `app.js`, `styles.css`, `views/dashboard.js`, `views/dialogs.js`, `views/profile-editor.js`, new focused `domain/` and `views/` modules, frontend `tests/`, and this `PROGRESS.md`. No shared package manifest, Rust, Android, or workflow edits.
+- Acceptance checks: GitHub-hosted exact-head frontend format, lint, Node tests; Linux/Android/Windows CI and security/release workflows as applicable. Record exact results and manual accessibility/device verification gaps.
+
+### Non-goals and risks
+- No external runtime activation, shell execution, import of runnable files, arbitrary filesystem paths, silent profile replacement, pretend telemetry, backend admission policy edits, or merges.
+- All JSON is untrusted; invalid items must not be saved. Bulk import can partially succeed if the backend rejects an item; report the partial result explicitly.
+- Browser/WebView file download and keyboard/assistive-technology behavior require manual app-shell validation beyond Node tests.
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
