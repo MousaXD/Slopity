@@ -1,5 +1,30 @@
 # Progress ledger
 
+## Step 109: owner integration of specialist fixes and guarded main merge
+
+**Status:** IN PROGRESS (plan-only; no specialist code incorporated yet)  
+**Declared:** 2026-11-08  
+**Coordinator:** Agent 00; integration PR #43
+
+### Scope and exact inputs
+- Preserve the existing owner integration branch and integrate the reviewed source from PRs #46 (Rust admission/lifecycle), #47 (CI and Android JUnit gate), #50 (GUI), #51 (Android foreground safety), #53 (Tauri atomic profile/start transaction), and #54 (stacked security update that includes #48). Keep all specialist development histories and record exact heads in the integration commit.
+- Integrate PR #54 on top of PR #48 as a unit; retain the Tokio 1.53.3 and Tauri 2.11.6 security fixes.
+- Preserve the red historical QA PR #49 without duplicating its regression tests, which are already embedded in PR #46.
+- Reconcile the shared PROGRESS.md additions without dropping prior entries. For non-overlapping specialist source paths, preserve their exact blob content; review the combined Tauri, Rust-core, host-service, JavaScript and CI contracts, including runtime host counts and error evidence.
+
+### Intended files and risks
+- Intended: all changed source/test/docs/workflow paths reviewed in PRs #46/#47/#48/#50/#51/#53/#54, this ledger and engineering status notes if needed.
+- Risks: cross-PR runtime semantics despite non-overlapping paths; start/stop interleavings and Android pending stop; native Android generated Gradle/JUnit may pass on isolated heads but fail when combined; one or more dependencies remain audit warnings; CI queue/environment failures must not be misreported as code success.
+- Lock order is store then orchestrator. No native platform call while both locks are held. Admission/profile mutation atomicity and host start acknowledgement must stay fail-closed.
+
+### Non-goals
+- No direct main edits, force merges, disabled assertions, ignore lists to mask known vulnerabilities, relaxed runtime validation, production release publishing, unverified external runtimes, device-test claims, or signed-release claims.
+
+### Required hosted acceptance before main promotion
+- Run exact-head PR #43 Rust fmt/locked metadata/workspace tests/strict Clippy; frontend format/lint/Node tests; Linux Tauri; Windows x64 NSIS; Android ARM64 manifest and debug APK/AAB; real generated Kotlin/JUnit tests with nonempty successful XML; Linux .deb/AppImage; Cargo/npm audit and dependency review; explicit no publication on PR.
+- Obtain fresh independent QA GO — DEVELOPMENT MERGE at that same SHA, satisfy branch protection/reviews, merge via PR, verify final main and post-merge CI. Track glib and other debt (#52), physical device durability (#44) and non-production release limitations truthfully.
+- If any gate is missing or fails, keep PR #43 draft and record precise blockers.
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
