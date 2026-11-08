@@ -2,7 +2,7 @@
 
 ## Step 110: serialize Tauri host-service operations across runtime lifecycle commands
 
-**Status:** IN PROGRESS (plan-only; code unchanged)  
+**Status:** PARTIAL (host-operation gate and two deterministic Rust interleaving regressions implemented; exact-head hosted CI pending)  
 **Declared:** 2026-11-08  
 **Coordinator:** Agent 00
 
@@ -21,6 +21,13 @@
 - Do not change adapter behavior, Kotlin service, dependency versions, provider support, native UI, watchdog policy, audit exemptions, workflows or release settings.
 - No host operation mutex acquisition inside helpers already called by gated commands; avoid recursive mutex deadlock. No physical-device success claims.
 - Exact-head CI must pass Rust fmt, tests, strict Clippy and all required platform/security/package gates after implementation. Independent QA remains mandatory. Any hosted CI run on the pre-fix integration SHA becomes historical evidence only.
+
+### Implementation and validation status
+
+- Added `HOST_OPERATION_GATE` and `lock_host_operation` to the Tauri adapter, covering dashboard, host status, server-list reconciliation, start and stop commands. Native host calls remain outside both profile and orchestrator mutexes.
+- Added deterministic `host_gate_prevents_stale_start_count_after_concurrent_stop` and `host_gate_prevents_older_start_from_overwriting_second_server_count` tests. Both stage a first host operation and assert the second cannot overtake it before validating the final native count.
+- No local test claims: Rust formatting/tests/strict Clippy and platform/security/package checks must run on the new combined GitHub SHA; previous isolated/combined SHA runs are historical only.
+- Keep PR #43 draft until exact-head CI, independent QA and review protection are satisfied.
 
 ## Step 109: owner integration of specialist fixes and guarded main merge
 

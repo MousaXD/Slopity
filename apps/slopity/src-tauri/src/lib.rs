@@ -18,6 +18,19 @@ use tauri_plugin_slopity_host::{
 type SharedProfileStore = Mutex<ProfileStore>;
 type SharedOrchestrator = Mutex<ServerOrchestrator>;
 
+// Serializes runtime lifecycle changes with native host-service reconciliation.
+// A native start may take time to acknowledge; without this gate another Rust
+// command can stop/start a server and subsequently be overwritten by a stale
+// foreground host count. Never hold the profile/orchestrator locks across
+// native calls; this independent operation lock spans the complete command.
+static HOST_OPERATION_GATE: Mutex<()> = Mutex::new(());
+
+fn lock_host_operation() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    HOST_OPERATION_GATE
+        .lock()
+        .map_err(|_| "host operation gate lock is poisoned".to_string())
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DashboardSnapshot {
@@ -82,6 +95,7 @@ fn dashboard_snapshot(
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<DashboardSnapshot, String> {
+    let _host_operation = lock_host_operation()?;
     let device_telemetry = read_device_telemetry(&app);
     let capability = capability_snapshot(&device_telemetry);
     let (profiles, profile_recovery_notices) = {
@@ -133,6 +147,7 @@ fn host_service_status(
     app: tauri::AppHandle,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<HostServiceStatus, String> {
+    let _host_operation = lock_host_operation()?;
     reconcile_host_service(&app, &orchestrator)
 }
 
@@ -221,6 +236,7 @@ fn list_builtin_http_servers(
     app: tauri::AppHandle,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<Vec<ServerRuntimeSnapshot>, String> {
+    let _host_operation = lock_host_operation()?;
     reconcile_host_service(&app, &orchestrator)?;
     let mut orchestrator = orchestrator
         .lock()
@@ -235,6 +251,7 @@ fn start_builtin_http_server(
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<ServerRuntimeSnapshot, StartServerCommandError> {
+    let _host_operation = lock_host_operation().map_err(StartServerCommandError::internal)?;
     // Read native telemetry before taking either lock. Profile lookup, admission, and
     // actual launch are one store -> orchestrator transaction; host calls remain outside.
     let device_telemetry = read_device_telemetry(&app);
@@ -280,6 +297,7 @@ fn stop_builtin_http_server(
     id: ServerId,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<ServerRuntimeSnapshot, String> {
+    let _host_operation = lock_host_operation()?;
     let snapshot = {
         let mut orchestrator = orchestrator
             .lock()
@@ -839,6 +857,125 @@ mod tests {
             started,
             _dir: TestProfileDir(path),
         }
+    }
+
+    #[test]
+    fn host_gate_prevents_stale_start_count_after_concurrent_stop() {
+        let TestFixture {
+            store,
+            orchestrator,
+            _dir,
+            ..
+        } = test_fixture();
+        let reported_count = Arc::new(AtomicUsize::new(usize::MAX));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let start_store = Arc::clone(&store);
+        let start_orchestrator = Arc::clone(&orchestrator);
+        let start_reported = Arc::clone(&reported_count);
+        let starter = thread::spawn(move || {
+            let _gate = super::lock_host_operation().unwrap();
+            let (_, count, _) = start_profile_transaction(
+                &start_store,
+                &start_orchestrator,
+                &test_capability(),
+                &ServerId("atomic".into()),
+            )
+            .unwrap();
+            started_tx.send(count).unwrap();
+            release_rx.recv().unwrap();
+            // Simulates the native start acknowledgement after Rust launch.
+            start_reported.store(count, Ordering::SeqCst);
+        });
+
+        assert_eq!(started_rx.recv_timeout(Duration::from_secs(5)).unwrap(), 1);
+        let (blocked_tx, blocked_rx) = mpsc::channel();
+        let stop_orchestrator = Arc::clone(&orchestrator);
+        let stop_reported = Arc::clone(&reported_count);
+        let stopper = thread::spawn(move || {
+            blocked_tx
+                .send(matches!(
+                    super::HOST_OPERATION_GATE.try_lock(),
+                    Err(std::sync::TryLockError::WouldBlock)
+                ))
+                .unwrap();
+            let _gate = super::lock_host_operation().unwrap();
+            let mut orchestrator = stop_orchestrator.lock().unwrap();
+            orchestrator.stop(&ServerId("atomic".into())).unwrap();
+            stop_reported.store(orchestrator.active_count(), Ordering::SeqCst);
+        });
+
+        assert!(blocked_rx.recv_timeout(Duration::from_secs(5)).unwrap());
+        release_tx.send(()).unwrap();
+        starter.join().unwrap();
+        stopper.join().unwrap();
+        assert_eq!(reported_count.load(Ordering::SeqCst), 0);
+        assert_eq!(orchestrator.lock().unwrap().active_count(), 0);
+    }
+
+    #[test]
+    fn host_gate_prevents_older_start_from_overwriting_second_server_count() {
+        let TestFixture {
+            store,
+            orchestrator,
+            _dir,
+            ..
+        } = test_fixture();
+        let mut second = test_profile();
+        second.id = ServerId("second".into());
+        second.name = "Second host".into();
+        second.port = 8_891;
+        store.lock().unwrap().create(second).unwrap();
+
+        let reported_count = Arc::new(AtomicUsize::new(0));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let start_store = Arc::clone(&store);
+        let start_orchestrator = Arc::clone(&orchestrator);
+        let start_reported = Arc::clone(&reported_count);
+        let first = thread::spawn(move || {
+            let _gate = super::lock_host_operation().unwrap();
+            let (_, count, _) = start_profile_transaction(
+                &start_store,
+                &start_orchestrator,
+                &test_capability(),
+                &ServerId("atomic".into()),
+            )
+            .unwrap();
+            started_tx.send(count).unwrap();
+            release_rx.recv().unwrap();
+            start_reported.store(count, Ordering::SeqCst);
+        });
+
+        assert_eq!(started_rx.recv_timeout(Duration::from_secs(5)).unwrap(), 1);
+        let (blocked_tx, blocked_rx) = mpsc::channel();
+        let second_store = Arc::clone(&store);
+        let second_orchestrator = Arc::clone(&orchestrator);
+        let second_reported = Arc::clone(&reported_count);
+        let second_start = thread::spawn(move || {
+            blocked_tx
+                .send(matches!(
+                    super::HOST_OPERATION_GATE.try_lock(),
+                    Err(std::sync::TryLockError::WouldBlock)
+                ))
+                .unwrap();
+            let _gate = super::lock_host_operation().unwrap();
+            let (_, count, _) = start_profile_transaction(
+                &second_store,
+                &second_orchestrator,
+                &test_capability(),
+                &ServerId("second".into()),
+            )
+            .unwrap();
+            second_reported.store(count, Ordering::SeqCst);
+        });
+
+        assert!(blocked_rx.recv_timeout(Duration::from_secs(5)).unwrap());
+        release_tx.send(()).unwrap();
+        first.join().unwrap();
+        second_start.join().unwrap();
+        assert_eq!(reported_count.load(Ordering::SeqCst), 2);
+        assert_eq!(orchestrator.lock().unwrap().active_count(), 2);
     }
 
     #[derive(Clone, Copy, Debug)]
