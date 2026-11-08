@@ -2,7 +2,7 @@
 
 ## Step 106: atomic Tauri profile-to-runtime start transaction
 
-**Status:** IN PROGRESS (plan committed before application changes)  
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions and independent QA pending)  
 **Declared:** 2026-11-08  
 **Owner:** Agent 02 — isolated Tauri race fix, Agent 00 integration coordination.
 
@@ -38,7 +38,12 @@
 
 ### Implementation and evidence
 
-Pending implementation and exact-head GitHub Actions. This entry will be closed in the implementation commit with changed files, observed checks, limitations, and follow-up work.
+- Implemented Tauri-only atomic start transaction: native telemetry before locks; profile lookup, current profile collection, admission permit and adapter startup within one store → orchestrator lock scope. Native host-service start, rollback and reconciliation remain outside both locks.
+- Routed edit, enable/disable and delete commands through the same stopped-profile guard helper; retain durable profile commits and existing stop failure behavior.
+- Added four named concurrent start/profile mutation regressions covering disabled, deleted, modified port and loopback→LAN exposure, each checking both start-wins (in-flight profile lock held, mutation rejected) and mutation-wins (latest profile honored). A no-socket fake runtime adapter records the exact authorized profile.
+- Files changed: `apps/slopity/src-tauri/src/lib.rs`, `PROGRESS.md`. No Android plugin, runtime core, security checks, dependency, workflow, release or frontend files changed.
+- GitHub-hosted `cargo fmt`, locked Rust workspace tests, strict Clippy, Linux Tauri, Android ARM64, Windows NSIS, security and release-package checks: **pending** at implementation commit creation. No local tests or physical-device checks were run; no CI success is claimed here.
+- Outstanding: request independent Agent 06 review of this Tauri fix; coordinate Agent 00 integration alongside PR #46 and Agent 04 host-service work; validate on the final integrated SHA. Running adapter starts may temporarily hold two locks; asynchronous foreground host acknowledgement remains separately unverified.
 
 
 ## Step 033: owner-controlled cross-workstream integration candidate
