@@ -1,5 +1,27 @@
 # Progress ledger
 
+## Step 110: serialize Tauri host-service operations across runtime lifecycle commands
+
+**Status:** IN PROGRESS (plan-only; code unchanged)  
+**Declared:** 2026-11-08  
+**Coordinator:** Agent 00
+
+### Specific verified cross-command hazard
+- PR #53 atomically closes the profile-store -> orchestrator startup race, but the returned active server count is a snapshot taken **before** the native host-service call.
+- Two concurrent starts can finish host updates in the wrong order (newer count 2 overwritten by stale count 1). A stop can reconcile to count 0 while a prior start is still pending and the old start can subsequently re-enable the host service with no running server.
+- A dashboard/status/list reconciliation can also interleave with lifecycle updates. Avoid any false safety claim.
+
+### Scope
+- Own only `apps/slopity/src-tauri/src/lib.rs`, this progress ledger, and focused tests.
+- Add a single fail-closed mutex gate for host-affecting Tauri command lifecycles (start, stop, status, list, dashboard) so runtime modifications and native host-service reconciliation do not interleave across those commands.
+- Preserve existing store -> orchestrator ordering, release both state mutexes before native calls, retain all failure evidence and native pending-stop fail-closed semantics.
+- Use deterministic multithreaded gate regressions, including proof a second command cannot overtake a pending host update and that post-stop count cannot be overwritten by stale start.
+
+### Non-goals and safeguards
+- Do not change adapter behavior, Kotlin service, dependency versions, provider support, native UI, watchdog policy, audit exemptions, workflows or release settings.
+- No host operation mutex acquisition inside helpers already called by gated commands; avoid recursive mutex deadlock. No physical-device success claims.
+- Exact-head CI must pass Rust fmt, tests, strict Clippy and all required platform/security/package gates after implementation. Independent QA remains mandatory. Any hosted CI run on the pre-fix integration SHA becomes historical evidence only.
+
 ## Step 109: owner integration of specialist fixes and guarded main merge
 
 **Status:** PARTIAL (specialist source integration prepared; exact-head CI and independent QA pending)  
