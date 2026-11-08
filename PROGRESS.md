@@ -1,5 +1,46 @@
 # Progress ledger
 
+## Step 106: atomic Tauri profile-to-runtime start transaction
+
+**Status:** IN PROGRESS (plan committed before application changes)  
+**Declared:** 2026-11-08  
+**Owner:** Agent 02 — isolated Tauri race fix, Agent 00 integration coordination.
+
+### Scope and invariant
+
+- Close QA issue #45's profile edit/start TOCTOU window in `apps/slopity/src-tauri/src/lib.rs`: a previously cloned profile cannot launch after an edit, disable, deletion, port change or loopback-to-LAN change has committed.
+- Treat profile lookup, currently committed profile collection, authorization, and `ServerOrchestrator::start` as one transaction under a consistent **profile-store lock → orchestrator lock** order. The mutation paths already use this order; centralize their guard logic where practical.
+- Take native device telemetry before the transaction; do **not** call host-service/native plugin APIs while either mutex is held. Preserve the existing host-service startup/rollback and runtime failure diagnostics.
+- Test both possible linearizations: mutation before start sees the latest profile; mutation attempted during start cannot commit until start completes, then active-runtime safety rejects the mutation. Cover disable, delete, changed port and loopback→LAN scope with deterministic barriers/channels and a fake runtime adapter (no hardware/device assertions).
+
+### Intended files
+
+- `apps/slopity/src-tauri/src/lib.rs` (Tauri commands, private transaction helpers, scoped concurrency regressions).
+- `PROGRESS.md` (this entry only).
+
+### Non-goals
+
+- No changes to Rust core admission permits or PR #46, Android plugin/Kotlin, CI workflow configuration, frontend behavior, supported-runtime claims, or `main`/`dev`.
+- No merge, release, lockfile churn, weakening of tests/authorization, automation, or physical-device claims.
+
+### Risks
+
+- A long-running adapter startup under both locks may block concurrent profile mutations temporarily; it must never invert lock ordering.
+- Host-service native calls occur after the runtime transaction; their own asynchronous foreground visibility/rollback risk remains assigned to Agent 04 and independent QA.
+- Final integration must reconcile this Tauri-only PR with PR #46 and all other agent changes, then rerun exact-head gates.
+
+### Acceptance checks — GitHub-hosted only
+
+- Four named deterministic start/mutation regressions (disable, delete, port update, scope update), plus mutation-first behavior and existing host reconciliation/failed-stop assertions.
+- `cargo fmt --all -- --check`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo metadata --locked`.
+- Linux Tauri compile, Windows NSIS, Android ARM64 debug packaging, security/release workflow gates; PR publication skipped. Record exact-head result links truthfully.
+- Add no claims about local tests, physical Android durability or signed production builds.
+
+### Implementation and evidence
+
+Pending implementation and exact-head GitHub Actions. This entry will be closed in the implementation commit with changed files, observed checks, limitations, and follow-up work.
+
+
 ## Step 033: owner-controlled cross-workstream integration candidate
 
 **Status:** PARTIAL (combined source committed; exact-head GitHub Actions pending)  
