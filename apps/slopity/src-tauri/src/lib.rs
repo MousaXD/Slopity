@@ -3,10 +3,10 @@
 use serde::Serialize;
 use slopity_core::{
     authorize_start, sample_profiles, CapabilitySnapshot, ProfileRecoveryNotice, ProfileStore,
-    ProfileStoreError, ResourceAccounting, ResourceAccountingSnapshot, ResourcePlan, ResourcePlanner,
-    RuntimeAvailability, RuntimeFailureEvidence, RuntimeKind, ServerId, ServerOrchestrator,
-    ServerProfile, ServerRuntimeSnapshot, ServerState, StartAdmissionRejection, ValidationIssue,
-    PROFILE_SCHEMA_VERSION,
+    ProfileStoreError, ResourceAccounting, ResourceAccountingSnapshot, ResourcePlan,
+    ResourcePlanner, RuntimeAvailability, RuntimeFailureEvidence, RuntimeKind, ServerId,
+    ServerOrchestrator, ServerProfile, ServerRuntimeSnapshot, ServerState, StartAdmissionRejection,
+    ValidationIssue, PROFILE_SCHEMA_VERSION,
 };
 use slopity_runtime_http::HttpServerManager;
 use std::sync::Mutex;
@@ -522,9 +522,10 @@ fn start_profile_transaction_after_read(
     let store = store
         .lock()
         .map_err(|_| StartServerCommandError::internal("profile store lock is poisoned"))?;
-    let profile = store.profile(id).cloned().ok_or_else(|| {
-        StartServerCommandError::runtime(format!("profile not found: {}", id.0))
-    })?;
+    let profile = store
+        .profile(id)
+        .cloned()
+        .ok_or_else(|| StartServerCommandError::runtime(format!("profile not found: {}", id.0)))?;
     if profile.runtime != RuntimeKind::BuiltInHttp {
         return Err(StartServerCommandError::runtime(
             "the built-in HTTP command cannot start another runtime kind",
@@ -557,10 +558,7 @@ fn start_profile_transaction_after_read(
     Ok((snapshot, active_count, profile.name))
 }
 
-fn ensure_server_stopped(
-    id: &ServerId,
-    orchestrator: &SharedOrchestrator,
-) -> Result<(), String> {
+fn ensure_server_stopped(id: &ServerId, orchestrator: &SharedOrchestrator) -> Result<(), String> {
     let mut orchestrator = orchestrator
         .lock()
         .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
@@ -702,13 +700,11 @@ mod tests {
         );
     }
 
-
     // These tests exercise the same transaction and mutation functions as the
     // Tauri commands without invoking native host APIs or binding a TCP socket.
     use super::{
-        mutate_stopped_profile, start_profile_transaction,
-        start_profile_transaction_after_read, SharedOrchestrator, SharedProfileStore,
-        StartServerCommandError,
+        mutate_stopped_profile, start_profile_transaction, start_profile_transaction_after_read,
+        SharedOrchestrator, SharedProfileStore, StartServerCommandError,
     };
     use slopity_core::{
         CapabilitySnapshot, NetworkScope, ProfileStore, RuntimeAdapter, RuntimeAvailability,
@@ -825,8 +821,8 @@ mod tests {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&path).unwrap();
-        let store = ProfileStore::load_or_create(path.join("profiles.json"), vec![test_profile()])
-            .unwrap();
+        let store =
+            ProfileStore::load_or_create(path.join("profiles.json"), vec![test_profile()]).unwrap();
         let started = Arc::new(Mutex::new(Vec::new()));
         let mut orchestrator = ServerOrchestrator::default();
         orchestrator
@@ -920,7 +916,9 @@ mod tests {
 
         let mutation_result = mutate_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(
-            mutation_result.unwrap_err().contains("stop atomic before editing"),
+            mutation_result
+                .unwrap_err()
+                .contains("stop atomic before editing"),
             "{mutation:?} must be rejected after start linearizes"
         );
         mutator.join().unwrap();
@@ -963,7 +961,9 @@ mod tests {
                 assert_eq!(started.lock().unwrap().as_slice(), saved.as_slice());
                 match mutation {
                     TestMutation::ChangePort => assert_eq!(saved[0].port, 8_891),
-                    TestMutation::ExposeLan => assert_eq!(saved[0].network_scope, NetworkScope::Lan),
+                    TestMutation::ExposeLan => {
+                        assert_eq!(saved[0].network_scope, NetworkScope::Lan)
+                    }
                     _ => unreachable!(),
                 }
             }

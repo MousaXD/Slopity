@@ -2,7 +2,7 @@
 
 ## Step 107: restore strict rustfmt gate for atomic Tauri start
 
-**Status:** IN PROGRESS (plan first; no application changes yet)  
+**Status:** PARTIAL (format-only correction committed; exact-head CI pending)  
 **Declared:** 2026-11-08  
 **Owner:** Agent 02 — PR #53 follow-up.
 
@@ -25,7 +25,10 @@
 
 ### Implementation and evidence
 
-Pending exact CI retry.
+- Applied only the exact Rust 1.89 rustfmt diff from failed [job #128752351465](https://github.com/MousaXD/Slopity/actions/runs/42487457518/job/128752351465): line wraps, signature layout, and one extra blank line; no assertion, lock-order, authorization, error or adapter behavior changed.
+- Changed files: `apps/slopity/src-tauri/src/lib.rs`, `PROGRESS.md` only. No local tests or platform/device checks run.
+- Revised exact-head GitHub Actions results: **pending** at commit creation. Previous #42487457518 failed at rustfmt and did not exercise tests or Clippy; release workflow #42487457496 passed but does not certify the new head.
+- Independent QA review and final integrated-head validation remain required before merge. No Android real-device or production release proof is claimed.
 
 
 ## Step 106: atomic Tauri profile-to-runtime start transaction
