@@ -1,5 +1,33 @@
 # Progress ledger
 
+## Step 108: remove Clippy test-fixture type complexity without weakening QA
+
+**Status:** IN PROGRESS (plan first; implementation pending)  
+**Declared:** 2026-11-08  
+**Owner:** Agent 02 — PR #53 strict-lint follow-up.
+
+### Exact-head evidence and cause
+
+- [Cross-platform CI #42492183851](https://github.com/MousaXD/Slopity/actions/runs/42492183851), head `b13ca86ca95303656e767a9ca0feb2c0b6f94acf`: formatting, locked metadata and workspace tests passed, including all four new `concurrent_*` Tauri regressions. Strict Clippy failed at `apps/slopity/src-tauri/src/lib.rs:811` with `clippy::type_complexity` on the nested four-tuple return type of the **test-only** fixture helper. Linux/Android/Windows CI jobs skipped because Rust quality failed; no claims about downstream runs.
+- Previous release workflow success was for the earlier head and cannot certify this SHA. [Release workflow #42492183847](https://github.com/MousaXD/Slopity/actions/runs/42492183847) may still be queued.
+
+### Scope, risks, and non-goals
+
+- Convert only the `#[cfg(test)]` `test_fixture()` return value from a complex tuple into a named `TestFixture` struct with identical store/orchestrator/launch evidence/temporary-directory ownership. Destructure it at its two call sites, preserving assertions and thread interleavings.
+- No lint suppressions, disabled checks, mutated production lock logic, authorization changes, new runtime functionality, Android plugin changes, dependency/workflow edits, PR #46 edits, merges or direct main/dev edits.
+- Intended files: `apps/slopity/src-tauri/src/lib.rs` (test-only type simplification), `PROGRESS.md`.
+
+### Acceptance (GitHub-hosted only)
+
+- Exact-head rustfmt, locked metadata, workspace tests and strict all-targets all-features Clippy; four named race tests must remain green.
+- Linux Tauri, Android ARM64 debug, Windows NSIS, release-package/no-publish checks on revised head; independent QA re-review, coordinated integration and final integrated-head validation remain separate.
+- No local or physical-device test claims.
+
+### Implementation and evidence
+
+Pending strict-lint correction and new exact-head CI.
+
+
 ## Step 107: restore strict rustfmt gate for atomic Tauri start
 
 **Status:** PARTIAL (format-only correction committed; exact-head CI pending)  
