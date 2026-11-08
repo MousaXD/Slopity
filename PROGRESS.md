@@ -1,5 +1,33 @@
 # Progress ledger
 
+## Step 107: restore strict rustfmt gate for atomic Tauri start
+
+**Status:** IN PROGRESS (plan first; no application changes yet)  
+**Declared:** 2026-11-08  
+**Owner:** Agent 02 — PR #53 follow-up.
+
+### Observed exact-head CI failure
+
+- [Cross-platform CI #42487457518](https://github.com/MousaXD/Slopity/actions/runs/42487457518), exact implementation head `2ce76bd6e2fa945df5acf26df4d11bc9e5491997`, failed only after reaching `cargo fmt --all -- --check`. The log precisely lists formatting diffs in `apps/slopity/src-tauri/src/lib.rs` for import wrapping, profile lookup layout, stopped guard signature, test imports, fixture initialization, mutation error assertion, LAN match arm, and excess blank line. Downstream Rust tests/Clippy/Linux/Windows/Android CI skipped as a consequence; do not claim they passed or failed.
+- [Release packages #42487457496](https://github.com/MousaXD/Slopity/actions/runs/42487457496) succeeded on the same patch head, with Android ARM64 and Linux .deb/AppImage jobs successful and prerelease publication skipped.
+
+### Scope and non-goals
+
+- Apply **only** exact formatting changes requested by rustfmt 1.89 to `apps/slopity/src-tauri/src/lib.rs`. Preserve the Step 106 mutex transaction, existing assertions, fake adapter interleavings, host-service rollback, diagnostic behavior and all runtime security logic.
+- No CI/workflow/dependency changes; no weakening tests, no Android plugin edits, no PR #46 edits, no main/dev changes or merges.
+- Intended files: `apps/slopity/src-tauri/src/lib.rs` and this `PROGRESS.md` entry.
+
+### Acceptance
+
+- GitHub-hosted `cargo fmt --all -- --check`, `cargo metadata --locked`, Rust workspace tests and strict Clippy must pass on the revised exact head, including all four threaded start/mutation regressions.
+- Downstream Linux Tauri, Windows NSIS, Android ARM64 and PR-safe release-package jobs must pass (publisher skipped); independent QA #45 must re-review semantics.
+- Evidence and limitations to be updated with the implementation commit. No local or device testing claims.
+
+### Implementation and evidence
+
+Pending exact CI retry.
+
+
 ## Step 106: atomic Tauri profile-to-runtime start transaction
 
 **Status:** PARTIAL (implementation committed; exact-head GitHub Actions and independent QA pending)  
