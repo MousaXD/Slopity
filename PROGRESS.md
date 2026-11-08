@@ -2,7 +2,7 @@
 
 ## Step 052: fix upstream Tauri cross-WebView IPC isolation flaw (GHSA-w28w-mhc8-qvjv)
 
-**Status:** IN PROGRESS — planning checkpoint; code not yet changed.  
+**Status:** IMPLEMENTED — proposed change in this commit; exact-head GitHub CI/audit/package verification REQUIRED before certification.  
 **Declared:** 2026-11-08  
 **Owner:** Agent 05, isolated stacked branch `agent-05/tauri-2-11-6-ipc-security`, based on Agent 05 certified PR #48 exact head `78fa630b9dd87d1b717a59f35e3011332b43ca78`.
 
@@ -19,6 +19,12 @@
 - Update the supply-chain review to document this additional externally disclosed High finding, its patched disposition, GHSA vs Cargo-audit coverage limits, and the cross-WebView reachability uncertainty.
 - Update this ledger in the same implementation commit, referencing the exact new source SHA as soon as known.
 - No app code, workflows, Android service, UI, PolyForm license, `main`/`dev`, release publishing, bulk Dependabot merges, or glib/GTK migration. Keep original PR #48 unmodified; submit a **separate draft stacked PR targeting `fix/slopity-deps-agent05`** for Agent 00 sequencing.
+
+### Implementation evidence (exact-head validation pending)
+
+- Applied the single-package `Cargo.lock` change `tauri 2.11.5 -> 2.11.6` using the exact published Dependabot PR #20 registry checksum `6fa5bacdb9bbad5954af3d1bd6cf6ae9192cab1b2e270f4a07f904610b9e85f4` (old `667b20e2726d572dea2de7370da16e188eb06008faf9a92fab7cdc46791190b5`). All other lock packages and dependency relationships unchanged.
+- Updated `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md` to include the additional High-severity GitHub advisory and its patched version. No Rust/TypeScript/Kotlin runtime code, workflow, manifest, npm lock, license, `main` or `dev` edits.
+- The earlier green checks for Agent 05 PR #48 do **not** certify this source commit. Wait for the new draft PR exact-head GitHub Actions; do not claim success or merge before completed. The seven unrelated RustSec warnings remain open under #52.
 
 ### Acceptance gates
 
