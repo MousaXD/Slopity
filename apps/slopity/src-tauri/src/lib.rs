@@ -3,10 +3,10 @@
 use serde::Serialize;
 use slopity_core::{
     authorize_start, sample_profiles, CapabilitySnapshot, ProfileRecoveryNotice, ProfileStore,
-    ResourceAccounting, ResourceAccountingSnapshot, ResourcePlan, ResourcePlanner,
-    RuntimeAvailability, RuntimeFailureEvidence, RuntimeKind, ServerId, ServerOrchestrator,
-    ServerProfile, ServerRuntimeSnapshot, ServerState, StartAdmissionRejection, ValidationIssue,
-    PROFILE_SCHEMA_VERSION,
+    ProfileStoreError, ResourceAccounting, ResourceAccountingSnapshot, ResourcePlan,
+    ResourcePlanner, RuntimeAvailability, RuntimeFailureEvidence, RuntimeKind, ServerId,
+    ServerOrchestrator, ServerProfile, ServerRuntimeSnapshot, ServerState, StartAdmissionRejection,
+    ValidationIssue, PROFILE_SCHEMA_VERSION,
 };
 use slopity_runtime_http::HttpServerManager;
 use std::sync::Mutex;
@@ -175,12 +175,8 @@ fn update_server_profile(
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<Vec<ServerProfile>, String> {
-    let mut store = store
-        .lock()
-        .map_err(|_| "profile store lock is poisoned".to_string())?;
-    ensure_server_stopped(&profile.id, &orchestrator)?;
-    store.update(profile).map_err(|error| error.to_string())?;
-    Ok(store.profiles().to_vec())
+    let id = profile.id.clone();
+    mutate_stopped_profile(&store, &orchestrator, &id, |store| store.update(profile))
 }
 
 #[tauri::command]
@@ -206,14 +202,9 @@ fn set_server_profile_enabled(
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<Vec<ServerProfile>, String> {
-    let mut store = store
-        .lock()
-        .map_err(|_| "profile store lock is poisoned".to_string())?;
-    ensure_server_stopped(&id, &orchestrator)?;
-    store
-        .set_enabled(&id, enabled)
-        .map_err(|error| error.to_string())?;
-    Ok(store.profiles().to_vec())
+    mutate_stopped_profile(&store, &orchestrator, &id, |store| {
+        store.set_enabled(&id, enabled)
+    })
 }
 
 #[tauri::command]
@@ -222,12 +213,7 @@ fn delete_server_profile(
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<Vec<ServerProfile>, String> {
-    let mut store = store
-        .lock()
-        .map_err(|_| "profile store lock is poisoned".to_string())?;
-    ensure_server_stopped(&id, &orchestrator)?;
-    store.delete(&id).map_err(|error| error.to_string())?;
-    Ok(store.profiles().to_vec())
+    mutate_stopped_profile(&store, &orchestrator, &id, |store| store.delete(&id))
 }
 
 #[tauri::command]
@@ -249,48 +235,12 @@ fn start_builtin_http_server(
     store: State<'_, SharedProfileStore>,
     orchestrator: State<'_, SharedOrchestrator>,
 ) -> Result<ServerRuntimeSnapshot, StartServerCommandError> {
-    let (profile, profiles) = {
-        let store = store
-            .lock()
-            .map_err(|_| StartServerCommandError::internal("profile store lock is poisoned"))?;
-        let profile = store.profile(&id).cloned().ok_or_else(|| {
-            StartServerCommandError::runtime(format!("profile not found: {}", id.0))
-        })?;
-        (profile, store.profiles().to_vec())
-    };
-    if profile.runtime != RuntimeKind::BuiltInHttp {
-        return Err(StartServerCommandError::runtime(
-            "the built-in HTTP command cannot start another runtime kind",
-        ));
-    }
-
+    // Read native telemetry before taking either lock. Profile lookup, admission, and
+    // actual launch are one store -> orchestrator transaction; host calls remain outside.
     let device_telemetry = read_device_telemetry(&app);
     let capability = capability_snapshot(&device_telemetry);
-    let (snapshot, active_count) = {
-        let mut orchestrator = orchestrator.lock().map_err(|_| {
-            StartServerCommandError::internal("server orchestrator lock is poisoned")
-        })?;
-        let existing = orchestrator.snapshots();
-        let active_server_ids = existing
-            .iter()
-            .filter(|server| is_active_state(server.state))
-            .map(|server| server.server_id.clone())
-            .collect::<Vec<_>>();
-        let availability = orchestrator.runtime_availability(profile.runtime);
-        let permit = authorize_start(
-            &capability,
-            &profiles,
-            &active_server_ids,
-            &profile,
-            &availability,
-        )
-        .map_err(|rejection| StartServerCommandError::Admission { rejection })?;
-        let snapshot = orchestrator
-            .start(&profile, permit)
-            .map_err(|error| StartServerCommandError::runtime(error.to_string()))?;
-        let active_count = orchestrator.active_count();
-        (snapshot, active_count)
-    };
+    let (snapshot, active_count, profile_name) =
+        start_profile_transaction(&store, &orchestrator, &capability, &id)?;
 
     if active_count == 0 {
         app.slopity_host_stop()
@@ -298,7 +248,7 @@ fn start_builtin_http_server(
         return Ok(snapshot);
     }
 
-    let label = hosting_label(Some(&profile.name), active_count);
+    let label = hosting_label(Some(&profile_name), active_count);
     if let Err(error) = app.slopity_host_start(label, host_count(active_count)) {
         let rollback_error = {
             let mut orchestrator = orchestrator.lock().map_err(|_| {
@@ -533,10 +483,82 @@ fn reconcile_host_service(
     }
 }
 
-fn ensure_server_stopped(
+// All profile mutations that require a stopped server use the same lock order as
+// startup. The store guard remains held through the active-runtime check and
+// durable write, preventing a concurrent start from reading a stale revision.
+fn mutate_stopped_profile<T>(
+    store: &SharedProfileStore,
+    orchestrator: &SharedOrchestrator,
     id: &ServerId,
-    orchestrator: &State<'_, SharedOrchestrator>,
-) -> Result<(), String> {
+    action: impl FnOnce(&mut ProfileStore) -> Result<T, ProfileStoreError>,
+) -> Result<Vec<ServerProfile>, String> {
+    let mut store = store
+        .lock()
+        .map_err(|_| "profile store lock is poisoned".to_string())?;
+    ensure_server_stopped(id, orchestrator)?;
+    action(&mut store).map_err(|error| error.to_string())?;
+    Ok(store.profiles().to_vec())
+}
+
+// The test hook runs after reading a profile but *before* taking the orchestrator
+// lock. Production passes a no-op; tests coordinate a concurrent mutation at the
+// exact former TOCTOU window. Both locks remain held until the runtime is started.
+fn start_profile_transaction(
+    store: &SharedProfileStore,
+    orchestrator: &SharedOrchestrator,
+    capability: &CapabilitySnapshot,
+    id: &ServerId,
+) -> Result<(ServerRuntimeSnapshot, usize, String), StartServerCommandError> {
+    start_profile_transaction_after_read(store, orchestrator, capability, id, || {})
+}
+
+fn start_profile_transaction_after_read(
+    store: &SharedProfileStore,
+    orchestrator: &SharedOrchestrator,
+    capability: &CapabilitySnapshot,
+    id: &ServerId,
+    after_profile_read: impl FnOnce(),
+) -> Result<(ServerRuntimeSnapshot, usize, String), StartServerCommandError> {
+    let store = store
+        .lock()
+        .map_err(|_| StartServerCommandError::internal("profile store lock is poisoned"))?;
+    let profile = store
+        .profile(id)
+        .cloned()
+        .ok_or_else(|| StartServerCommandError::runtime(format!("profile not found: {}", id.0)))?;
+    if profile.runtime != RuntimeKind::BuiltInHttp {
+        return Err(StartServerCommandError::runtime(
+            "the built-in HTTP command cannot start another runtime kind",
+        ));
+    }
+
+    after_profile_read();
+    let mut orchestrator = orchestrator
+        .lock()
+        .map_err(|_| StartServerCommandError::internal("server orchestrator lock is poisoned"))?;
+    let existing = orchestrator.snapshots();
+    let active_server_ids = existing
+        .iter()
+        .filter(|server| is_active_state(server.state))
+        .map(|server| server.server_id.clone())
+        .collect::<Vec<_>>();
+    let availability = orchestrator.runtime_availability(profile.runtime);
+    let permit = authorize_start(
+        capability,
+        store.profiles(),
+        &active_server_ids,
+        &profile,
+        &availability,
+    )
+    .map_err(|rejection| StartServerCommandError::Admission { rejection })?;
+    let snapshot = orchestrator
+        .start(&profile, permit)
+        .map_err(|error| StartServerCommandError::runtime(error.to_string()))?;
+    let active_count = orchestrator.active_count();
+    Ok((snapshot, active_count, profile.name))
+}
+
+fn ensure_server_stopped(id: &ServerId, orchestrator: &SharedOrchestrator) -> Result<(), String> {
     let mut orchestrator = orchestrator
         .lock()
         .map_err(|_| "server orchestrator lock is poisoned".to_string())?;
@@ -676,5 +698,311 @@ mod tests {
             host_reconciliation_action(2, &android_status(true, 2)),
             HostReconciliationAction::None
         );
+    }
+
+    // These tests exercise the same transaction and mutation functions as the
+    // Tauri commands without invoking native host APIs or binding a TCP socket.
+    use super::{
+        mutate_stopped_profile, start_profile_transaction, start_profile_transaction_after_read,
+        SharedOrchestrator, SharedProfileStore, StartServerCommandError,
+    };
+    use slopity_core::{
+        CapabilitySnapshot, NetworkScope, ProfileStore, RuntimeAdapter, RuntimeAvailability,
+        RuntimeError, RuntimeHandle, RuntimeKind, RuntimeObservation, RuntimeRequest, ServerId,
+        ServerOrchestrator, ServerProfile, ServerState,
+    };
+    use std::{
+        collections::HashSet,
+        fs,
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            mpsc, Arc, Mutex,
+        },
+        thread,
+        time::Duration,
+    };
+
+    #[derive(Default)]
+    struct TestHttpAdapter {
+        active: HashSet<ServerId>,
+        started: Arc<Mutex<Vec<ServerProfile>>>,
+    }
+
+    impl RuntimeAdapter for TestHttpAdapter {
+        fn runtime_kind(&self) -> RuntimeKind {
+            RuntimeKind::BuiltInHttp
+        }
+
+        fn availability(&self) -> RuntimeAvailability {
+            RuntimeAvailability {
+                runtime: RuntimeKind::BuiltInHttp,
+                available: true,
+                reason: "deterministic test adapter".into(),
+            }
+        }
+
+        fn start(&mut self, request: RuntimeRequest) -> Result<RuntimeHandle, RuntimeError> {
+            let id = request.profile.id.clone();
+            self.started.lock().unwrap().push(request.profile);
+            self.active.insert(id.clone());
+            Ok(RuntimeHandle {
+                server_id: id,
+                process_id: None,
+            })
+        }
+
+        fn stop(&mut self, id: &ServerId) -> Result<(), RuntimeError> {
+            if self.active.remove(id) {
+                Ok(())
+            } else {
+                Err(RuntimeError::NotRunning(id.0.clone()))
+            }
+        }
+
+        fn observe(&mut self, id: &ServerId) -> Option<RuntimeObservation> {
+            self.active
+                .contains(id)
+                .then(|| RuntimeObservation::running(id.clone()))
+        }
+
+        fn observations(&mut self) -> Vec<RuntimeObservation> {
+            self.active
+                .iter()
+                .cloned()
+                .map(RuntimeObservation::running)
+                .collect()
+        }
+    }
+
+    struct TestProfileDir(PathBuf);
+
+    impl Drop for TestProfileDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn test_profile() -> ServerProfile {
+        ServerProfile {
+            id: ServerId("atomic".into()),
+            name: "Atomic start test".into(),
+            runtime: RuntimeKind::BuiltInHttp,
+            executable: None,
+            arguments: Vec::new(),
+            working_directory: None,
+            port: 8_890,
+            memory_mib: 128,
+            network_scope: NetworkScope::Loopback,
+            enabled: true,
+        }
+    }
+
+    fn test_capability() -> CapabilitySnapshot {
+        CapabilitySnapshot {
+            platform: "linux".into(),
+            architecture: "x86_64".into(),
+            logical_cpus: 8,
+            total_memory_mib: Some(16_384),
+            available_memory_mib: Some(12_288),
+        }
+    }
+
+    struct TestFixture {
+        store: Arc<SharedProfileStore>,
+        orchestrator: Arc<SharedOrchestrator>,
+        started: Arc<Mutex<Vec<ServerProfile>>>,
+        _dir: TestProfileDir,
+    }
+
+    fn test_fixture() -> TestFixture {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "slopity-tauri-start-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).unwrap();
+        let store =
+            ProfileStore::load_or_create(path.join("profiles.json"), vec![test_profile()]).unwrap();
+        let started = Arc::new(Mutex::new(Vec::new()));
+        let mut orchestrator = ServerOrchestrator::default();
+        orchestrator
+            .register_adapter(Box::new(TestHttpAdapter {
+                active: HashSet::new(),
+                started: Arc::clone(&started),
+            }))
+            .unwrap();
+        TestFixture {
+            store: Arc::new(Mutex::new(store)),
+            orchestrator: Arc::new(Mutex::new(orchestrator)),
+            started,
+            _dir: TestProfileDir(path),
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum TestMutation {
+        Disable,
+        Delete,
+        ChangePort,
+        ExposeLan,
+    }
+
+    fn apply_test_mutation(
+        mutation: TestMutation,
+        store: &SharedProfileStore,
+        orchestrator: &SharedOrchestrator,
+    ) -> Result<Vec<ServerProfile>, String> {
+        let id = ServerId("atomic".into());
+        mutate_stopped_profile(store, orchestrator, &id, |store| match mutation {
+            TestMutation::Disable => store.set_enabled(&id, false).map(|_| ()),
+            TestMutation::Delete => store.delete(&id).map(|_| ()),
+            TestMutation::ChangePort | TestMutation::ExposeLan => {
+                let mut profile = store.profile(&id).unwrap().clone();
+                match mutation {
+                    TestMutation::ChangePort => profile.port = 8_891,
+                    TestMutation::ExposeLan => profile.network_scope = NetworkScope::Lan,
+                    _ => unreachable!(),
+                }
+                store.update(profile).map(|_| ())
+            }
+        })
+    }
+
+    fn assert_start_wins_over_concurrent_mutation(mutation: TestMutation) {
+        let TestFixture {
+            store,
+            orchestrator,
+            started,
+            _dir,
+        } = test_fixture();
+        let (read_tx, read_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let start_store = Arc::clone(&store);
+        let start_orchestrator = Arc::clone(&orchestrator);
+        let starter = thread::spawn(move || {
+            start_profile_transaction_after_read(
+                &start_store,
+                &start_orchestrator,
+                &test_capability(),
+                &ServerId("atomic".into()),
+                || {
+                    read_tx.send(()).unwrap();
+                    resume_rx.recv().unwrap();
+                },
+            )
+        });
+        read_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(
+            store.try_lock().is_err(),
+            "start must retain the profile lock after reading the profile"
+        );
+
+        let (mutate_tx, mutate_rx) = mpsc::channel();
+        let mutation_store = Arc::clone(&store);
+        let mutation_orchestrator = Arc::clone(&orchestrator);
+        let mutator = thread::spawn(move || {
+            mutate_tx
+                .send(apply_test_mutation(
+                    mutation,
+                    &mutation_store,
+                    &mutation_orchestrator,
+                ))
+                .unwrap();
+        });
+        // Mutation cannot finish during the test-controlled in-flight start.
+        assert!(
+            mutate_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+            "profile mutation completed before the start transaction released its locks"
+        );
+        resume_tx.send(()).unwrap();
+        let (snapshot, count, _) = starter.join().unwrap().unwrap();
+        assert_eq!(snapshot.state, ServerState::Running);
+        assert_eq!(count, 1);
+
+        let mutation_result = mutate_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(
+            mutation_result
+                .unwrap_err()
+                .contains("stop atomic before editing"),
+            "{mutation:?} must be rejected after start linearizes"
+        );
+        mutator.join().unwrap();
+        assert_eq!(store.lock().unwrap().profiles(), &[test_profile()]);
+        assert_eq!(started.lock().unwrap().as_slice(), &[test_profile()]);
+    }
+
+    fn assert_mutation_wins_before_start(mutation: TestMutation) {
+        let TestFixture {
+            store,
+            orchestrator,
+            started,
+            _dir,
+        } = test_fixture();
+        let saved = apply_test_mutation(mutation, &store, &orchestrator).unwrap();
+        let result = start_profile_transaction(
+            &store,
+            &orchestrator,
+            &test_capability(),
+            &ServerId("atomic".into()),
+        );
+
+        match mutation {
+            TestMutation::Disable => {
+                assert!(matches!(
+                    result,
+                    Err(StartServerCommandError::Admission { .. })
+                ));
+                assert!(!saved[0].enabled);
+                assert!(started.lock().unwrap().is_empty());
+            }
+            TestMutation::Delete => {
+                assert!(matches!(
+                    result,
+                    Err(StartServerCommandError::Runtime { .. })
+                ));
+                assert!(saved.is_empty());
+                assert!(started.lock().unwrap().is_empty());
+            }
+            TestMutation::ChangePort | TestMutation::ExposeLan => {
+                let (snapshot, count, name) = result.unwrap();
+                assert_eq!(snapshot.state, ServerState::Running);
+                assert_eq!(count, 1);
+                assert_eq!(name, saved[0].name);
+                assert_eq!(started.lock().unwrap().as_slice(), saved.as_slice());
+                match mutation {
+                    TestMutation::ChangePort => assert_eq!(saved[0].port, 8_891),
+                    TestMutation::ExposeLan => {
+                        assert_eq!(saved[0].network_scope, NetworkScope::Lan)
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn concurrent_disable_cannot_start_obsolete_enabled_profile() {
+        assert_start_wins_over_concurrent_mutation(TestMutation::Disable);
+        assert_mutation_wins_before_start(TestMutation::Disable);
+    }
+
+    #[test]
+    fn concurrent_delete_cannot_start_missing_profile() {
+        assert_start_wins_over_concurrent_mutation(TestMutation::Delete);
+        assert_mutation_wins_before_start(TestMutation::Delete);
+    }
+
+    #[test]
+    fn concurrent_port_change_cannot_start_old_port() {
+        assert_start_wins_over_concurrent_mutation(TestMutation::ChangePort);
+        assert_mutation_wins_before_start(TestMutation::ChangePort);
+    }
+
+    #[test]
+    fn concurrent_loopback_to_lan_change_cannot_use_stale_scope() {
+        assert_start_wins_over_concurrent_mutation(TestMutation::ExposeLan);
+        assert_mutation_wins_before_start(TestMutation::ExposeLan);
     }
 }

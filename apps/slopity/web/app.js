@@ -7,6 +7,10 @@ import { renderServerDetails } from './views/server-details.js';
 import { closeDialog, createConfirmController, showDialog } from './views/dialogs.js';
 import { clientValidateProfile, cloneIdentity, emptyDraft, nextAvailablePort, nextProfileId, profileToDraft } from './domain/profile.js';
 import { availabilityFor, commandErrorMessage, isActiveState, profileLifecycle } from './domain/runtime.js';
+import { MAX_IMPORT_BYTES, parseProfileImport, serializeProfiles } from './domain/profile-transfer.js';
+import { renderImportPreview } from './views/import-preview.js';
+import { canApplyServerPoll, canStartServerPoll, performBackendMutation } from './domain/mutation-outcome.js';
+import { loadUiPreferences, saveUiPreferences } from './domain/ui-preferences.js';
 
 const api = createSlopityApi();
 const store = createStore();
@@ -14,12 +18,44 @@ const elements = collectElements(document);
 const editor = createProfileEditor(document, elements.editorDialog);
 const confirmAction = createConfirmController(elements.confirmDialog);
 let pollTimer = null;
+let serverPollPending = false;
+let editorSaving = false;
+let pendingImport = null;
+let filters = { query: '', runtime: 'all', status: 'all', sort: 'name' };
+let uiPreferences = loadUiPreferences(preferenceStorage());
+
+function preferenceStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 function collectElements(root) {
   return {
     refresh: root.querySelector('#refresh-button'),
     create: root.querySelector('#create-button'),
     notice: root.querySelector('#global-notice'),
+    connection: root.querySelector('#connection-status'),
+    connectionMessage: root.querySelector('#connection-message'),
+    retry: root.querySelector('#retry-button'),
+    search: root.querySelector('#profile-search'),
+    runtimeFilter: root.querySelector('#profile-runtime-filter'),
+    statusFilter: root.querySelector('#profile-status-filter'),
+    sort: root.querySelector('#profile-sort'),
+    resetFilters: root.querySelector('#profile-filter-reset'),
+    resultCount: root.querySelector('#profile-result-count'),
+    import: root.querySelector('#import-profiles-button'),
+    export: root.querySelector('#export-profiles-button'),
+    importFile: root.querySelector('#import-profile-file'),
+    importDialog: root.querySelector('#import-dialog'),
+    importPreview: root.querySelector('#import-preview'),
+    importConfirm: root.querySelector('#import-confirm'),
+    editorSave: root.querySelector('#profile-form button[type="submit"]'),
+    settingsAutoRefresh: root.querySelector('#settings-auto-refresh'),
+    settingsInterval: root.querySelector('#settings-refresh-interval'),
+    settingsFeedback: root.querySelector('#settings-feedback'),
     metrics: root.querySelector('#metric-grid'),
     runtimeGrid: root.querySelector('#runtime-grid'),
     resourceWarnings: root.querySelector('#resource-warnings'),
@@ -57,11 +93,19 @@ function setNotice(message, kind = 'info') {
 function renderState(state) {
   const snapshot = state.snapshot;
   elements.refresh.disabled = state.busy;
-  elements.create.disabled = state.busy;
+  elements.retry.disabled = state.busy;
+  elements.create.disabled = state.busy || !snapshot || Boolean(state.refreshError);
+  elements.import.disabled = state.busy || !snapshot || Boolean(state.refreshError);
+  elements.export.disabled = state.busy || !snapshot?.profiles?.length;
+  elements.connection.hidden = Boolean(snapshot && !state.refreshError);
+  elements.connectionMessage.textContent = state.refreshError
+    ? `${snapshot ? 'Backend connection lost; showing the last saved snapshot. ' : 'Cannot reach the native backend. '}${state.refreshError}`
+    : 'Connecting to the native backend…';
   if (state.notice) {
     elements.notice.hidden = false;
     elements.notice.className = `global-notice notice-${state.notice.kind}`;
     elements.notice.textContent = state.notice.message;
+    elements.notice.setAttribute('role', state.notice.kind === 'error' ? 'alert' : 'status');
   } else {
     elements.notice.hidden = true;
     elements.notice.textContent = '';
@@ -71,7 +115,9 @@ function renderState(state) {
     onStart: startProfile,
     onStop: stopProfile,
     onDetails: openDetails,
-  });
+    mutationBusy: state.busy,
+    backendStale: Boolean(state.refreshError),
+  }, filters);
   renderDeviceStatus(document, elements.deviceGrid, snapshot);
   elements.deviceSubtitle.textContent = `${snapshot.platform} · ${snapshot.architecture} · telemetry values remain unavailable when the backend cannot prove them`;
 }
@@ -79,48 +125,65 @@ function renderState(state) {
 store.subscribe(renderState);
 
 async function refreshDashboard({ announce = false } = {}) {
+  if (store.get().busy) return null;
   try {
-    store.set({ busy: true, refreshError: null });
+    store.set({ busy: true });
     const snapshot = await api.dashboard();
-    store.set({ snapshot, busy: false });
+    store.set({ snapshot, busy: false, refreshError: null });
     if (announce) setNotice('Dashboard refreshed from the backend.', 'success');
     refreshOpenDetails();
     return snapshot;
   } catch (error) {
-    store.set({ busy: false, refreshError: String(error) });
-    setNotice(`Dashboard refresh failed: ${String(error)}`, 'error');
+    store.set({ busy: false, refreshError: commandErrorMessage(error) });
+    setNotice(`Dashboard refresh failed: ${commandErrorMessage(error)}`, 'error');
     throw error;
   }
 }
 
 async function refreshServerStates() {
-  if (store.get().busy || !currentSnapshot()) return;
+  if (!canStartServerPoll(store.get(), document.hidden, serverPollPending)) return;
+  const requestedSnapshot = currentSnapshot();
+  serverPollPending = true;
   try {
     const servers = await api.listServers();
-    const snapshot = currentSnapshot();
-    store.set({ snapshot: { ...snapshot, servers } });
+    if (!canApplyServerPoll(store.get(), requestedSnapshot)) return;
+    store.set({ snapshot: { ...requestedSnapshot, servers } });
     refreshOpenDetails();
   } catch (error) {
-    setNotice(`Server state refresh failed: ${String(error)}`, 'error');
+    if (canApplyServerPoll(store.get(), requestedSnapshot)) {
+      const message = commandErrorMessage(error);
+      store.set({ refreshError: message });
+      setNotice(`Server state refresh failed: ${message}`, 'error');
+    }
+  } finally {
+    serverPollPending = false;
   }
 }
 
-async function withMutation(action, successMessage) {
+async function withMutation(action, successMessage, { allowWhileStale = false } = {}) {
   if (store.get().busy) return false;
-  try {
-    store.set({ busy: true });
-    await action();
-    const snapshot = await api.dashboard();
-    store.set({ snapshot, busy: false });
-    setNotice(successMessage, 'success');
-    refreshOpenDetails();
-    return true;
-  } catch (error) {
+  if (store.get().refreshError && !allowWhileStale) {
+    setNotice('Backend status is out of date. Refresh the connection before changing profiles or starting servers.', 'warning');
+    return false;
+  }
+  store.set({ busy: true });
+  const outcome = await performBackendMutation(action, () => api.dashboard());
+  if (!outcome.committed) {
     store.set({ busy: false });
-    setNotice(commandErrorMessage(error), 'error');
+    setNotice(commandErrorMessage(outcome.actionError), 'error');
     refreshOpenDetails();
     return false;
   }
+  if (outcome.refreshError) {
+    const message = commandErrorMessage(outcome.refreshError);
+    store.set({ busy: false, refreshError: message });
+    setNotice(`${successMessage} The change succeeded, but the dashboard could not reload: ${message}. Refresh before making other changes.`, 'warning');
+  } else {
+    store.set({ snapshot: outcome.snapshot, busy: false, refreshError: null });
+    setNotice(successMessage, 'success');
+    refreshOpenDetails();
+  }
+  return true;
 }
 
 async function startProfile(profile) {
@@ -137,11 +200,15 @@ async function stopProfile(profile) {
     setNotice(`${profile.name} is not active.`, 'warning');
     return false;
   }
-  return withMutation(() => api.stopServer(profile.id), `${profile.name} stopped.`);
+  return withMutation(() => api.stopServer(profile.id), `${profile.name} stopped.`, { allowWhileStale: true });
 }
 
 function openCreate() {
-  const snapshot = currentSnapshot() ?? { profiles: [], runtimes: [] };
+  if (store.get().busy || !currentSnapshot() || store.get().refreshError) {
+    setNotice('Connect to the native backend before creating a profile.', 'warning');
+    return;
+  }
+  const snapshot = currentSnapshot();
   const draft = emptyDraft(nextAvailablePort(snapshot.profiles, 8080));
   draft.id = nextProfileId(snapshot.profiles, 'http');
   editor.setDraft(draft, { runtimeAvailability: availabilityFor(draft.runtime, snapshot.runtimes) });
@@ -150,6 +217,10 @@ function openCreate() {
 }
 
 function openEdit(profile) {
+  if (store.get().busy || store.get().refreshError) {
+    setNotice('Refresh the backend connection before editing a profile.', 'warning');
+    return;
+  }
   const lifecycle = profileLifecycle(profile, currentSnapshot());
   if (lifecycle.active) {
     setNotice('Stop the server before editing its saved profile.', 'warning');
@@ -165,6 +236,14 @@ function openEdit(profile) {
 
 async function saveEditor(event) {
   event.preventDefault();
+  if (editorSaving || store.get().busy) return;
+  if (store.get().refreshError) {
+    setNotice('Backend status is stale. Refresh before saving this profile.', 'warning');
+    return;
+  }
+  editorSaving = true;
+  elements.editorSave.disabled = true;
+  try {
   const snapshot = currentSnapshot() ?? { profiles: [], runtimes: [] };
   const editingId = store.get().editingProfileId;
   const profile = editor.readProfile();
@@ -181,8 +260,8 @@ async function saveEditor(event) {
   try {
     backendIssues = normalizeBackendIssues(await api.validateProfile(profile));
   } catch (error) {
-    editor.renderIssues([{ severity: 'error', message: `Backend validation failed: ${String(error)}` }]);
-    setNotice(`Backend validation failed: ${String(error)}`, 'error');
+    editor.renderIssues([{ severity: 'error', message: `Backend validation failed: ${commandErrorMessage(error)}` }]);
+    setNotice(`Backend validation failed: ${commandErrorMessage(error)}`, 'error');
     return;
   }
   const allIssues = [...clientIssues, ...backendIssues];
@@ -198,9 +277,16 @@ async function saveEditor(event) {
     `${profile.name} saved.`,
   );
   if (saved) closeDialog(elements.editorDialog);
+  } finally {
+    editorSaving = false;
+    elements.editorSave.disabled = false;
+  }
 }
 
 function normalizeBackendIssues(issues = []) {
+  if (!Array.isArray(issues)) {
+    return [{ severity: 'error', message: 'Backend returned an invalid profile validation response.' }];
+  }
   return issues.map((issue) => ({
     ...issue,
     field: issue.field || inferField(issue),
@@ -259,11 +345,15 @@ function updateDetailsActions(profile) {
   const lifecycle = profileLifecycle(profile, currentSnapshot());
   elements.detailsStartStop.textContent = lifecycle.active ? 'Stop server' : lifecycle.availability.available ? 'Start server' : 'Runtime unavailable';
   elements.detailsStartStop.className = lifecycle.active ? 'button danger' : 'button primary';
-  elements.detailsStartStop.disabled = lifecycle.active ? false : !lifecycle.runnable;
-  elements.detailsStartStop.title = lifecycle.active ? 'Stop this server' : lifecycle.startDisabledReason;
-  elements.detailsEdit.disabled = lifecycle.active;
-  elements.detailsEnable.disabled = lifecycle.active;
-  elements.detailsDelete.disabled = lifecycle.active;
+  const stale = Boolean(store.get().refreshError);
+  const busy = store.get().busy;
+  elements.detailsStartStop.disabled = busy || (!lifecycle.active && (stale || !lifecycle.runnable));
+  elements.detailsStartStop.title = lifecycle.active ? 'Stop this server' :
+    stale ? 'Refresh the backend connection before starting a server.' : lifecycle.startDisabledReason;
+  elements.detailsEdit.disabled = lifecycle.active || busy || stale;
+  elements.detailsEnable.disabled = lifecycle.active || busy || stale;
+  elements.detailsClone.disabled = busy || stale;
+  elements.detailsDelete.disabled = lifecycle.active || busy || stale;
   elements.detailsEnable.textContent = profile.enabled ? 'Disable profile' : 'Enable profile';
 }
 
@@ -324,9 +414,138 @@ function setupNavigation() {
   }
 }
 
+function setupProfileFilters() {
+  const controls = [
+    [elements.search, 'query', 'input'],
+    [elements.runtimeFilter, 'runtime', 'change'],
+    [elements.statusFilter, 'status', 'change'],
+    [elements.sort, 'sort', 'change'],
+  ];
+  for (const [control, key, event] of controls) {
+    control.addEventListener(event, () => {
+      filters = { ...filters, [key]: control.value };
+      renderState(store.get());
+    });
+  }
+  elements.resetFilters.addEventListener('click', () => {
+    filters = { query: '', runtime: 'all', status: 'all', sort: 'name' };
+    for (const [control, key] of controls) control.value = filters[key];
+    renderState(store.get());
+    elements.search.focus();
+  });
+}
+
+function exportSavedProfiles() {
+  const profiles = currentSnapshot()?.profiles;
+  if (!profiles?.length) return;
+  try {
+    const json = serializeProfiles(profiles);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = 'slopity-profiles-v1.json';
+    document.body.append(download);
+    try {
+      download.click();
+    } finally {
+      download.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    setNotice('JSON export requested. Check your app or browser downloads; some mobile WebViews do not support saving files.', 'info');
+  } catch (error) {
+    setNotice(`Could not export profiles: ${commandErrorMessage(error)}`, 'error');
+  }
+}
+
+async function previewProfileFile(event) {
+  const file = event.target.files?.[0];
+  elements.importFile.value = '';
+  if (!file) return;
+  if (store.get().busy || !currentSnapshot()) return;
+  try {
+    if (file.size > MAX_IMPORT_BYTES) throw new Error('JSON imports must be 8 MiB or smaller.');
+    const text = await file.text();
+    const preview = parseProfileImport(text, currentSnapshot().profiles ?? []);
+    pendingImport = preview;
+    renderImportPreview(document, elements.importPreview, preview);
+    elements.importConfirm.disabled = preview.importable === 0;
+    showDialog(elements.importDialog, preview.importable ? elements.importConfirm : elements.importDialog.querySelector('[data-dialog-close]'));
+  } catch (error) {
+    pendingImport = null;
+    setNotice(`Profile import rejected: ${commandErrorMessage(error)}`, 'error');
+  }
+}
+
+async function importPreviewedProfiles() {
+  if (!pendingImport || store.get().busy || !currentSnapshot() || store.get().refreshError) {
+    setNotice('Refresh the backend connection before importing profiles.', 'warning');
+    return;
+  }
+  const entries = pendingImport.entries.filter((entry) => !entry.reason);
+  const existingIds = new Set(currentSnapshot().profiles.map((profile) => profile.id));
+  let imported = 0;
+  let skipped = pendingImport.skipped;
+  const failures = [];
+  store.set({ busy: true });
+  elements.importConfirm.disabled = true;
+  for (const { profile } of entries) {
+    if (existingIds.has(profile.id)) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      const backendIssues = normalizeBackendIssues(await api.validateProfile(profile));
+      const errors = backendIssues.filter((issue) => issue.severity === 'error');
+      if (errors.length) throw new Error(errors.map((issue) => issue.message).join(' '));
+      await api.createProfile(profile);
+      existingIds.add(profile.id);
+      imported += 1;
+    } catch (error) {
+      failures.push(`${profile.id}: ${commandErrorMessage(error)}`);
+    }
+  }
+
+  let refreshFailure = null;
+  try {
+    store.set({ snapshot: await api.dashboard(), refreshError: null });
+  } catch (error) {
+    refreshFailure = commandErrorMessage(error);
+    store.set({ refreshError: refreshFailure });
+  }
+  store.set({ busy: false });
+  closeDialog(elements.importDialog);
+  pendingImport = null;
+  const summary = `Imported ${imported} disabled profile(s); skipped ${skipped} ID conflict(s); ${failures.length} backend failure(s).`;
+  const details = [...failures.slice(0, 3), ...(refreshFailure ? [`Dashboard refresh failed: ${refreshFailure}`] : [])].join(' ');
+  setNotice(`${summary} ${details}`.trim(), failures.length || refreshFailure || skipped ? 'warning' : 'success');
+}
+
+function setupUiPreferences() {
+  elements.settingsAutoRefresh.checked = uiPreferences.autoRefresh;
+  elements.settingsInterval.value = String(uiPreferences.refreshIntervalMs);
+  elements.settingsInterval.disabled = !uiPreferences.autoRefresh;
+  elements.settingsFeedback.textContent = 'Preferences apply to this interface only. Native servers continue running independently.';
+  function update() {
+    const result = saveUiPreferences(preferenceStorage(), {
+      autoRefresh: elements.settingsAutoRefresh.checked,
+      refreshIntervalMs: Number(elements.settingsInterval.value),
+    });
+    uiPreferences = result.preferences;
+    elements.settingsInterval.disabled = !uiPreferences.autoRefresh;
+    startPolling();
+    elements.settingsFeedback.textContent = result.persisted
+      ? 'Preferences saved on this device. Server hosting is unaffected.'
+      : 'Preferences applied for this session. Local preference storage is unavailable.';
+  }
+  elements.settingsAutoRefresh.addEventListener('change', update);
+  elements.settingsInterval.addEventListener('change', update);
+}
+
 function startPolling() {
   stopPolling();
-  pollTimer = window.setInterval(refreshServerStates, 2000);
+  if (!uiPreferences.autoRefresh || document.hidden) return;
+  pollTimer = window.setInterval(refreshServerStates, uiPreferences.refreshIntervalMs);
 }
 
 function stopPolling() {
@@ -335,6 +554,14 @@ function stopPolling() {
 }
 
 elements.refresh.addEventListener('click', () => refreshDashboard({ announce: true }).catch(() => {}));
+elements.retry.addEventListener('click', () => refreshDashboard({ announce: true }).catch(() => {}));
+elements.import.addEventListener('click', () => elements.importFile.click());
+elements.importFile.addEventListener('change', previewProfileFile);
+elements.importConfirm.addEventListener('click', importPreviewedProfiles);
+elements.export.addEventListener('click', exportSavedProfiles);
+elements.importDialog.addEventListener('close', () => {
+  if (!store.get().busy) pendingImport = null;
+});
 elements.create.addEventListener('click', openCreate);
 editor.form.addEventListener('submit', saveEditor);
 elements.detailsStartStop.addEventListener('click', async () => {
@@ -360,10 +587,12 @@ elements.editorDialog.addEventListener('close', () => store.set({ editingProfile
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopPolling();
   else {
-    refreshDashboard().catch(() => {});
+    if (uiPreferences.autoRefresh) refreshDashboard().catch(() => {});
     startPolling();
   }
 });
 
 setupNavigation();
-refreshDashboard().then(startPolling).catch(() => {});
+setupProfileFilters();
+setupUiPreferences();
+refreshDashboard().catch(() => {}).finally(startPolling);

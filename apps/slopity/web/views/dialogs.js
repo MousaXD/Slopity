@@ -1,4 +1,11 @@
 const focusOrigins = new WeakMap();
+const observedDialogs = new WeakSet();
+
+function restoreOrigin(dialog) {
+  const origin = focusOrigins.get(dialog);
+  focusOrigins.delete(dialog);
+  if (origin?.isConnected && typeof origin.focus === 'function') frame(() => origin.focus());
+}
 
 function frame(callback) {
   const view = globalThis.requestAnimationFrame;
@@ -9,6 +16,10 @@ function frame(callback) {
 export function showDialog(dialog, focusTarget = null) {
   if (!dialog.open) {
     focusOrigins.set(dialog, dialog.ownerDocument?.activeElement ?? null);
+    if (!observedDialogs.has(dialog) && typeof dialog.addEventListener === 'function') {
+      dialog.addEventListener('close', () => restoreOrigin(dialog));
+      observedDialogs.add(dialog);
+    }
     dialog.showModal();
   }
   frame(() => (focusTarget || dialog.querySelector('button,input,select,textarea'))?.focus());
@@ -16,10 +27,8 @@ export function showDialog(dialog, focusTarget = null) {
 
 export function closeDialog(dialog) {
   if (!dialog.open) return;
-  const origin = focusOrigins.get(dialog);
-  focusOrigins.delete(dialog);
   dialog.close();
-  if (origin?.isConnected && typeof origin.focus === 'function') frame(() => origin.focus());
+  restoreOrigin(dialog);
 }
 
 export function createConfirmController(dialog) {

@@ -30,10 +30,13 @@ export function renderServerCard(document, profile, snapshot, actions = {}) {
     className: lifecycle.active ? 'button danger' : 'button primary',
     type: 'button',
     text: lifecycle.active ? 'Stop' : lifecycle.availability.available ? 'Start' : 'Unavailable',
-    disabled: lifecycle.active ? false : !lifecycle.runnable,
+    disabled: Boolean(actions.mutationBusy || (!lifecycle.active && (actions.backendStale || !lifecycle.runnable))),
     attributes: {
-      title: lifecycle.active ? 'Stop this server' : lifecycle.startDisabledReason,
+      title: lifecycle.active ? 'Stop this server'
+        : actions.backendStale ? 'Refresh the backend connection before starting a server.'
+          : lifecycle.startDisabledReason,
       'aria-label': lifecycle.active ? `Stop ${profile.name}` : `Start ${profile.name}`,
+      'data-server-action': 'lifecycle',
     },
     on: { click: () => (lifecycle.active ? actions.onStop?.(profile) : actions.onStart?.(profile)) },
   });
@@ -41,6 +44,7 @@ export function renderServerCard(document, profile, snapshot, actions = {}) {
     className: 'button secondary',
     type: 'button',
     text: 'Details',
+    attributes: { 'aria-label': `Details for ${profile.name}`, 'data-server-action': 'details' },
     on: { click: () => actions.onDetails?.(profile) },
   });
   footer.append(lifecycleButton, details);

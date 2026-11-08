@@ -2,7 +2,7 @@
 
 ## Step 109: owner integration of specialist fixes and guarded main merge
 
-**Status:** IN PROGRESS (plan-only; no specialist code incorporated yet)  
+**Status:** PARTIAL (specialist source integration prepared; exact-head CI and independent QA pending)  
 **Declared:** 2026-11-08  
 **Coordinator:** Agent 00; integration PR #43
 
@@ -24,6 +24,726 @@
 - Run exact-head PR #43 Rust fmt/locked metadata/workspace tests/strict Clippy; frontend format/lint/Node tests; Linux Tauri; Windows x64 NSIS; Android ARM64 manifest and debug APK/AAB; real generated Kotlin/JUnit tests with nonempty successful XML; Linux .deb/AppImage; Cargo/npm audit and dependency review; explicit no publication on PR.
 - Obtain fresh independent QA GO — DEVELOPMENT MERGE at that same SHA, satisfy branch protection/reviews, merge via PR, verify final main and post-merge CI. Track glib and other debt (#52), physical device durability (#44) and non-production release limitations truthfully.
 - If any gate is missing or fails, keep PR #43 draft and record precise blockers.
+
+
+### Integration assembly record
+
+- Integrated source from PRs #46 (Rust), #47 (CI), #50 (GUI), #51 (Android), #53 (Tauri concurrency) and #54 (stacked on #48). Exact source blobs and all agent commits are to be preserved as merge parents; #54 includes the Tokio 1.53.3 and Tauri 2.11.6 security updates.
+- PR #49 is a historical failing test, not to be copied separately. Original QA regression tests are already in PR #46.
+- Cross-platform build, Kotlin/JUnit, cargo/npm audit, PR publication skip and fresh independent QA against the combined HEAD are **not yet verified**. Leave PR #43 draft pending verification.
+- Audit debt #52 and physical-device verification #44 remain independent limitations; not a signed or production-ready release.
+
+## Source history — specialist PR #46
+
+## Step 105: retain independent QA admission regressions in Rust test suite
+
+**Status:** PARTIAL (QA regressions committed; new exact-head CI pending)
+**Declared:** 2026-11-07
+**Updated:** 2026-11-07
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Baseline:** Step 104 exact SHA `11356868918b146be98bc5989bee78504544ee8f` and [successful cross-platform CI 42285264906](https://github.com/MousaXD/Slopity/actions/runs/42285264906).
+
+### Scope
+- Independent QA's [test-only PR #49](https://github.com/MousaXD/Slopity/pull/49), SHA `48e2e9f4b6215f7bd53a4c315670c89a70ea8ef4`, demonstrated two baseline defects: disabled-after-admission and loopback-to-LAN-after-admission permit reuse.
+- Carry both exact, named QA regression tests into the fixed Rust `admission.rs` module, preserving the QA assertions without reducing existing orchestration tests or the full-profile permit match.
+- Intended files: `crates/slopity-core/src/admission.rs` and `PROGRESS.md`. No production behavior changes expected.
+
+### Non-goals and acceptance
+- No changes to Tauri/Android/GUI/CI workflows, package graph, other agents' branches, `main`, `dev` or integration branch. Do not merge the intentionally red QA branch.
+- Mandatory planning commit first; implementation/tests and status ledger in the second commit.
+- Verify exact implementation SHA on GitHub-hosted Rust fmt, locked tests, strict Clippy, Linux/Android/Windows and package validation. Record incomplete jobs honestly; no local/device tests claimed.
+
+### Implementation and evidence
+- Copied QA's two named test cases `permit_rejects_profile_disabled_after_admission` and `permit_rejects_network_scope_expanded_after_admission` without modifying their assertion logic.
+- Retained existing full-profile equality permit implementation, structured admission rejection, and all other tests unchanged.
+- Changes: `crates/slopity-core/src/admission.rs` and same-commit `PROGRESS.md` only.
+- Parent SHA `11356868918b146be98bc5989bee78504544ee8f` passed [cross-platform run 42285264906](https://github.com/MousaXD/Slopity/actions/runs/42285264906), including 86 Rust tests, formatting, strict Clippy, Linux Tauri, Android ARM64, and Windows NSIS. This does **not** certify this newly tested head.
+- This head needs new exact-head Actions. No local tests or physical device checks performed.
+
+
+## Step 104: apply GitHub-hosted Rust formatting gate for Step 103
+
+**Status:** PARTIAL (exact formatting patch committed; new-head CI pending)
+**Declared:** 2026-11-06
+**Updated:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Observed failure:** [Cross-platform CI 42284944250](https://github.com/MousaXD/Slopity/actions/runs/42284944250), Rust quality job `128123228627` at `3169e211436d3273cd767baeaeb23272c1ac0c26`.
+
+### Scope and non-goals
+- Apply only the three exact `rustfmt` layout diffs reported by Rust 1.89.0 in `crates/slopity-runtime-local/src/lib.rs`: nested std import, multiline start request, multiline chained observation assertion.
+- Preserve all Step 102/103 semantics, security checks, tests, process-handling behavior and existing assertions unchanged.
+- Intended files: `crates/slopity-runtime-local/src/lib.rs`, `PROGRESS.md`.
+- No workflows, GUI, shared Tauri, Android Kotlin, `main`, `dev`, integration edits, or merges.
+
+### Acceptance
+- Planning commit precedes code change. Implementation commit carries only formatting and closure of this entry.
+- Exact-head GitHub-hosted formatting, locked workspace tests, strict Clippy and Linux/Android/Windows/build-package jobs. The failed Step 103 run did not execute tests or Clippy.
+- Maintain draft PR #46 until the last implementation SHA passes; no local tests or device proof claimed.
+
+### Implementation and evidence
+- Applied exactly three rustfmt-requested formatting changes to `crates/slopity-runtime-local/src/lib.rs`, without changing process semantics, regression test logic, or lint settings.
+- Updated this `PROGRESS.md` entry in the implementation commit.
+- Prior run [42284944250](https://github.com/MousaXD/Slopity/actions/runs/42284944250) failed solely at `cargo fmt --all -- --check` and never ran the workspace test/Clippy steps; downstream platform jobs were skipped.
+- New-head GitHub-hosted exact-SHA checks remain pending. No local build or physical-device checks performed.
+
+
+## Step 103: observe and reap desktop child-process exits
+
+**Status:** PARTIAL (source and tests committed; exact-head CI pending)
+**Declared:** 2026-11-06
+**Updated:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Parent implementation SHA:** `d6714fe21665e10fda6180fdca91f4635870db96`
+
+### Scope
+- The currently unregistered `LocalProcessRuntime` stores process handles, but implements no `observe` or `observations`. A natural child exit remains a stale Running state in `ServerOrchestrator` and a stale process handle prevents restart.
+- Implement nonblocking, trustworthy child `try_wait` observations and record terminal states. A zero exit is a completed stop, a nonzero exit a failure with diagnostic evidence; an inconclusive wait error must not discard a potentially live child.
+- Reap completed processes before new start attempts and retain known terminal observations so the orchestrator can detect unexpected exits; cleanly reset a restarted server's terminal snapshot.
+- Add tests for nonzero exit, clean exit, and restart eligibility after a terminated child.
+- Intended implementation files: `crates/slopity-runtime-local/src/lib.rs` and this same-commit `PROGRESS.md`.
+
+### Non-goals and safety
+- No registration of external runtime providers, actual Java/Node/Python/PHP support claims, shell commands, new OS process-kill permissions, or Android process execution.
+- No edits to shared Tauri, Kotlin, GUI, workflows, `main`, `dev` or integration branch.
+- Do not erase errors or report a possibly live process terminal merely because `try_wait` fails; keep structured executable arguments, path validation and the Step 102 stop-failure protections.
+
+### Acceptance
+- GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, strict Clippy, Linux/Android/Windows and package validation, with exact run links recorded truthfully. No local or physical-device tests claimed.
+- Commit A is this plan only. Commit B combines the source changes, regression tests and this closed ledger entry; keep PR #46 draft while exact-head CI is not certified.
+
+### Implementation and evidence
+- Implemented `RuntimeAdapter::observe` and `observations` for the dormant local process adapter; `try_wait` polls distinguish live processes from clean exit, nonzero exit, and inconclusive poll errors.
+- Natural exits are reaped and recorded as terminal observations. Failed exits retain exit status and last-error diagnostics for orchestrator failure capture; an inconclusive poll retains the live child handle.
+- A newly started child replaces stale terminal observations. Local-process `stop` records a user-requested stop when kill/wait confirms termination, or a known terminal observation if the child already exited.
+- Added Rust regression tests for clean process exit, nonzero exit diagnostics, and restart after natural exit without shell execution. Android still refuses adapter launches.
+- Changed files: `crates/slopity-runtime-local/src/lib.rs`, `PROGRESS.md`.
+- No local, physical Android, or manual process/GUI test was run. All exact-head CI checks are pending; no claim of full runtime-provider support. Previous PR #46 Actions runs were superseded by the Step 103 commits and cannot certify the new head.
+
+
+## Step 102: Agent 02 Rust admission and lifecycle fail-closed hardening
+
+**Status:** PARTIAL (implementation submitted; exact-head GitHub-hosted validation pending)
+**Declared:** 2026-11-06
+**Updated:** 2026-11-06
+**Owner:** Agent 02, branch `fix/slopity-rust-safety-agent02`
+**Baseline:** integration PR #43 head `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
+
+### Scope and acceptance
+- Review Rust core, admission/resource reservations, lifecycle observations, profile recovery, built-in HTTP and dormant local-process adapter for actual correctness and security defects.
+- Bind start permits to the *entire* validated profile, preventing post-authorization mutations (enabled, networking and process configuration) from reusing admission.
+- On adapter start failures, retain authoritative active observations and failure diagnostics instead of incorrectly marking a potentially live workload terminal.
+- Preserve local-process child handles when kill or wait fails so stop can be retried and ownership is not silently lost.
+- Add focused Rust regression tests for modified authorization and startup failure behavior; preserve existing failed-stop and telemetry tests.
+- Intended implementation files: `crates/slopity-core/src/admission.rs`, `crates/slopity-core/src/orchestrator.rs`, `crates/slopity-runtime-local/src/lib.rs`, and this `PROGRESS.md`.
+
+### Non-goals and safety
+- No changes to `main`, `dev`, integration branch, Tauri bridge, Android Kotlin, GUI, workflows, package dependencies, or release signing.
+- No new runtime-provider registration or support claims, shell command strings, downgraded admission rules, skipped assertions, or weakened Clippy.
+- Agent 00 owns Tauri `lib.rs` and will receive any cross-file findings separately.
+
+### Risks and checks
+- Changing startup failure handling must avoid false terminal evidence, stale diagnostics and loss of retry/cleanup visibility.
+- Local-process kill/wait errors must never orphan Slopity's in-memory process handle.
+- Verify via GitHub-hosted exact-head `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and relevant Linux/Android/Windows build jobs; report any incomplete gate accurately.
+- No local build or device test is claimed. This step requires a second commit combining implementation, regression tests, and the completed ledger entry.
+
+### Implementation and regression coverage
+- Admission permit captures the entire validated `ServerProfile`, including enabled status, network exposure and executable arguments rather than only ID/runtime/port/memory.
+- Orchestrator checks the adapter's observation after failed startup and conservatively keeps a still-active workload in snapshots (with a persistent startup error), so it remains visible and stoppable after partial launch.
+- The status reconciliation preserves live-state failure diagnostics until a fresh adapter error or terminal observation replaces them.
+- Desktop local-process termination keeps the child handle until kill/wait is confirmed; an already exited child may be reaped without treating it as a live stop failure.
+- Rust regressions cover changed-profile permit reuse, partial startup with live observations and subsequent stop, plus already reaped child cleanup.
+- Additional in-scope execution-path hardening: resolve the profile executable and working directory to concrete absolute filesystem paths before calling `Command::new` and `current_dir`. This closes the mismatch between `is_file()` checking a relative file and OS PATH lookup executing a different binary; added a non-file execution rejection test. Local-process registration is still intentionally disabled in the app.
+- Changed source: `crates/slopity-core/src/admission.rs`, `crates/slopity-core/src/orchestrator.rs`, `crates/slopity-runtime-local/src/lib.rs`; this progress entry is included in the implementation commit.
+- Acceptance is pending **this branch's final implementation SHA** in GitHub Actions; validation on an earlier commit does not certify subsequent source changes. The integration PR #43 baseline at `31d524f` had [Cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [Security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) successful; these historical results do not certify Agent 02 changes. No local checks are claimed.
+
+## Source history — specialist PR #47
+
+## Step 036: gate Android native plugin JUnit tests in hosted CI
+
+**Status:** PARTIAL (native test gate implemented; exact-head hosted CI pending and PR #51 tests not present on this branch)  
+**Declared:** 2026-11-07  
+**Updated:** 2026-11-07
+
+### Verified baseline and review request
+
+- Step 035 implementation SHA `895ca859dc27bad1823264380d871c3101fb1129` passed [cross-platform CI 42284217620](https://github.com/MousaXD/Slopity/actions/runs/42284217620), [security audit 42284217458](https://github.com/MousaXD/Slopity/actions/runs/42284217458), and [release-package CI 42284217616](https://github.com/MousaXD/Slopity/actions/runs/42284217616), including both Linux .deb/AppImage and Android debug packages; PR publishing skipped.
+- Independent QA [comment 6694209878](https://github.com/MousaXD/Slopity/pull/47#issuecomment-6694209878) and Android owner [comment 6694244126](https://github.com/MousaXD/Slopity/pull/47#issuecomment-6694244126) identify missing hosted Kotlin/JUnit lifecycle test execution from Android [draft PR #51](https://github.com/MousaXD/Slopity/pull/51). Android ARM64 compile alone is not native JVM unit test certification.
+- PR #51 provides `HostForegroundServiceTest.kt` and `junit:junit:4.13.2` in the Android library. Those files are **not yet in this CI branch's base** and must not be copied into another owner's lane.
+
+### Intended scope / files
+
+- `scripts/check-android-host-junit.sh`: following Tauri Android debug build, invoke generated Android Gradle wrapper's `testDebugUnitTest` from the generated multi-module project and verify plugin-specific, nonempty JUnit XML results when the lifecycle test source exists.
+- `.github/workflows/ci.yml` and `.github/workflows/release.yml`: add Android native host unit-test step **after Tauri Android build and before manifest/artifact acceptance** in both hosted Android workflows, keeping artifact, manifest and no-publish gates unchanged.
+- `PROGRESS.md`: implementation and exact-run evidence.
+
+### Fail-closed acceptance, limitations and risks
+
+- If the lifecycle source test exists, missing Gradle test task/project, missing or empty plugin JUnit XML, skipped tests, failures or errors **must fail CI**. Gradle cannot silently pass on `NO-SOURCE`.
+- If lifecycle tests are absent from this branch, explicitly label the test source missing and the resulting execution unverified; the Gradle unit-test task will still be invoked to validate its availability, but **this is not proof that PR #51's new tests ran**. Agent 00 must validate merged PR #51 together with this gate.
+- Generated Android Gradle modules/settings are created by Tauri Android build; test step must run after build. Hosted Gradle may need additional dependency downloads and can reveal real test bugs.
+- Preserve Rust fmt/locked tests/strict Clippy, frontend gates, all 4 platform build targets, audit/dependency review, action SHA pins, job limits, and PR no-release publication policy.
+- No edits to Android/Kotlin application or plugin business logic, dependencies, signatures, production release settings, other agent branches, `main` or `dev`. No local-test claims.
+- Require exact new-head GitHub-hosted CI and release results and describe absent native test evidence truthfully.
+
+### Implementation and evidence at implementation commit
+
+- Added `scripts/check-android-host-junit.sh` to run generated Gradle `testDebugUnitTest` after the Tauri Android build, using GitHub-hosted JDK 17/SDK/NDK setup.
+- Validates nonempty JUnit XML for the exact `com.slopity.host.HostForegroundServiceTest` class and rejects missing reports, zero tests, skipped tests, errors and failures when the source exists. A successful Android APK compilation or Gradle `NO-SOURCE` alone is never reported as lifecycle test certification.
+- Added the native JVM test command to the CI and release-package Android jobs, preserving ARM64 debug builds, manifest checks and artifact assertions.
+- **Branch boundary:** PR #51's Kotlin/JUnit source is not yet integrated into this branch's base. If the source is absent, CI prints an explicit GitHub warning that these lifecycle tests have **not** been certified. Agent 00 must validate the combined tree with PR #51 after integration.
+- No Android plugin source, dependency versions or Rust/GUI files modified; no local tests run. GitHub-hosted new-head validation is pending at implementation commit.
+- Earlier Step 035 implementation was validated: [CI 42284217620](https://github.com/MousaXD/Slopity/actions/runs/42284217620), [security 42284217458](https://github.com/MousaXD/Slopity/actions/runs/42284217458), [release packages 42284217616](https://github.com/MousaXD/Slopity/actions/runs/42284217616) succeeded, publication skipped. These historical results do not certify this new script.
+
+## Step 035: remove premature apt wall-clock cutoff from hosted Linux builds
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Confirmed failure and rationale
+
+- [PR #47 release run 42279623891](https://github.com/MousaXD/Slopity/actions/runs/42279623891) failed its [Linux .deb/AppImage job 128104932881](https://github.com/MousaXD/Slopity/actions/runs/42279623891/job/128104932881) during `Install Linux Tauri system dependencies`, with **exit 124** after the 900-second GNU `timeout` set in Step 034. The logs show apt still successfully fetching necessary packages until the forced cutoff.
+- The unmodified parent PR #43's [release run 42275322783](https://github.com/MousaXD/Slopity/actions/runs/42275322783) subsequently **passed** Linux packaging and published no release. Its Linux job spent approximately **32 minutes 37 seconds** fetching 33.6 MB from a severely slow Ubuntu mirror; the explicit 900-second limit introduced a regression relative to that working base.
+- [PR #47 cross-platform CI 42279623935](https://github.com/MousaXD/Slopity/actions/runs/42279623935) and [security audit 42279623942](https://github.com/MousaXD/Slopity/actions/runs/42279623942) passed; the Linux package failure is infrastructure download time, not evidence that application build or tests failed.
+
+### Scope and intended files
+
+- Remove both GNU `timeout` wrappers in the apt bootstrap steps from `.github/workflows/ci.yml` and `.github/workflows/release.yml`. Keep `Acquire::Retries=3` and per-request HTTP/HTTPS timeouts (30 seconds) to bound stalled acquisition attempts without prematurely rejecting a long but progressing package set.
+- Preserve the original `timeout-minutes` limits on the GitHub jobs as the overarching wall-clock bound, all existing Ubuntu package names and flags, and all downstream Rust/frontend/package gates.
+- Update `PROGRESS.md` in the implementation commit with exact-head CI evidence.
+
+### Non-goals
+
+- No changes to application code, platform targets, dependencies, audit policy, release signing, publication behavior, action pinning, user functionality, `main` or `dev`.
+- No suppression of security advisories, disabling tests, skipping Linux artifacts, bypassing permission controls, or speculative mirror changes.
+
+### Risks and acceptance
+
+- Hosted Ubuntu mirrors can still be slow. Per-request timeout/retries can fail genuine network outages while GitHub job time limits prevent unbounded hangs; a fast download is not guaranteed.
+- Require fresh GitHub Actions runs on exact implementation head: Rust fmt/locked workspace tests/strict Clippy, frontend tests/lint/format, Linux Tauri compile, Android ARM64 manifest and artifacts, Windows NSIS, Cargo/npm audits, dependency review, Linux .deb/AppImage and Android preview packages, with PR publication skipped.
+- Keep draft PR until every required check passes; do not claim local verification.
+
+### Implementation and verification at implementation commit
+
+- Removed the fixed 300-second/900-second GNU `timeout` wrappers from apt bootstrap in **both CI Linux jobs and the release Linux job**.
+- Retained apt acquisition `Acquire::Retries=3` and HTTP/HTTPS `Timeout=30` request timeouts, all original native packages and target/toolchain choices, GitHub job-level `timeout-minutes`, and every test, build, artifact, audit and no-publish gate.
+- No application code, dependency versions or pinned GitHub Actions were modified.
+- No local tests were run. Exact new-head GitHub-hosted CI, audits and release packages remain **pending** at implementation commit; report the new job URLs and final results separately and do not promote this PR until they pass.
+- Parent PR #43's Linux release job passing is **not** evidence that this new commit passes; the confirmed Step 034 cutoff regression is recorded above.
+
+## Step 034: bound Linux hosted dependency bootstrap without weakening checks
+
+**Status:** PARTIAL (bounded bootstrap implemented; exact-head GitHub Actions pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06
+
+### Evidence and scope
+
+- PR #43 combined candidate at `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`: [exact-head cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969) and [security audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) passed.
+- [Release validation run 42275322783, Linux job 128090109452](https://github.com/MousaXD/Slopity/actions/runs/42275322783/job/128090109452) remained in `Install Linux Tauri system dependencies` from 18:57:40 UTC through repeated inspection; Android release packages passed. Live job logs were unavailable (GitHub returned 404) so the precise apt operation/root cause is unknown.
+- Retain all original Linux package names and compiler/toolchain versions. Bound apt metadata refresh and package installation; explicitly configure network acquisition retries and timeouts so transient mirror problems retry and persistent stalls fail with a diagnostic before the overall job timeout.
+- Apply the same targeted Linux apt bootstrap handling to Rust quality, Linux Tauri CI, and Linux release bundling, maintaining identical package sets and all downstream gates.
+
+### Intended files
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `PROGRESS.md`
+
+### Non-goals and security boundaries
+
+- No changes to Rust business logic, GUI, Android host, dependencies, signing keys, publication conditions, pinned actions, tests, audit policy, release version or license.
+- No assertion that this corrects the particular run's underlying problem; the running job's log is not accessible, and a hang could be transient hosted-runner infrastructure.
+- No merge, release publication, direct `main`/`dev` writes, or local-test claims.
+
+### Risks and acceptance checks
+
+- Some mirrors or temporary GitHub runners can remain slow; bounded apt may turn indefinite stalls into explicit failures rather than guarantee a green build.
+- After implementation, require exact new branch-head GitHub-hosted Rust formatting, locked tests, strict Clippy, frontend checks, Linux Tauri, Windows NSIS, Android ARM64 manifest/packages, Cargo/npm audit, dependency review, Linux .deb/AppImage, and PR publication skipped.
+- Record exact runs and pass/fail/availability in this same entry when available; hold integration for Agent 00 if Linux packaging is not green.
+
+### Implementation and verification at implementation commit
+
+- Applied bounded GNU `timeout` to `apt-get update` (300 seconds) and dependency installation (900 seconds), with a 30-second termination grace period.
+- Set `Acquire::Retries=3` and 30-second HTTP/HTTPS acquisition timeouts. Preserved the complete pre-existing packages, Tauri/build commands, pinned Actions, platform target choices, warning strictness, vulnerability checks, and PR publication guard.
+- Updated both Rust and Linux CI apt steps and Linux release package apt step; no application or dependency files changed.
+- At this implementation commit, exact new-head GitHub Actions checks are pending. Do not count the successful parent PR #43 runs as validation of these new workflow edits. No local tests were run.
+- Remaining known review item outside CI ownership: PR #43 Cargo audit succeeded but emitted eight RustSec warnings (six unmaintained dependencies and two unsoundness advisories, including `glib` and `tokio`). They are **not** reported by cargo-audit as a zero-warning result; dependency/security owner must triage, not suppress.
+- Root cause of the observed Linux runner stall remains unconfirmed until the original run's job log is available. If the Linux release still fails, retain draft status and investigate exact new-head log before further changes.
+
+## Source history — specialist PR #50
+
+## Step 047: prevent stale server polls from bypassing recovery
+
+**Status:** PARTIAL (implementation committed; exact-head CI/manual verification pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, risk and acceptance
+- A backend mutation can commit while its dashboard reload fails; a concurrently executing server-list poll must never clear the stale-state warning or restore profile-mutation controls without an authoritative full dashboard refresh.
+- Gate poll start and poll result application against busy/offline state and snapshot identity; discard results from older snapshots rather than overwriting fresher server data.
+- Preserve manual Retry connection, emergency Stop of observed active servers, UI refresh settings, and existing backend calls without inventing state.
+- Intended files: `apps/slopity/web/app.js`, `apps/slopity/web/domain/mutation-outcome.js`, `apps/slopity/web/tests/preferences-mutations.test.mjs`, and this `PROGRESS.md`.
+- Non-goals: Rust, Android, CI/workflow edits, shared manifests, fake server states, platform runtime support, direct integration changes, merges, scheduled tasks.
+- Checks: GitHub-hosted exact-head frontend format/lint/Node tests, Rust/Linux/Android/Windows and release validation. Manual app-shell behavior remains unverified.
+
+### Implementation and test evidence
+- Added explicit conditions to begin/apply server polling only while the latest snapshot is authoritative and the interface is not busy, hidden, or waiting for a full refresh.
+- Captured snapshot identity before asynchronous `listServers` calls and discarded results/errors from superseded snapshots, so delayed polling cannot overwrite a newer dashboard or clear a stale-state lock.
+- Polling only refreshes the server-list portion of a snapshot; the stale-state warning can now clear only through a successful full `dashboard_snapshot` request.
+- Added Node regression tests for stale refresh lock, hidden/busy/pending suppression, and out-of-order asynchronous result rejection.
+- No local tests or physical-device tests run. Exact-head CI and manual keyboard/real backend validation remain pending.
+
+
+## Step 046: truthful mutation outcomes and functional UI refresh settings
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions and manual UX checks pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope and intended files
+- Fix a real UX/data-integrity risk: a profile/server operation may succeed, then the dashboard refresh may fail. Do not report the committed operation as failed or encourage accidental retry; retain the existing snapshot, communicate stale state, and require refresh before further non-emergency mutation.
+- Continue allowing Stop for an observed active server during stale-state recovery, subject to backend policy; never falsely claim that a failure is success.
+- Add a real Settings screen for UI-only auto-refresh on/off and interval (2/5/10/30 seconds), with safe optional local persistence and explicit messaging that these options do not affect native server hosting.
+- Improve busy/offline controls on server cards and details so users cannot launch duplicate mutations while the backend state is stale; retain read-only details/export and retry controls.
+- Add Node tests proving mutation/action vs refresh outcomes, preference validation/storage failure, and rendering behavior. Preserve all existing functionality.
+- Intended files: `apps/slopity/web/app.js`, `index.html`, `styles.css`, `components/server-card.js`, `views/dashboard.js`, new `domain/ui-preferences.js`, new `domain/mutation-outcome.js`, new frontend tests, `PROGRESS.md`.
+- No Rust, Android, native settings, package manifests, GitHub workflows, or shared integration changes.
+
+### Risks, non-goals and acceptance
+- An action's failure must never be converted to success; distinguish only the separately failing follow-up snapshot request.
+- Cached/stale dashboards are never evidence of live backend status. Blocking profile starts during unknown state must not remove the user's ability to attempt Stop on an already-observed active server.
+- Local storage can be unavailable in WebViews; settings must still work for the current session. Do not claim local preferences change hosting durability.
+- No mocked backend success, unsupported runtimes, executable imports, or scheduled tasks.
+- Acceptance: exact-head GitHub-hosted frontend format/lint/Node tests, Linux Tauri, Rust, Android and Windows where applicable, release package validation, manual app-shell keyboard/visual/WebView verification documented truthfully.
+
+### Delivered
+- Added an operational Settings screen to desktop/mobile navigation with auto-refresh toggle, validated 2/5/10/30-second intervals, read-only UI polling semantics, safe local persistence and explicit session-only fallback.
+- Fixed false failure reporting when a backend action commits but the subsequent dashboard snapshot request fails. User-facing notices now distinguish committed mutation from missing refresh. Stale-state guards block new profile mutations/server starts until a full refresh succeeds, while emergency Stop remains available for servers observed active.
+- Added disabled/busy states for server cards/details and backend-unavailable profile actions without suppressing actual backend admission errors.
+- Added Node tests covering preference loading, malformed values, storage unavailability, action failure versus post-mutation refresh failure, successful refresh and stale/busy lifecycle button behavior.
+- Changed only frontend source/test files and this ledger. No native/platform/workflow manifests were edited.
+
+### Evidence and limitations
+- Previous head `acc32598e1f4493261c4b7e36eb5c5444ac221da` passed cross-platform CI [42281605318](https://github.com/MousaXD/Slopity/actions/runs/42281605318): Rust format/locked tests/strict Clippy, Linux Tauri frontend format/lint/Node tests and compile, Windows NSIS, Android ARM64 debug. Release package validation [42281605320](https://github.com/MousaXD/Slopity/actions/runs/42281605320) passed Linux and Android packaging; publish skipped.
+- Those green checks validate only the *prior* head. This step requires fresh exact-head Actions evidence. No local tests or physical Android device tests were run.
+- Manual keyboard/screen-reader, cross-viewport UI, Tauri desktop/Android actual downloads and real backend failure reproduction remain unverified. Security audit workflow filters dependency changes; it did not run on these frontend-only commits. CI Linux job independently runs `npm audit`.
+
+
+## Step 045: preserve Rust-compatible profile metadata through JSON transfer
+
+**Status:** PARTIAL (implementation committed; exact-head CI pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, non-goals, risks and acceptance
+- Audit versioned profile import/export validation against the actual `slopity-core` model and validation constants, especially UTF-8 path/argument limits and u32 memory budgets.
+- Preserve existing built-in HTTP configuration metadata (which the backend warns about but does not execute); a JSON import is never a runtime launch or executable-file import.
+- Retain strict JSON format, field allowlist, profile-count/file-size limits, conflict skipping, disabled-on-import behavior, backend validation, and truthful partial-failure states.
+- Avoid exporting JSON that fails the declared file limit. Increase the bounded document limit if necessary to support the Rust model with up to 100 profiles.
+- Intended files: `apps/slopity/web/domain/profile-transfer.js`, `apps/slopity/web/app.js`, `apps/slopity/web/tests/discovery-transfer.test.mjs`, and this `PROGRESS.md` only.
+- No shared manifests, Rust/Android/workflows, filesystem execution, runtime enablement, merges or release operations.
+- Acceptance: exact-head GitHub Actions frontend tests, format/lint and platform builds; manual WebView download behavior remains unverified.
+
+### Implementation and evidence
+- Aligned JSON profile validation with Rust's 4,096-byte path fields, 256 arguments / 8,192 UTF-8 bytes each / 65,536-byte combined argument payload and u32 memory value. The backend continues to apply its runtime/memory policy independently.
+- Preserved inert executable/working-directory/argument metadata even on built-in HTTP profiles, matching the persisted model (the backend warns but never executes these fields).
+- Bounded JSON document import **and export** to 8 MiB with at most 100 profiles; oversized/unsupported content fails before backend mutation.
+- Expanded regression tests for compatible metadata round trips, malformed payload rejection, UTF-8/argument limits, and memory overflow.
+- No local checks or Android WebView download tests claimed; GitHub-hosted exact-head runs are required after committing this implementation.
+
+
+## Step 044: retain keyboard focus through live card updates
+
+**Status:** PARTIAL (implemented; exact-head Actions and manual keyboard checks pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX
+
+### Scope, risks and checks
+- Keep keyboard focus on the same server action when the two-second backend state poll or filter redraws server cards. Never steal focus from a dialog or another view; do not fabricate lifecycle state.
+- Give every server action an accessible profile-specific name. Let the Runtime unavailable filter find unavailable adapters even if the profile is disabled; preserve the primary disabled status for badges.
+- Limit changes to `apps/slopity/web/components/server-card.js`, `views/dashboard.js`, `domain/profile-query.js`, their dedicated Node tests, and this ledger.
+- Risks: focused rows may be removed by filters/deletion, in which case do not redirect focus to unrelated controls. CSS selector values must remain allowlisted to avoid injection.
+- Acceptance: exact-head GitHub-hosted frontend format/lint/Node regression tests and platform builds; no local or device-test claims. Manual keyboard checks remain necessary.
+- Non-goals: Rust/Android/package/CI changes, new runtimes, fake backend controls, merges, or releases.
+
+### Implementation and verification
+- Card lifecycle and Details buttons now have profile-specific accessible labels and stable action identities.
+- Re-rendering a card restores keyboard focus to the same action when it remains available, or to that card's Details action if the lifecycle action became disabled; no focus theft from other views or removed profiles.
+- Runtime unavailable filter now includes disabled profiles with unsupported backend adapters, while their primary badge still correctly reports disabled state.
+- Added dedicated Node regression cases for focus retention/fallback and updated filter behavior.
+- No local tests claimed; GitHub Actions exact-head frontend, Rust, Linux/Android/Windows and package checks are pending. Manual keyboard/assistive-technology tests still required.
+
+
+## Step 043: Agent 03 GUI V2 discoverability, accessibility and safe profile transfer
+
+**Status:** PARTIAL (implemented; exact-head GitHub Actions and manual app-shell UX verification pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 03 — GUI/UX (branch `feat/slopity-gui-agent03`; base `feat/owner-integration-20261106`)
+
+### Scope and acceptance
+- Audit GUI V2 dashboard, server cards/details, profile editor, runtime registry, device status and dialog behavior against the real Tauri API.
+- Add server search, runtime/status filtering and sorting, understandable result counts and no-match states; do not confuse saved-profile state with observed backend state.
+- Improve initial loading, backend-offline/retry behavior, accessible notices/focus and safe modal interactions without inventing backend success.
+- Provide versioned JSON-only profile import/export with strict schema, size/count guards, preview, duplicate-ID conflict handling, never auto-start, and per-profile backend validation/persistence; do not overwrite existing profiles or import executable payloads.
+- Add tests for selectors, import parsing/preview/conflicts, error handling, and accessibility-facing rendering.
+- Intended files: `apps/slopity/web/index.html`, `app.js`, `styles.css`, `views/dashboard.js`, `views/dialogs.js`, `views/profile-editor.js`, new focused `domain/` and `views/` modules, frontend `tests/`, and this `PROGRESS.md`. No shared package manifest, Rust, Android, or workflow edits.
+- Acceptance checks: GitHub-hosted exact-head frontend format, lint, Node tests; Linux/Android/Windows CI and security/release workflows as applicable. Record exact results and manual accessibility/device verification gaps.
+
+### Implementation submitted
+- Added pure server selectors with name/ID/runtime/port search, actual observed-state filtering, runtime filtering, port/status/name sort and match counts. Empty/no-match screens distinguish zero saved data from filtered results.
+- Added versioned, strict JSON-only profile transfer with 256 KiB and 100-profile limits, allowlisted fields and runtimes, type/range validation, disabled-on-import policy, safe DOM preview, existing/duplicate ID skip behavior, per-profile backend validation and partial-failure reporting. Existing profiles are never overwritten or auto-started.
+- Added responsive search/filter controls, JSON import/export controls, backend connection/retry state, informative failure notices, protected polling, editor double-submit guard, backend error formatting and native-dialog focus restoration. The UI still uses the real Tauri API, not simulated commands or resources.
+- Added `web/tests/discovery-transfer.test.mjs` for selectors, filtering, sorting, import/export and malicious payload rejection, plus existing frontend tests retained.
+- Changed only `apps/slopity/web/**` and this ledger. No Rust, Android, workflows or shared manifests changed.
+
+### Verification status and limitations
+- No local test execution is claimed; the required frontend format/lint/Node tests and Rust/platform checks must run on the exact implementation SHA in GitHub Actions after the draft PR is opened.
+- Manual keyboard/assistive-technology testing, narrow mobile layouts, Tauri Android/desktop WebView JSON download behavior, browser-native Escape focus and physical device telemetry remain unverified.
+- Bulk import intentionally reports partial success when backend validation or creation rejects an individual profile; rerunning skips IDs already persisted. External runtime fields remain configuration metadata, never executed by import.
+- Follow-up: inspect exact-head jobs, resolve real failures with a newly planned two-commit correction step if needed, then request coordinator review; do not merge this draft PR.
+
+### Non-goals and risks
+- No external runtime activation, shell execution, import of runnable files, arbitrary filesystem paths, silent profile replacement, pretend telemetry, backend admission policy edits, or merges.
+- All JSON is untrusted; invalid items must not be saved. Bulk import can partially succeed if the backend rejects an item; report the partial result explicitly.
+- Browser/WebView file download and keyboard/assistive-technology behavior require manual app-shell validation beyond Node tests.
+
+## Source history — specialist PR #51
+
+## Step 047: preserve an already-foregrounded Android host after update promotion failure
+
+**Status:** PARTIAL (safety correction committed; exact-head native/JVM and hosted CI pending)  
+**Declared:** 2026-11-07  
+**Updated:** 2026-11-07  
+**Owner:** Agent 04 — Android hosting & durability  
+**Branch:** `fix/slopity-android-agent04`  
+**Base:** `1340ecb5a09dbd0ffaaafbf91fe84c738b5b4805`
+
+### Finding and scope
+
+- `HostForegroundService.onStartCommand` currently calls `markStartFailed` and `stopSelf` unconditionally when `startForeground()` throws, even if this is a rejected **update** while a previous foreground notification protects Rust-owned listeners. This unconditionally removes the previous foreground service and risks orphaning live servers with no notification.
+- Reject only the failing native start/update request and preserve previously acknowledged active foreground state and count when a promotion error occurs during an update. An unsuccessful initial foreground promotion still resets state, rejects the request and stops the service. Notification permission/channel gates remain checked independently by the Rust application, which must reconcile/stop servers on delivery loss.
+- Scope limited to `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/HostForegroundService.kt`, `plugins/tauri-plugin-slopity-host/android/src/test/java/com/slopity/host/HostForegroundServiceTest.kt`, Android README, and this progress ledger. Do not modify Agent 01 workflows or Agent 00 application Rust code.
+
+### Verification and limits
+
+- Add JVM lifecycle tests for promotion-failure preservation vs. first-start rejection and ensure callbacks fire exactly once without pending states.
+- Check GitHub-hosted exact-head Android ARM64 build, Rust quality, package workflows and **combined** CI Gradle JUnit suite using isolated validation branch based on Agent 01's CI gate.
+- No claims about physical notification UI, service-kill durability, battery/thermal behavior or issue #44; no merging, publishing, signing or force pushes.
+
+### Implementation evidence
+
+- The Android service now distinguishes a rejected *initial* `startForeground()` promotion (native state cleared, request rejected, service stopped) from a rejected *update* on an already foregrounded service (only the rejected request is failed, previously acknowledged host/notification state retained).
+- Two Kotlin/JUnit regression tests assert the split, exact callback result, and no stale pending state. An Android permission or channel failure still reports unavailable notification delivery on the next Rust observation, triggering fail-closed reconciliation; no claim of ongoing notification visibility after Android revokes delivery.
+- Source/test/README and this ledger are committed together. Host-side Android compilation and the combined Agent 01 Gradle test gate must pass before the change is certified. Physical-device validation remains blocked by issue #44.
+
+
+## Step 044: Agent 04 Android foreground-host start acknowledgement and stop-race hardening
+
+**Status:** PARTIAL (implementation committed; exact-head CI and real-device verification pending)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 04 — Android Hosting & Durability  
+**Branch:** `fix/slopity-android-agent04`  
+**Base:** `feat/owner-integration-20261106` at `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`
+
+### Scope and verified baseline
+
+- Audit native Kotlin `HostForegroundService` and Tauri `HostPlugin`, Android manifest, Rust plugin bridge, host lifecycle tests, and the device durability probe.
+- Native `startHosting` currently resolves immediately after enqueueing `startForegroundService`, before the service confirms `startForeground` succeeded. In-process snapshots and notification visibility can therefore be mistaken for confirmed service state. Fix the native acknowledgement boundary without hiding failures.
+- Preserve native notification Stop safely -> Rust reconciliation, protect pending stop from concurrent start/update, avoid stale native state after start/stop failures, and make channel/permission status conservative.
+- Add focused lifecycle regression tests or testable state checks and improve device/probe documentation where the evidence path is unclear.
+
+### Intended files
+
+- `plugins/tauri-plugin-slopity-host/android/src/main/java/com/slopity/host/{HostForegroundService.kt,HostPlugin.kt}` and adjacent Android test sources as appropriate.
+- `plugins/tauri-plugin-slopity-host/src/lib.rs` only if required for honest status gating and compatible cross-platform tests.
+- `plugins/tauri-plugin-slopity-host/android/README.md`, `docs/android-device-durability.md`, `scripts/android-durability-probe.sh`.
+- `PROGRESS.md` (this plan and implementation evidence).
+
+### Guardrails and risks
+
+- Do not modify `apps/slopity/src-tauri/src/lib.rs` or overwrite Agent 00/02 runtime admission work; relay any required Rust application change to Agent 00.
+- Preserve built-in HTTP-only runtime support, user-initiated foreground hosting, native stop semantics, notification permission/channel fail-closed behavior, and in-process state/unknown-device limitations.
+- Android manifest/cross-compile passing is not physical-device foreground visibility, one-hour durability, thermal/battery safety, or Play policy certification.
+- Acknowledgement must be nonblocking for the Android service main thread; concurrent requests, denied permission, delayed lifecycle delivery, and stop-request races need explicit failure behavior.
+- No signing keys, releases, direct main/dev changes, bypasses, automated schedules, or manufactured device telemetry.
+
+### Acceptance checks
+
+- GitHub-hosted exact-HEAD Rust format, locked tests, strict Clippy; Android ARM64 debug compile/manifest and any available package/audit gates.
+- Review native lifecycle error propagation, start/stop/notification gate transitions, count updates, and no fabricated `notificationVisible` assertions.
+- Record precise GitHub Actions runs/job outcomes; no chat-local tests or physical device claim.
+- Keep physical ARM64 device release certification `BLOCKED` in [issue #44](https://github.com/MousaXD/Slopity/issues/44) until explicitly authorized device evidence is reviewed.
+- Open draft PR targeting `feat/owner-integration-20261106` for Agent 00; do not merge.
+
+### Implementation and evidence at this commit
+
+- Native foreground-service starts now use per-request asynchronous acknowledgement only after Android `startForeground()` returns; an unacknowledged request times out after 15 seconds. Canceled queued starts cannot promote a service, and service destruction rejects pending invokes.
+- Preserve stop-pending state across attempted count updates and retain active state while a stop is requested; native `stopHosting` no longer reports unconditional successful shutdown or clears state after a thrown stop exception.
+- Create/check the actual notification channel before Rust preflight; a missing channel is not considered enabled. Status visibility remains an inference rather than actual physical observation.
+- Rust plugin requires acknowledged, nonpending, visible-gated, exact-count Android status; a failed acknowledgement rolls back the newly started Rust listener through existing application code, while avoiding blind termination of an existing host service relied upon by other listeners.
+- Add Rust acknowledgement regressions for pending/denied/stopped/mismatched states; update Android bridge README and device durability cases; probe redacts device serial and timestamps ADB disconnect state.
+- `apps/slopity/src-tauri/src/lib.rs` intentionally unchanged to avoid racing Agent 00's runtime admission work. Existing reconciliation is observation-triggered, not an always-on watchdog.
+- Validation: changes are committed for GitHub-hosted exact-head Rust and Android ARM64 checks. No chat-local tests, emulator, or physical-device test was performed; no CI result claimed until the run completes. Physical certification remains **BLOCKED** under issue #44.
+- Pre-PR static review follow-up: corrected nullable Android `Intent?` access in Kotlin, and latched native shutdown before requesting `stopService` so an overlapping queued start cannot outrun a Rust-owned stop. CI compilation remains pending.
+- Android platform-restriction follow-up: replaced the new notification stop action's Android 12+ prohibited service-to-activity trampoline with a direct immutable Activity PendingIntent. Native `HostPlugin` processes the initial/new Activity Intent using a one-time per-process stop token; old service-action notifications keep a fallback. Rust-side reconciliation is still observation-triggered, not guaranteed by the Intent alone. No physical-device behavior claim.
+- Added `HostForegroundServiceTest.kt` Android local JVM regression scenarios for delayed acknowledgement, shutdown cancellation, preserving an acknowledged host on an update failure, and failed promotion with multiple pending starts. Added a scoped JUnit test dependency. These tests must be run by a generated Android Gradle unit-test task in CI; merely checking in the tests is not passing evidence. Agent 01 owns workflow wiring if absent.
+- Exact-head `076a5fc93dfb21f088a311cbfa2a91a0ffa10c6c` passed [Cross-platform CI 42281473924](https://github.com/MousaXD/Slopity/actions/runs/42281473924): Rust quality, Linux Tauri, Android ARM64 debug/manifest, Windows NSIS. Also passed [PR release-package run 42281473893](https://github.com/MousaXD/Slopity/actions/runs/42281473893): Linux and Android debug packages; release publication skipped. These checks do not execute Kotlin JUnit tests or prove physical-device lifecycle.
+- Post-CI review identified overlapping native start requests could produce a successful `startForeground` callback with `startRequestPending=true`, causing Rust's confirmed-host check to reject the first caller and potentially introduce out-of-order server count updates. Native request registration is now serialized (one pending promotion), with regression checks and an explicit retryable rejection message. CI must be repeated on the new exact HEAD.
+
+## Source history — specialist PR #53
+
+## Step 108: remove Clippy test-fixture type complexity without weakening QA
+
+**Status:** PARTIAL (test-fixture cleanup committed; fresh exact-head CI pending)  
+**Declared:** 2026-11-08  
+**Owner:** Agent 02 — PR #53 strict-lint follow-up.
+
+### Exact-head evidence and cause
+
+- [Cross-platform CI #42492183851](https://github.com/MousaXD/Slopity/actions/runs/42492183851), head `b13ca86ca95303656e767a9ca0feb2c0b6f94acf`: formatting, locked metadata and workspace tests passed, including all four new `concurrent_*` Tauri regressions. Strict Clippy failed at `apps/slopity/src-tauri/src/lib.rs:811` with `clippy::type_complexity` on the nested four-tuple return type of the **test-only** fixture helper. Linux/Android/Windows CI jobs skipped because Rust quality failed; no claims about downstream runs.
+- Previous release workflow success was for the earlier head and cannot certify this SHA. [Release workflow #42492183847](https://github.com/MousaXD/Slopity/actions/runs/42492183847) may still be queued.
+
+### Scope, risks, and non-goals
+
+- Convert only the `#[cfg(test)]` `test_fixture()` return value from a complex tuple into a named `TestFixture` struct with identical store/orchestrator/launch evidence/temporary-directory ownership. Destructure it at its two call sites, preserving assertions and thread interleavings.
+- No lint suppressions, disabled checks, mutated production lock logic, authorization changes, new runtime functionality, Android plugin changes, dependency/workflow edits, PR #46 edits, merges or direct main/dev edits.
+- Intended files: `apps/slopity/src-tauri/src/lib.rs` (test-only type simplification), `PROGRESS.md`.
+
+### Acceptance (GitHub-hosted only)
+
+- Exact-head rustfmt, locked metadata, workspace tests and strict all-targets all-features Clippy; four named race tests must remain green.
+- Linux Tauri, Android ARM64 debug, Windows NSIS, release-package/no-publish checks on revised head; independent QA re-review, coordinated integration and final integrated-head validation remain separate.
+- No local or physical-device test claims.
+
+### Implementation and evidence
+
+- Replaced only the test fixture's nested four-tuple return with a named `TestFixture` struct and two destructuring statements. The same four references (profile store, orchestrator, recorded adapter requests and RAII temp directory) retain their types, owners, and behavior.
+- No lock-order, admission, runtime adapter, assertion, error/recovery, host-service or production behavior changed, and no lint suppression added. Changed files: `apps/slopity/src-tauri/src/lib.rs`, `PROGRESS.md`.
+- [CI #42492183851](https://github.com/MousaXD/Slopity/actions/runs/42492183851) proved all four named race tests pass; Clippy flagged the exact tuple. New exact-head GitHub Actions validation is **pending** at implementation commit time, so no current-head pass is claimed. No local or physical-device tests were run.
+- Independent QA review and final integration-head test matrix are still required. Signing/real-device release gates remain outside scope.
+
+
+## Step 107: restore strict rustfmt gate for atomic Tauri start
+
+**Status:** PARTIAL (format-only correction committed; exact-head CI pending)  
+**Declared:** 2026-11-08  
+**Owner:** Agent 02 — PR #53 follow-up.
+
+### Observed exact-head CI failure
+
+- [Cross-platform CI #42487457518](https://github.com/MousaXD/Slopity/actions/runs/42487457518), exact implementation head `2ce76bd6e2fa945df5acf26df4d11bc9e5491997`, failed only after reaching `cargo fmt --all -- --check`. The log precisely lists formatting diffs in `apps/slopity/src-tauri/src/lib.rs` for import wrapping, profile lookup layout, stopped guard signature, test imports, fixture initialization, mutation error assertion, LAN match arm, and excess blank line. Downstream Rust tests/Clippy/Linux/Windows/Android CI skipped as a consequence; do not claim they passed or failed.
+- [Release packages #42487457496](https://github.com/MousaXD/Slopity/actions/runs/42487457496) succeeded on the same patch head, with Android ARM64 and Linux .deb/AppImage jobs successful and prerelease publication skipped.
+
+### Scope and non-goals
+
+- Apply **only** exact formatting changes requested by rustfmt 1.89 to `apps/slopity/src-tauri/src/lib.rs`. Preserve the Step 106 mutex transaction, existing assertions, fake adapter interleavings, host-service rollback, diagnostic behavior and all runtime security logic.
+- No CI/workflow/dependency changes; no weakening tests, no Android plugin edits, no PR #46 edits, no main/dev changes or merges.
+- Intended files: `apps/slopity/src-tauri/src/lib.rs` and this `PROGRESS.md` entry.
+
+### Acceptance
+
+- GitHub-hosted `cargo fmt --all -- --check`, `cargo metadata --locked`, Rust workspace tests and strict Clippy must pass on the revised exact head, including all four threaded start/mutation regressions.
+- Downstream Linux Tauri, Windows NSIS, Android ARM64 and PR-safe release-package jobs must pass (publisher skipped); independent QA #45 must re-review semantics.
+- Evidence and limitations to be updated with the implementation commit. No local or device testing claims.
+
+### Implementation and evidence
+
+- Applied only the exact Rust 1.89 rustfmt diff from failed [job #128752351465](https://github.com/MousaXD/Slopity/actions/runs/42487457518/job/128752351465): line wraps, signature layout, and one extra blank line; no assertion, lock-order, authorization, error or adapter behavior changed.
+- Changed files: `apps/slopity/src-tauri/src/lib.rs`, `PROGRESS.md` only. No local tests or platform/device checks run.
+- Revised exact-head GitHub Actions results: **pending** at commit creation. Previous #42487457518 failed at rustfmt and did not exercise tests or Clippy; release workflow #42487457496 passed but does not certify the new head.
+- Independent QA review and final integrated-head validation remain required before merge. No Android real-device or production release proof is claimed.
+
+
+## Step 106: atomic Tauri profile-to-runtime start transaction
+
+**Status:** PARTIAL (implementation committed; exact-head GitHub Actions and independent QA pending)  
+**Declared:** 2026-11-08  
+**Owner:** Agent 02 — isolated Tauri race fix, Agent 00 integration coordination.
+
+### Scope and invariant
+
+- Close QA issue #45's profile edit/start TOCTOU window in `apps/slopity/src-tauri/src/lib.rs`: a previously cloned profile cannot launch after an edit, disable, deletion, port change or loopback-to-LAN change has committed.
+- Treat profile lookup, currently committed profile collection, authorization, and `ServerOrchestrator::start` as one transaction under a consistent **profile-store lock → orchestrator lock** order. The mutation paths already use this order; centralize their guard logic where practical.
+- Take native device telemetry before the transaction; do **not** call host-service/native plugin APIs while either mutex is held. Preserve the existing host-service startup/rollback and runtime failure diagnostics.
+- Test both possible linearizations: mutation before start sees the latest profile; mutation attempted during start cannot commit until start completes, then active-runtime safety rejects the mutation. Cover disable, delete, changed port and loopback→LAN scope with deterministic barriers/channels and a fake runtime adapter (no hardware/device assertions).
+
+### Intended files
+
+- `apps/slopity/src-tauri/src/lib.rs` (Tauri commands, private transaction helpers, scoped concurrency regressions).
+- `PROGRESS.md` (this entry only).
+
+### Non-goals
+
+- No changes to Rust core admission permits or PR #46, Android plugin/Kotlin, CI workflow configuration, frontend behavior, supported-runtime claims, or `main`/`dev`.
+- No merge, release, lockfile churn, weakening of tests/authorization, automation, or physical-device claims.
+
+### Risks
+
+- A long-running adapter startup under both locks may block concurrent profile mutations temporarily; it must never invert lock ordering.
+- Host-service native calls occur after the runtime transaction; their own asynchronous foreground visibility/rollback risk remains assigned to Agent 04 and independent QA.
+- Final integration must reconcile this Tauri-only PR with PR #46 and all other agent changes, then rerun exact-head gates.
+
+### Acceptance checks — GitHub-hosted only
+
+- Four named deterministic start/mutation regressions (disable, delete, port update, scope update), plus mutation-first behavior and existing host reconciliation/failed-stop assertions.
+- `cargo fmt --all -- --check`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo metadata --locked`.
+- Linux Tauri compile, Windows NSIS, Android ARM64 debug packaging, security/release workflow gates; PR publication skipped. Record exact-head result links truthfully.
+- Add no claims about local tests, physical Android durability or signed production builds.
+
+### Implementation and evidence
+
+- Implemented Tauri-only atomic start transaction: native telemetry before locks; profile lookup, current profile collection, admission permit and adapter startup within one store → orchestrator lock scope. Native host-service start, rollback and reconciliation remain outside both locks.
+- Routed edit, enable/disable and delete commands through the same stopped-profile guard helper; retain durable profile commits and existing stop failure behavior.
+- Added four named concurrent start/profile mutation regressions covering disabled, deleted, modified port and loopback→LAN exposure, each checking both start-wins (in-flight profile lock held, mutation rejected) and mutation-wins (latest profile honored). A no-socket fake runtime adapter records the exact authorized profile.
+- Files changed: `apps/slopity/src-tauri/src/lib.rs`, `PROGRESS.md`. No Android plugin, runtime core, security checks, dependency, workflow, release or frontend files changed.
+- GitHub-hosted `cargo fmt`, locked Rust workspace tests, strict Clippy, Linux Tauri, Android ARM64, Windows NSIS, security and release-package checks: **pending** at implementation commit creation. No local tests or physical-device checks were run; no CI success is claimed here.
+- Outstanding: request independent Agent 06 review of this Tauri fix; coordinate Agent 00 integration alongside PR #46 and Agent 04 host-service work; validate on the final integrated SHA. Running adapter starts may temporarily hold two locks; asynchronous foreground host acknowledgement remains separately unverified.
+
+## Source history — specialist PR #54
+
+## Step 052: fix upstream Tauri cross-WebView IPC isolation flaw (GHSA-w28w-mhc8-qvjv)
+
+**Status:** IMPLEMENTED — proposed change in this commit; exact-head GitHub CI/audit/package verification REQUIRED before certification.  
+**Declared:** 2026-11-08  
+**Owner:** Agent 05, isolated stacked branch `agent-05/tauri-2-11-6-ipc-security`, based on Agent 05 certified PR #48 exact head `78fa630b9dd87d1b717a59f35e3011332b43ca78`.
+
+### Security evidence and risk
+
+- Tauri public advisory [GHSA-w28w-mhc8-qvjv](https://github.com/tauri-apps/tauri/security/advisories/GHSA-w28w-mhc8-qvjv) (High, published 2026-09-26) affects `tauri >=2.0.0, <=2.11.5`. The local `Cargo.lock` resolves `tauri 2.11.5`. An attacker-controlled WebView with Tauri IPC access could retrieve queued channel responses belonging to another WebView due to the unscoped fetch command. **No exploit or reachable attacker-controlled second WebView has been established in Slopity.**
+- The upstream advisory identifies **`tauri 2.11.6`** as patched. The official upstream `tauri-v2.11.6` workspace declares `rust-version = "1.77.2"`, compatible with Slopity's pinned Rust 1.89.0 and workspace MSRV 1.82.
+- Existing [Dependabot PR #20](https://github.com/MousaXD/Slopity/pull/20) supplies a narrowly scoped lockfile patch: `tauri 2.11.5 -> 2.11.6` and registry checksum `667b20e2... -> 6fa5bacd...`. It changes no manifest or transitive package entry. Do not merge the stale bot PR itself into the integration branch.
+- This upstream GitHub advisory is a **separate finding** from the seven RustSec warnings tracked under issue #52. Cargo audit success on PR #48 must not be misrepresented as proof that this patched GHSA is unnecessary.
+
+### Planned implementation and boundaries
+
+- Change **only the `tauri` record's `version` and `checksum` in `Cargo.lock`**, using the exact independently reviewed Dependabot #20 values; leave every other package, feature graph, Rust toolchain and npm lockfile unchanged.
+- Update the supply-chain review to document this additional externally disclosed High finding, its patched disposition, GHSA vs Cargo-audit coverage limits, and the cross-WebView reachability uncertainty.
+- Update this ledger in the same implementation commit, referencing the exact new source SHA as soon as known.
+- No app code, workflows, Android service, UI, PolyForm license, `main`/`dev`, release publishing, bulk Dependabot merges, or glib/GTK migration. Keep original PR #48 unmodified; submit a **separate draft stacked PR targeting `fix/slopity-deps-agent05`** for Agent 00 sequencing.
+
+### Implementation evidence (exact-head validation pending)
+
+- Applied the single-package `Cargo.lock` change `tauri 2.11.5 -> 2.11.6` using the exact published Dependabot PR #20 registry checksum `6fa5bacdb9bbad5954af3d1bd6cf6ae9192cab1b2e270f4a07f904610b9e85f4` (old `667b20e2726d572dea2de7370da16e188eb06008faf9a92fab7cdc46791190b5`). All other lock packages and dependency relationships unchanged.
+- Updated `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md` to include the additional High-severity GitHub advisory and its patched version. No Rust/TypeScript/Kotlin runtime code, workflow, manifest, npm lock, license, `main` or `dev` edits.
+- The earlier green checks for Agent 05 PR #48 do **not** certify this source commit. Wait for the new draft PR exact-head GitHub Actions; do not claim success or merge before completed. The seven unrelated RustSec warnings remain open under #52.
+
+### Acceptance gates
+
+- GitHub-hosted exact-head Rust 1.89.0 formatting, `cargo metadata --locked`, all-features workspace tests, strict Clippy; Linux Tauri compilation; Windows NSIS; Android ARM64 APK/AAB and foreground-service manifest.
+- Cargo audit (report all **seven** existing allowed warnings honestly), npm audit, GitHub dependency review and pull-request package validation (no publish).
+- Inspect exact PR patch to prove no manifest/workflow/other resolved dependency changes; classify risk as patched only after exact-head CI succeeds. Do not extrapolate PR #48 historical green checks to this new source SHA.
+
+## Step 051: remediate Tokio I/O-safety advisory without expanding Rust toolchain
+
+**Status:** DONE (Step 051 implementation at `728fa08` verified by all required exact-head GitHub Actions; seven pre-existing advisory warnings tracked in issue #52)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 05 on `fix/slopity-deps-agent05`, following Step 050's confirmed exact-head CI.
+
+### Finding and declared change
+
+- The [Step 050 Cargo audit job 128106136604](https://github.com/MousaXD/Slopity/actions/runs/42279980285/job/128106136604) passed, yet its detailed output shows **eight allowed warnings** rather than zero findings. Two are `unsound`, not ordinary `vulnerability` advisories. No warning is suppressed.
+- RUSTSEC-2026-0386 affects locked `tokio 1.53.1`; the RustSec patched range includes **`>=1.53.3`**. Choose exactly `1.53.3` instead of major or 1.54.0, avoiding unrelated changes and the separately documented Tokio 1.54.0 regression.
+- Upstream `tokio-1.53.3/tokio/Cargo.toml` declares `rust-version = "1.71"`, compatible with the repo's actual pinned Rust 1.89.0 and declared workspace MSRV 1.82. Independently corroborated the registry checksum `ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e` against a public Rust project's resolved lockfile; CI must still resolve and validate bytes via Cargo.
+- Scope: **only** update `Cargo.lock` Tokio 1.53.1 → 1.53.3 version/checksum; update `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md` to correct the earlier false impression of zero advisories and triage all eight original warnings with the Tokio disposition; update this entry **in the same implementation commit** with evidence and limitations.
+
+### Non-goals and ownership
+
+- No edits to Rust source, Tauri runtime, frontend, Android service, workflows, npm lockfile, Dependabot configuration, or PolyForm license. No command execution/download feature, no auto-merge, no signed release, no `main`/`dev` changes.
+- Do **not** update `glib 0.18.5` independently: GTK/Tauri ABI and build constraints need Agent 01 + Agent 02 cross-platform validation. No blanket warning ignore or audit weakening.
+- The six unmaintained transitive crates require ownership-path review, not unverified mass upgrades; document and delegate appropriately.
+- If Cargo `--locked` metadata or Rust 1.89 CI fails on a checksum/dependency change, stop and record the exact failure; do not disable checks.
+
+### Intended files
+
+- `Cargo.lock`
+- `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md`
+- `PROGRESS.md` (same-implementation-commit completion evidence)
+
+### Acceptance
+
+- Exact-head GitHub-hosted `cargo metadata --locked`, formatting, locked workspace tests, strict Clippy on Rust 1.89, Cargo audit with Tokio RUSTSEC-2026-0386 **absent**, npm audit and dependency review.
+- Linux Tauri, Android ARM64 build/manifest, Windows NSIS and release package validation all remain passing, with pull-request publication skipped.
+- Accurately report any remaining unmaintained or soundness advisories; no false claim that green Cargo audit means a warning-free graph.
+
+### Implementation and initial evidence
+
+- Per Step 051 plan, changed **only** the Tokio `Cargo.lock` package version `1.53.1 -> 1.53.3` and checksum `202ca... -> ce3335...`; no Tokio dependency names/features, application manifests, or other crate entries were altered manually. The checksum is corroborated by publicly published resolved Cargo locks; hosted Cargo --locked checks are the acceptance authority.
+- Documented the eight original allowed warnings and dispositions in `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md`; corrected the incorrect suggestion that a passing cargo audit had no informational advisories. Kept all warnings enabled; no `--ignore`.
+- The original Step 050 implementation `bdfebbf` passed audit, Rust/Linux/Android/Windows CI and PR release packaging as linked above. **No local tests were executed.**
+- New Step 051 exact-head CI remains **pending** at this commit; completion depends on the selected new SHA's audit (Tokio warning absent) and unchanged cross-platform/release gates.
+- The `glib 0.18.5` unsoundness warning and six unmaintained dependency warnings are not fixed in this narrow compatibility-preserving update; their remediations are delegated for separate reviewed changes.
+
+### Final exact implementation-head CI verification (2026-11-06)
+
+- **Verified implementation SHA:** `728fa080d345650da008658820da77e2e905ee16` on draft [PR #48](https://github.com/MousaXD/Slopity/pull/48), targeting `feat/owner-integration-20261106`. The implemented lockfile and source tree were tested on this exact SHA. No local tests ran.
+- [Cross-platform CI run **42284699140**](https://github.com/MousaXD/Slopity/actions/runs/42284699140): **success**. Rust 1.89.0 `cargo fmt --all -- --check`, `cargo metadata --locked --format-version 1`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` all **passed**. Linux Tauri compilation, Android ARM64 debug APK/AAB + manifest validation, and Windows x64 NSIS build/validation all **passed**.
+- [Security and dependency audit run **42284699790**](https://github.com/MousaXD/Slopity/actions/runs/42284699790): **success** for Cargo vulnerability audit, npm audit (`found 0 vulnerabilities`), and GitHub dependency review. Cargo-audit log: **7 allowed warnings**, down from 8 at Step 050; **RUSTSEC-2026-0386 (`tokio`) is absent** after pinned Tokio 1.53.3, with 6 `unmaintained` crate warnings and `glib 0.18.5` **RUSTSEC-2024-0429 (`unsound`) still present**. No warning suppression or audit configuration change.
+- [Package and publish releases run **42284699112**](https://github.com/MousaXD/Slopity/actions/runs/42284699112): **success**. Linux `.deb` and AppImage bundles and Android ARM64 debug packages succeeded, including artifacts upload; GitHub prerelease publication **skipped** for PR as intended.
+- Unresolved GTK/Tauri and unmaintained transitive-dependency risk documented and delegated in [issue #52](https://github.com/MousaXD/Slopity/issues/52). No merge or production-signing/physical-device certification. Any independent `main` integration merge still requires the coordinator's explicit decision and CI on the final integration SHA.
+- **Closeout note:** this progress-only documentation update follows the verified implementation SHA, so it creates a **new PR head**; the latest head's required checks must also pass before the coordinator accepts the PR. Do not mislabel the above historical implementation SHA's green results as validation of this new documentation SHA.
+
+## Step 050: Agent 05 narrowly scoped dependency and supply-chain audit
+
+**Status:** DONE (Step 050 implementation validated at bdfebbf; follow-up advisory remediation planned separately)  
+**Declared:** 2026-11-06  
+**Updated:** 2026-11-06  
+**Owner:** Agent 05, branch `fix/slopity-deps-agent05`, based on integration PR #43 head `31d524fba0b72a4a79ec7d6bac3b97c749d564f2`.
+
+### Scope and baseline
+
+- Independently review the resolved Cargo/npm lock graphs, pinned Rust compiler, GitHub Actions pins, exact-head audit jobs, 15 outstanding Dependabot PRs, executable/package trust boundaries, and reproducibility limitations.
+- Review [integration audit 42275322860](https://github.com/MousaXD/Slopity/actions/runs/42275322860) and [cross-platform CI 42275322969](https://github.com/MousaXD/Slopity/actions/runs/42275322969), both successful on the integration commit; release-package run 42275322783 was pending at initial inspection.
+- Apply exactly one reviewable, low-risk Rust lockfile patch: `serde_json 1.0.151 -> 1.0.154` with the registry checksum and unchanged dependency relationships from [Dependabot PR #29](https://github.com/MousaXD/Slopity/pull/29). Keep the existing semver-compatible workspace manifest; no unrelated `cargo update`.
+- Align `.github/dependabot.yml` target branches to supported `main`, which is the destination of integration PR #43 and the security-supported trunk defined in `SECURITY.md`; do not retarget existing bot PRs in this step.
+- Write `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md` with per-PR disposition, threat-model recommendations for *future* packages, action/provenance review, and unresolved risks. Cross-reference it from `docs/SECURITY_MODEL.md`.
+
+### Non-goals, coordination, risks
+
+- Never modify `.github/workflows/**` (Agent 01); do not change frontend dependencies (Agent 03), runtime execution (Agent 02), or Android code (Agent 04).
+- No package download/extraction/execution feature, no runtime support claim, no `main`/`dev` edits, no merge, no auto-merge, no release, and no PolyForm license change.
+- The Cargo 1.89.0 pin is an application test contract; do not raise it to satisfy a speculative dependency. Verify the updated lockfile with `--locked`, and revert on confirmed incompatibility.
+- GitHub Actions uses moving hosted images and scanner toolchain, so passing audits are time- and commit-scoped rather than permanent supply-chain certification.
+- Existing Dependabot action-major PRs were authored against older workflow trees; avoid bulk merging and coordinate any future action pin updates with Agent 01.
+
+### Intended files
+
+- `Cargo.lock`
+- `.github/dependabot.yml`
+- `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md` (new)
+- `docs/SECURITY_MODEL.md`
+- `PROGRESS.md` (implementation, checks, results, and honest completion state **in the same implementation commit**)
+
+### Acceptance checks (GitHub-hosted; record exact head)
+
+- Rust formatting; `cargo metadata --locked`; `cargo test --workspace --all-features --locked`; strict all-targets Clippy with `--locked`, using Rust 1.89.0.
+- Cargo vulnerability audit, `npm audit`, GitHub dependency review, frontend checks, Linux Tauri, Android ARM64 build/manifest, Windows NSIS, and non-publishing PR release-package validation.
+- Verify only the intended lockfile package/checksum and `main` Dependabot targets change. No physical Android device, production signing, or provenance claim from CI alone.
+
+
+### Implementation and evidence at implementation commit
+
+- Inspected all 15 open Dependabot PR patches, integration manifests/lockfile, pinned workflows, release permission model and untrusted executable boundary. Wrote the per-PR triage and future package verification gates in `docs/DEPENDENCY_SECURITY_REVIEW_2026-11-06.md`.
+- Changed exactly the `serde_json` package's version/checksum in `Cargo.lock` from 1.0.151 to 1.0.154, using the independently supplied checksum in #29; no additional package graph entry or manifest range changed.
+- Changed exactly three Dependabot `target-branch` fields `dev -> main`; aligned `docs/SECURITY_MODEL.md` with built-in HTTP runtime support and unverified Android hosting.
+- Remote baseline (before modification): [Rust / Linux / Android / Windows green](https://github.com/MousaXD/Slopity/actions/runs/42275322969), [Cargo/npm/dependency-review green](https://github.com/MousaXD/Slopity/actions/runs/42275322860). These validate only original integration head `31d524f`.
+- Static checks performed in GitHub connector: exact old serde_json version/checksum present exactly once; substitution makes only requested package metadata change; three `dev` target branches found; no workflow/source/licensing files written. **No local tests run.**
+- **Exact implementation-head CI: pending until draft PR is opened.** Do not mark this step DONE, close Dependabot #29, or merge before independently checking all new SHA jobs. Release-packaging status to be rechecked and cited separately.
+- Remaining action, CLI, Rust Tauri and package-management risks are delegated to their owning agents, with no implied approval or suppression.
+
+### Post-implementation verification (2026-11-06)
+
+- Exact implementation-head `bdfebbf8c14fc0cfb9c70b9d0fb5320d780dc198`: [cross-platform CI 42279980309](https://github.com/MousaXD/Slopity/actions/runs/42279980309) **success** (Rust 1.89.0 fmt, locked metadata/tests, strict Clippy, Linux Tauri, Android ARM64 debug + manifest, Windows NSIS); [audit 42279980285](https://github.com/MousaXD/Slopity/actions/runs/42279980285) **success** (Cargo audit, npm audit, dependency review); [release packaging 42279980270](https://github.com/MousaXD/Slopity/actions/runs/42279980270) **success** (Linux .deb/AppImage and Android debug APK/AAB); GitHub prerelease publishing was **skipped** as expected.
+- **Factual correction:** a successful Cargo audit does not mean no advisories. Its detailed log reported **8 allowed warnings**: six **unmaintained** dependencies (`proc-macro-error`, `unic-char-property`, `unic-char-range`, `unic-common`, `unic-ucd-ident`, `unic-ucd-version`) and two **unsound** dependencies (`glib 0.18.5` RUSTSEC-2024-0429; `tokio 1.53.1` RUSTSEC-2026-0386). No vulnerability-class failures were reported, but these warnings require transparent triage. Step 051 handles the patched Tokio advisory; glib and unmaintained transitive crates remain explicit review risks.
+- This post-checkpoint documentation does not change the evidence for `bdfebbf`; new commits require their own exact-head CI. No merge authorized.
 
 ## Step 033: owner-controlled cross-workstream integration candidate
 

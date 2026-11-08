@@ -50,6 +50,19 @@ impl HostServiceStatus {
             && self.notifications_enabled
             && self.notification_channel_enabled
     }
+
+    /// Confirms the native service acknowledged startForeground(), not merely
+    /// that Android accepted a request to start it. The notification visibility
+    /// bit is a native delivery-gate inference, not physical-device evidence.
+    pub fn foreground_start_acknowledged(&self, expected_count: u32) -> bool {
+        self.platform == "android"
+            && self.active
+            && !self.start_request_pending
+            && !self.stop_request_pending
+            && self.notification_visible
+            && self.notification_delivery_available()
+            && self.active_server_count == expected_count
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -211,10 +224,12 @@ impl<R: Runtime> HostServiceBridge<R> {
             }
 
             let status = self.mobile.start(label, active_server_count)?;
-            if status.active && !status.notification_delivery_available() {
-                let _ = self.mobile.stop();
+            if !status.foreground_start_acknowledged(active_server_count) {
+                // Do not blindly stop an existing foreground service: other
+                // Rust-owned servers may still depend on it. The application
+                // rolls back this listener and reconciles the remaining count.
                 return Err(
-                    "Android foreground hosting started without a deliverable notification; the host service was stopped conservatively."
+                    "Android did not acknowledge visible foreground hosting with the expected active-server count; the new listener must be rolled back."
                         .into(),
                 );
             }
@@ -430,6 +445,46 @@ mod tests {
         status.notifications_enabled = true;
         status.notification_channel_enabled = false;
         assert!(!status.notification_delivery_available());
+    }
+
+    #[test]
+    fn android_acknowledgement_requires_confirmed_visible_matching_service() {
+        let mut status = HostServiceStatus {
+            platform: "android".into(),
+            active: true,
+            start_request_pending: false,
+            notification_visible: true,
+            notification_permission_granted: true,
+            notification_permission_required: true,
+            notifications_enabled: true,
+            notification_channel_enabled: true,
+            label: "Hosting".into(),
+            active_server_count: 2,
+            stop_request_pending: false,
+            reason: String::new(),
+        };
+        assert!(status.foreground_start_acknowledged(2));
+        assert!(!status.foreground_start_acknowledged(1));
+        status.start_request_pending = true;
+        assert!(!status.foreground_start_acknowledged(2));
+        status.start_request_pending = false;
+        status.stop_request_pending = true;
+        assert!(!status.foreground_start_acknowledged(2));
+        status.stop_request_pending = false;
+        status.active = false;
+        assert!(!status.foreground_start_acknowledged(2));
+        status.active = true;
+        status.notification_visible = false;
+        assert!(!status.foreground_start_acknowledged(2));
+        status.notification_visible = true;
+        status.notification_permission_granted = false;
+        assert!(!status.foreground_start_acknowledged(2));
+        status.notification_permission_granted = true;
+        status.notification_channel_enabled = false;
+        assert!(!status.foreground_start_acknowledged(2));
+        status.notification_channel_enabled = true;
+        status.notifications_enabled = false;
+        assert!(!status.foreground_start_acknowledged(2));
     }
 
     #[test]

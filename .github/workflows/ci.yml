@@ -43,8 +43,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          # Retry stalled downloads without cutting off a slow but progressing package set.
+          # The GitHub job timeout remains the overall wall-clock bound.
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 update
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \
@@ -82,8 +91,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          # Retry stalled downloads without cutting off a slow but progressing package set.
+          # The GitHub job timeout remains the overall wall-clock bound.
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 update
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \
@@ -152,6 +170,9 @@ jobs:
       - name: Build ARM64 debug APK and AAB
         working-directory: apps/slopity
         run: npm run android:build -- --debug --target aarch64
+      - name: Run native Android host JUnit tests
+        shell: bash
+        run: bash scripts/check-android-host-junit.sh
       - name: Validate merged Android host manifest
         shell: bash
         run: |
