@@ -808,12 +808,14 @@ mod tests {
         }
     }
 
-    fn test_fixture() -> (
-        Arc<SharedProfileStore>,
-        Arc<SharedOrchestrator>,
-        Arc<Mutex<Vec<ServerProfile>>>,
-        TestProfileDir,
-    ) {
+    struct TestFixture {
+        store: Arc<SharedProfileStore>,
+        orchestrator: Arc<SharedOrchestrator>,
+        started: Arc<Mutex<Vec<ServerProfile>>>,
+        _dir: TestProfileDir,
+    }
+
+    fn test_fixture() -> TestFixture {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
             "slopity-tauri-start-{}-{}",
@@ -831,12 +833,12 @@ mod tests {
                 started: Arc::clone(&started),
             }))
             .unwrap();
-        (
-            Arc::new(Mutex::new(store)),
-            Arc::new(Mutex::new(orchestrator)),
+        TestFixture {
+            store: Arc::new(Mutex::new(store)),
+            orchestrator: Arc::new(Mutex::new(orchestrator)),
             started,
-            TestProfileDir(path),
-        )
+            _dir: TestProfileDir(path),
+        }
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -869,7 +871,12 @@ mod tests {
     }
 
     fn assert_start_wins_over_concurrent_mutation(mutation: TestMutation) {
-        let (store, orchestrator, started, _dir) = test_fixture();
+        let TestFixture {
+            store,
+            orchestrator,
+            started,
+            _dir,
+        } = test_fixture();
         let (read_tx, read_rx) = mpsc::channel();
         let (resume_tx, resume_rx) = mpsc::channel();
         let start_store = Arc::clone(&store);
@@ -927,7 +934,12 @@ mod tests {
     }
 
     fn assert_mutation_wins_before_start(mutation: TestMutation) {
-        let (store, orchestrator, started, _dir) = test_fixture();
+        let TestFixture {
+            store,
+            orchestrator,
+            started,
+            _dir,
+        } = test_fixture();
         let saved = apply_test_mutation(mutation, &store, &orchestrator).unwrap();
         let result = start_profile_transaction(
             &store,

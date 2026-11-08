@@ -2,7 +2,7 @@
 
 ## Step 108: remove Clippy test-fixture type complexity without weakening QA
 
-**Status:** IN PROGRESS (plan first; implementation pending)  
+**Status:** PARTIAL (test-fixture cleanup committed; fresh exact-head CI pending)  
 **Declared:** 2026-11-08  
 **Owner:** Agent 02 — PR #53 strict-lint follow-up.
 
@@ -25,7 +25,10 @@
 
 ### Implementation and evidence
 
-Pending strict-lint correction and new exact-head CI.
+- Replaced only the test fixture's nested four-tuple return with a named `TestFixture` struct and two destructuring statements. The same four references (profile store, orchestrator, recorded adapter requests and RAII temp directory) retain their types, owners, and behavior.
+- No lock-order, admission, runtime adapter, assertion, error/recovery, host-service or production behavior changed, and no lint suppression added. Changed files: `apps/slopity/src-tauri/src/lib.rs`, `PROGRESS.md`.
+- [CI #42492183851](https://github.com/MousaXD/Slopity/actions/runs/42492183851) proved all four named race tests pass; Clippy flagged the exact tuple. New exact-head GitHub Actions validation is **pending** at implementation commit time, so no current-head pass is claimed. No local or physical-device tests were run.
+- Independent QA review and final integration-head test matrix are still required. Signing/real-device release gates remain outside scope.
 
 
 ## Step 107: restore strict rustfmt gate for atomic Tauri start
