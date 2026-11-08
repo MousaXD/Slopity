@@ -1,5 +1,31 @@
 # Progress ledger
 
+## Step 052: fix upstream Tauri cross-WebView IPC isolation flaw (GHSA-w28w-mhc8-qvjv)
+
+**Status:** IN PROGRESS — planning checkpoint; code not yet changed.  
+**Declared:** 2026-11-08  
+**Owner:** Agent 05, isolated stacked branch `agent-05/tauri-2-11-6-ipc-security`, based on Agent 05 certified PR #48 exact head `78fa630b9dd87d1b717a59f35e3011332b43ca78`.
+
+### Security evidence and risk
+
+- Tauri public advisory [GHSA-w28w-mhc8-qvjv](https://github.com/tauri-apps/tauri/security/advisories/GHSA-w28w-mhc8-qvjv) (High, published 2026-09-26) affects `tauri >=2.0.0, <=2.11.5`. The local `Cargo.lock` resolves `tauri 2.11.5`. An attacker-controlled WebView with Tauri IPC access could retrieve queued channel responses belonging to another WebView due to the unscoped fetch command. **No exploit or reachable attacker-controlled second WebView has been established in Slopity.**
+- The upstream advisory identifies **`tauri 2.11.6`** as patched. The official upstream `tauri-v2.11.6` workspace declares `rust-version = "1.77.2"`, compatible with Slopity's pinned Rust 1.89.0 and workspace MSRV 1.82.
+- Existing [Dependabot PR #20](https://github.com/MousaXD/Slopity/pull/20) supplies a narrowly scoped lockfile patch: `tauri 2.11.5 -> 2.11.6` and registry checksum `667b20e2... -> 6fa5bacd...`. It changes no manifest or transitive package entry. Do not merge the stale bot PR itself into the integration branch.
+- This upstream GitHub advisory is a **separate finding** from the seven RustSec warnings tracked under issue #52. Cargo audit success on PR #48 must not be misrepresented as proof that this patched GHSA is unnecessary.
+
+### Planned implementation and boundaries
+
+- Change **only the `tauri` record's `version` and `checksum` in `Cargo.lock`**, using the exact independently reviewed Dependabot #20 values; leave every other package, feature graph, Rust toolchain and npm lockfile unchanged.
+- Update the supply-chain review to document this additional externally disclosed High finding, its patched disposition, GHSA vs Cargo-audit coverage limits, and the cross-WebView reachability uncertainty.
+- Update this ledger in the same implementation commit, referencing the exact new source SHA as soon as known.
+- No app code, workflows, Android service, UI, PolyForm license, `main`/`dev`, release publishing, bulk Dependabot merges, or glib/GTK migration. Keep original PR #48 unmodified; submit a **separate draft stacked PR targeting `fix/slopity-deps-agent05`** for Agent 00 sequencing.
+
+### Acceptance gates
+
+- GitHub-hosted exact-head Rust 1.89.0 formatting, `cargo metadata --locked`, all-features workspace tests, strict Clippy; Linux Tauri compilation; Windows NSIS; Android ARM64 APK/AAB and foreground-service manifest.
+- Cargo audit (report all **seven** existing allowed warnings honestly), npm audit, GitHub dependency review and pull-request package validation (no publish).
+- Inspect exact PR patch to prove no manifest/workflow/other resolved dependency changes; classify risk as patched only after exact-head CI succeeds. Do not extrapolate PR #48 historical green checks to this new source SHA.
+
 ## Step 051: remediate Tokio I/O-safety advisory without expanding Rust toolchain
 
 **Status:** DONE (Step 051 implementation at `728fa08` verified by all required exact-head GitHub Actions; seven pre-existing advisory warnings tracked in issue #52)  
