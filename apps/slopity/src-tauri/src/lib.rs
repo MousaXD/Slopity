@@ -456,14 +456,20 @@ fn incomplete_native_stop_message(
         // Attempting slopity_host_start here cannot restore or update the host.
         // Do not stop the existing foreground host while Rust listeners remain.
         details.push(
-            "Android stop is still pending; the existing foreground host is not stopped,              and a new native host start/update is intentionally not attempted"
+            concat!(
+                "Android stop is still pending; the existing foreground host is not stopped, ",
+                "and a new native host start/update is intentionally not attempted"
+            )
                 .into(),
         );
     } else {
         // Notification visibility is unavailable. A new start/update cannot be
         // used to claim safe hosting when that prerequisite is missing.
         details.push(
-            "foreground notification delivery is unavailable; native host              start/update is not attempted while visibility is unsafe"
+            concat!(
+                "foreground notification delivery is unavailable; native host ",
+                "start/update is not attempted while visibility is unsafe"
+            )
                 .into(),
         );
     }
