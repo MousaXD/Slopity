@@ -2,7 +2,7 @@
 
 ## Step 111: report incomplete Android native stop without rejected host restart
 
-**Status:** IN PROGRESS (plan-first; no source changes yet)  
+**Status:** PARTIAL (targeted fix and regression tests committed; exact-head GitHub-hosted checks and independent QA pending)  
 **Declared:** 2026-11-11  
 **Owner:** Agent 00  
 **Baseline:** PR #43 exact integrated head `c58dcda4943d656e9dde4b448603680f93b0eb4f`  
@@ -23,6 +23,14 @@
 - New Rust regression test covers an incomplete native stop with stop pending and the notification-unavailable case; no host restart/update in the incomplete-stop path.
 - Run exact-head Rust formatting, locked workspace tests and strict Clippy, frontend checks, Linux Tauri, Windows NSIS, Android ARM64 manifest + **actual** native Kotlin JUnit tests, security audit and PR package validation (publishing skipped) via GitHub Actions.
 - Obtain independent Agent 06 review on combined owner integration SHA after this fix; keep PR #43 draft, do not merge without independent GO and branch-protection requirements.
+
+
+### Implementation and validation status
+
+- `stop_servers_after_native_request` now accepts the observed host status and never calls `slopity_host_start` when one or more Rust runtimes remain active after a pending stop or an unavailable notification. It leaves the existing native host alone (if present), preserves potentially-live runtime state, and returns an explicit incomplete-shutdown error including surviving count and runtime-stop failures.
+- Added two Rust tests for pending native stop and notification-unavailable conditions, including explicit text that shutdown was not confirmed. Neither test is a physical Android device test; testing the pure error-decision function does not itself prove native calls.
+- No Kotlin, frontend, workflow, security, dependency, runtime-registration or release behavior changed.
+- **Validation pending:** no local build/test or exact-commit hosted Actions claim yet. Require Rust fmt/test/Clippy and full integrated platform, security and packaging workflows before any merge. Keep PR #43 draft pending independent QA.
 
 
 ## Step 110: serialize Tauri host-service operations across runtime lifecycle commands
