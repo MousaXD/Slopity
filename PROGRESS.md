@@ -1,5 +1,30 @@
 # Progress ledger
 
+## Step 112: owner-authorized v0.2.0 development merge and preview release
+
+**Status:** IN PROGRESS (plan committed before version changes; do not merge until exact-head GitHub CI)
+**Declared:** 2026-11-11
+**Owner:** Repository owner (Agent 00 coordinating), explicit instruction to complete safe merge with a version bump
+**Baseline:** PR #43 `5e0d8148d38e503afd8d0bac5f12023b594e3b7f` targeting `main` at `f57b7cee18dbf73b06eb64aa0c12212c4ca9333d`
+
+### Purpose, authorization, and disclosure
+- Bump the integrated Slopity overhaul to **0.2.0**, treating it as a source-level/development integration and **preview prerelease**, not a production-certified release.
+- User has explicitly authorized owner approval and final merge. Previous Agent 06 independent QA GO was not submitted for the final SHA; the coordinator **will not misrepresent owner review as independent QA**. Record the owner acceptance of that review-process exception with exact risk evidence.
+- The existing `v0.1.0` tag must stay immutable. A first `main` push with `0.2.0` automatically builds packages and publishes `v0.2.0` as a prerelease; production signing is intentionally unavailable.
+
+### Scope and non-goals
+- Intended files: `Cargo.toml`, `Cargo.lock` (five first-party workspace package versions only), `apps/slopity/package.json`, `apps/slopity/package-lock.json` (root package metadata only), `apps/slopity/src-tauri/tauri.conf.json`, `docs/releases.md`, new `CHANGELOG.md`, and this ledger.
+- No change to runtime behavior, source APIs, dependencies, Kotlin, frontend interactions, CI/release workflow logic, permissions, secrets, or production signing.
+- Preserve fail-closed host startup/stop recovery, allocator limits, UI functionality, Rust lock ordering, and all existing tests.
+- Existing RustSec audit permits **seven disclosed warnings** including unsound `glib 0.18.5` under issue #52; do not claim zero risk or close the issue without remediation. Physical Android durability #44, installed GUI accessibility, signing/provenance and rollback remain production blockers.
+
+### Acceptance and rollback
+- Verify every version declaration and lockfile matches `0.2.0`; ensure no `v0.2.0` tag or release exists before merging.
+- Review the final integrated safety-critical Rust/Kotlin command behavior and all 59 PR changed files by provenance and CI evidence where possible; report any remaining risks honestly.
+- Require **new exact-head** GitHub cross-platform CI (Rust fmt/tests/strict Clippy, frontend, Linux, Windows, Android Kotlin JUnit), Cargo/npm/dependency audit, and Linux/Android prerelease-package validation, with PR publication skipped.
+- Merge PR #43 through normal GitHub PR merge with exact expected SHA after automated checks and owner's documented explicit process waiver. Never force push or mutate `main` directly.
+- Verify post-merge `main` SHA, final CI, GitHub prerelease `v0.2.0` and its checksums. If the preview publication fails, keep the source merge truthful and diagnose before any tag or rerun; never rewrite existing tags.
+
 ## Step 111: report incomplete Android native stop without rejected host restart
 
 **Status:** PARTIAL (targeted fix and regression tests committed; exact-head GitHub-hosted checks and independent QA pending)  
