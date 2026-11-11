@@ -193,7 +193,7 @@ jobs:
           grep -q 'android:foregroundServiceType="specialUse"' "$manifest"
           echo "Validated merged host manifest: $manifest"
       - name: Upload Android debug packages
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: slopity-android-arm64-debug-${{ github.sha }}
           path: |
@@ -250,7 +250,7 @@ jobs:
           Copy-Item $packages[0].FullName "$env:GITHUB_WORKSPACE\ci-artifacts\windows\"
           Write-Host "Validated NSIS package: $($packages[0].FullName)"
       - name: Upload Windows NSIS package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: slopity-windows-x64-debug-nsis-${{ github.sha }}
           path: ci-artifacts/windows/*.exe
