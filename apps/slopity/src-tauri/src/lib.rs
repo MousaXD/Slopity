@@ -460,7 +460,7 @@ fn incomplete_native_stop_message(
                 "Android stop is still pending; the existing foreground host is not stopped, ",
                 "and a new native host start/update is intentionally not attempted"
             )
-                .into(),
+            .into(),
         );
     } else {
         // Notification visibility is unavailable. A new start/update cannot be
@@ -470,7 +470,7 @@ fn incomplete_native_stop_message(
                 "foreground notification delivery is unavailable; native host ",
                 "start/update is not attempted while visibility is unsafe"
             )
-                .into(),
+            .into(),
         );
     }
     details.push(format!(
