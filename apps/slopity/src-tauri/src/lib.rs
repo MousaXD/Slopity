@@ -353,7 +353,12 @@ fn host_reconciliation_action(
         return HostReconciliationAction::None;
     }
 
-    if status.stop_request_pending || !status.notification_delivery_available() {
+    // Android requires an acknowledged, visible notification while hosting.
+    // Desktop host status intentionally has no foreground notification.
+    if status.stop_request_pending
+        || !status.notification_delivery_available()
+        || (status.platform == "android" && status.active && !status.notification_visible)
+    {
         return HostReconciliationAction::StopServersAndHost;
     }
     if !status.active {
@@ -435,9 +440,54 @@ fn fail_safe_after_missing_host(
     Err(details.join("; "))
 }
 
+fn incomplete_native_stop_message(
+    remaining_active: usize,
+    stop_errors: &[String],
+    status: &HostServiceStatus,
+) -> String {
+    let mut details = if stop_errors.is_empty() {
+        vec![format!(
+            "native host stop request left {remaining_active} server(s) active"
+        )]
+    } else {
+        vec![format!(
+            "native host stop request could not stop every server: {}",
+            stop_errors.join(", ")
+        )]
+    };
+
+    if status.stop_request_pending {
+        // Kotlin rejects registerStartRequest while stopRequestPending is set.
+        // Attempting slopity_host_start here cannot restore or update the host.
+        // Do not stop the existing foreground host while Rust listeners remain.
+        details.push(
+            concat!(
+                "Android stop is still pending; the existing foreground host is not stopped, ",
+                "and a new native host start/update is intentionally not attempted"
+            )
+            .into(),
+        );
+    } else {
+        // Notification visibility is unavailable. A new start/update cannot be
+        // used to claim safe hosting when that prerequisite is missing.
+        details.push(
+            concat!(
+                "foreground notification delivery or visibility is unavailable; native host ",
+                "start/update is not attempted while visibility is unsafe"
+            )
+            .into(),
+        );
+    }
+    details.push(format!(
+        "{remaining_active} server(s) may still be active; shutdown was not confirmed"
+    ));
+    details.join("; ")
+}
+
 fn stop_servers_after_native_request(
     app: &tauri::AppHandle,
     orchestrator: &State<'_, SharedOrchestrator>,
+    status: &HostServiceStatus,
 ) -> Result<HostServiceStatus, String> {
     let (remaining_active, stop_errors) = stop_all_active_servers(orchestrator)?;
     if remaining_active == 0 {
@@ -451,26 +501,11 @@ fn stop_servers_after_native_request(
         ));
     }
 
-    let host_update = app.slopity_host_start(
-        hosting_label(None, remaining_active),
-        host_count(remaining_active),
-    );
-    let mut details = if stop_errors.is_empty() {
-        vec![format!(
-            "native host stop request left {remaining_active} server(s) active"
-        )]
-    } else {
-        vec![format!(
-            "native host stop request could not stop every server: {}",
-            stop_errors.join(", ")
-        )]
-    };
-    if let Err(error) = host_update {
-        details.push(format!(
-            "foreground notification could not be restored for remaining servers: {error}"
-        ));
-    }
-    Err(details.join("; "))
+    Err(incomplete_native_stop_message(
+        remaining_active,
+        &stop_errors,
+        status,
+    ))
 }
 
 fn reconcile_host_service(
@@ -496,7 +531,7 @@ fn reconcile_host_service(
                 )
             }),
         HostReconciliationAction::StopServersAndHost => {
-            stop_servers_after_native_request(app, orchestrator)
+            stop_servers_after_native_request(app, orchestrator, &status)
         }
     }
 }
@@ -696,6 +731,50 @@ mod tests {
         assert_eq!(
             host_reconciliation_action(2, &status),
             HostReconciliationAction::StopServersAndHost
+        );
+    }
+
+    #[test]
+    fn incomplete_native_stop_reports_surviving_servers_without_host_restart() {
+        let mut status = android_status(true, 2);
+        status.stop_request_pending = true;
+        assert_eq!(
+            host_reconciliation_action(2, &status),
+            HostReconciliationAction::StopServersAndHost
+        );
+        let detail = super::incomplete_native_stop_message(
+            1,
+            &["alpha: runtime stop failed".to_string()],
+            &status,
+        );
+        assert!(detail.contains("alpha: runtime stop failed"));
+        assert!(detail.contains("1 server(s) may still be active"));
+        assert!(detail.contains("native host start/update is intentionally not attempted"));
+        assert!(detail.contains("shutdown was not confirmed"));
+    }
+
+    #[test]
+    fn incomplete_stop_rejects_restarting_a_host_without_notifications() {
+        let mut status = android_status(true, 2);
+        status.notification_visible = false;
+        assert_eq!(
+            host_reconciliation_action(2, &status),
+            HostReconciliationAction::StopServersAndHost
+        );
+        let detail = super::incomplete_native_stop_message(2, &[], &status);
+        assert!(detail.contains("2 server(s) active"));
+        assert!(detail.contains("foreground notification delivery or visibility is unavailable"));
+        assert!(detail.contains("shutdown was not confirmed"));
+    }
+
+    #[test]
+    fn desktop_host_does_not_require_an_android_notification() {
+        let mut status = android_status(true, 2);
+        status.platform = "linux".into();
+        status.notification_visible = false;
+        assert_eq!(
+            host_reconciliation_action(2, &status),
+            HostReconciliationAction::None
         );
     }
 

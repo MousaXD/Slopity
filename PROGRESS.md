@@ -1,5 +1,39 @@
 # Progress ledger
 
+## Step 111: report incomplete Android native stop without rejected host restart
+
+**Status:** PARTIAL (targeted fix and regression tests committed; exact-head GitHub-hosted checks and independent QA pending)  
+**Declared:** 2026-11-11  
+**Owner:** Agent 00  
+**Baseline:** PR #43 exact integrated head `c58dcda4943d656e9dde4b448603680f93b0eb4f`  
+**Work branch:** `fix/slopity-native-stop-pending-reconciliation-agent00` (targets owner integration branch; not main)
+
+### Defect and safety invariant
+- When the Android foreground-service notification requests Stop, Kotlin sets `stopRequestPending=true`; `registerStartRequest` correctly rejects further start/update requests until shutdown completes.
+- If a Rust runtime fails to stop, `stop_servers_after_native_request` currently attempts `slopity_host_start` to refresh the count. That request is guaranteed to be refused by Kotlin's pending-stop latch, adding misleading recovery noise. The existing foreground host is intentionally not stopped while a potentially-live Rust listener remains.
+- Required invariant: never attempt a native host restart/update from this pending-stop or notification-unavailable recovery path; retain potentially live runtimes and existing error evidence, return a precise actionable error, and retry shutdown only on later observations/explicit stop.
+
+### Scope, non-goals and risks
+- Intended files: `apps/slopity/src-tauri/src/lib.rs` (narrow stop reconciliation and pure regression checks), and this `PROGRESS.md` entry.
+- Preserve admission fail-closed checks, store→orchestrator lock ordering, `HOST_OPERATION_GATE`, Kotlin native-stop state machine, host API contracts, runtime failure snapshots, notification safety, all frontend/UI functionality and code provenance.
+- Do not change `main`, release workflows, dependencies, Android Kotlin, security suppressions, runtime provider registration or packaging; do not claim physical Android device validation.
+- A stopped host must only be requested after no active runtime remains; an unsuccessful Rust stop must not be reported as successful host shutdown.
+
+### Acceptance
+- New Rust regression test covers an incomplete native stop with stop pending and the notification-unavailable case; no host restart/update in the incomplete-stop path.
+- Run exact-head Rust formatting, locked workspace tests and strict Clippy, frontend checks, Linux Tauri, Windows NSIS, Android ARM64 manifest + **actual** native Kotlin JUnit tests, security audit and PR package validation (publishing skipped) via GitHub Actions.
+- Obtain independent Agent 06 review on combined owner integration SHA after this fix; keep PR #43 draft, do not merge without independent GO and branch-protection requirements.
+
+
+### Implementation and validation status
+
+- `stop_servers_after_native_request` now accepts the observed host status and never calls `slopity_host_start` when one or more Rust runtimes remain active after a pending stop or an unavailable notification. It leaves the existing native host alone (if present), preserves potentially-live runtime state, and returns an explicit incomplete-shutdown error including surviving count and runtime-stop failures.
+- Added two Rust tests for pending native stop and notification-unavailable conditions, including explicit text that shutdown was not confirmed. Neither test is a physical Android device test; testing the pure error-decision function does not itself prove native calls.
+- No Kotlin, frontend, workflow, security, dependency, runtime-registration or release behavior changed.
+- **Hosted CI corrective finding:** [CI #42929811194](https://github.com/MousaXD/Slopity/actions/runs/42929811194) passed rustfmt but failed the new invisible-notification test: `host_reconciliation_action` returned `None` when Android reported active hosting without a visible notification while delivery flags appeared enabled. Added an **Android-only** fail-closed visibility check; desktop has no notification, so it is explicitly exempt. Updated the test message and added a desktop regression.
+- **Validation pending:** exact-head hosted Rust fmt/test/strict Clippy and integrated Linux/Windows/Android, native JUnit, package and security gates must pass at the new code SHA before any merge; no local/device testing claim. Keep PR #43 draft pending independent QA.
+
+
 ## Step 110: serialize Tauri host-service operations across runtime lifecycle commands
 
 **Status:** PARTIAL (host-operation gate and two deterministic Rust interleaving regressions implemented; exact-head hosted CI pending)  
