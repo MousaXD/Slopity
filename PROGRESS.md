@@ -30,7 +30,8 @@
 - `stop_servers_after_native_request` now accepts the observed host status and never calls `slopity_host_start` when one or more Rust runtimes remain active after a pending stop or an unavailable notification. It leaves the existing native host alone (if present), preserves potentially-live runtime state, and returns an explicit incomplete-shutdown error including surviving count and runtime-stop failures.
 - Added two Rust tests for pending native stop and notification-unavailable conditions, including explicit text that shutdown was not confirmed. Neither test is a physical Android device test; testing the pure error-decision function does not itself prove native calls.
 - No Kotlin, frontend, workflow, security, dependency, runtime-registration or release behavior changed.
-- **Validation pending:** no local build/test or exact-commit hosted Actions claim yet. Require Rust fmt/test/Clippy and full integrated platform, security and packaging workflows before any merge. Keep PR #43 draft pending independent QA.
+- **Hosted CI corrective finding:** [CI #42929811194](https://github.com/MousaXD/Slopity/actions/runs/42929811194) passed rustfmt but failed the new invisible-notification test: `host_reconciliation_action` returned `None` when Android reported active hosting without a visible notification while delivery flags appeared enabled. Added an **Android-only** fail-closed visibility check; desktop has no notification, so it is explicitly exempt. Updated the test message and added a desktop regression.
+- **Validation pending:** exact-head hosted Rust fmt/test/strict Clippy and integrated Linux/Windows/Android, native JUnit, package and security gates must pass at the new code SHA before any merge; no local/device testing claim. Keep PR #43 draft pending independent QA.
 
 
 ## Step 110: serialize Tauri host-service operations across runtime lifecycle commands

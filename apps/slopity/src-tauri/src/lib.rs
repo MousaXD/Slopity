@@ -353,7 +353,12 @@ fn host_reconciliation_action(
         return HostReconciliationAction::None;
     }
 
-    if status.stop_request_pending || !status.notification_delivery_available() {
+    // Android requires an acknowledged, visible notification while hosting.
+    // Desktop host status intentionally has no foreground notification.
+    if status.stop_request_pending
+        || !status.notification_delivery_available()
+        || (status.platform == "android" && status.active && !status.notification_visible)
+    {
         return HostReconciliationAction::StopServersAndHost;
     }
     if !status.active {
@@ -467,7 +472,7 @@ fn incomplete_native_stop_message(
         // used to claim safe hosting when that prerequisite is missing.
         details.push(
             concat!(
-                "foreground notification delivery is unavailable; native host ",
+                "foreground notification delivery or visibility is unavailable; native host ",
                 "start/update is not attempted while visibility is unsafe"
             )
             .into(),
@@ -758,8 +763,19 @@ mod tests {
         );
         let detail = super::incomplete_native_stop_message(2, &[], &status);
         assert!(detail.contains("2 server(s) active"));
-        assert!(detail.contains("foreground notification delivery is unavailable"));
+        assert!(detail.contains("foreground notification delivery or visibility is unavailable"));
         assert!(detail.contains("shutdown was not confirmed"));
+    }
+
+    #[test]
+    fn desktop_host_does_not_require_an_android_notification() {
+        let mut status = android_status(true, 2);
+        status.platform = "linux".into();
+        status.notification_visible = false;
+        assert_eq!(
+            host_reconciliation_action(2, &status),
+            HostReconciliationAction::None
+        );
     }
 
     #[test]
