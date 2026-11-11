@@ -2,7 +2,7 @@
 
 ## Step 112: owner-authorized v0.2.0 development merge and preview release
 
-**Status:** IN PROGRESS (plan committed before version changes; do not merge until exact-head GitHub CI)
+**Status:** PARTIAL (0.2.0 metadata/changelog implemented; exact-head Actions required before merging)
 **Declared:** 2026-11-11
 **Owner:** Repository owner (Agent 00 coordinating), explicit instruction to complete safe merge with a version bump
 **Baseline:** PR #43 `5e0d8148d38e503afd8d0bac5f12023b594e3b7f` targeting `main` at `f57b7cee18dbf73b06eb64aa0c12212c4ca9333d`
@@ -17,6 +17,12 @@
 - No change to runtime behavior, source APIs, dependencies, Kotlin, frontend interactions, CI/release workflow logic, permissions, secrets, or production signing.
 - Preserve fail-closed host startup/stop recovery, allocator limits, UI functionality, Rust lock ordering, and all existing tests.
 - Existing RustSec audit permits **seven disclosed warnings** including unsound `glib 0.18.5` under issue #52; do not claim zero risk or close the issue without remediation. Physical Android durability #44, installed GUI accessibility, signing/provenance and rollback remain production blockers.
+
+### Implementation record
+
+- Synchronized root Cargo workspace metadata, five first-party package versions in Cargo.lock, npm package metadata + lockfile root, and Tauri version to **0.2.0**. All third-party dependency versions and runtime logic unchanged.
+- Added a top-level changelog for the preview overhaul and clarified release tag naming without changing release workflow behavior.
+- Exact-head GitHub CI/security/package checks **pending at this implementation commit**; old green `5e0d8148` checks are historical. Owner acceptance and review-process exception will be documented without claiming independent Agent 06 sign-off.
 
 ### Acceptance and rollback
 - Verify every version declaration and lockfile matches `0.2.0`; ensure no `v0.2.0` tag or release exists before merging.

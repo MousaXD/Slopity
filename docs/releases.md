@@ -24,7 +24,7 @@ All three version declarations must match before packaging starts:
 - `apps/slopity/package.json`
 - `[workspace.package].version` in the root `Cargo.toml`
 
-The release tag must be exactly `v<version>`. For application version `0.1.0`, the only accepted tag is `v0.1.0`.
+The release tag must be exactly `v<version>`. For application version `0.2.0`, the only accepted tag is `v0.2.0`. The existing `v0.1.0` tag remains immutable.
 
 ## Workflow behavior
 
